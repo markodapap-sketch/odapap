@@ -341,6 +341,12 @@ function createVariationRow() {
  */
 function addAttribute(variationId) {
     const attributesList = document.querySelector(`.attributes-list[data-variation-id="${variationId}"]`);
+    
+    if (!attributesList) {
+        console.error(`Attributes list not found for variation ${variationId}`);
+        return;
+    }
+    
     const currentAttributes = attributesList.querySelectorAll('.attribute-item').length;
     
     if (currentAttributes >= MAX_ATTRIBUTES_PER_VARIATION) {
@@ -353,6 +359,7 @@ function addAttribute(variationId) {
     const attributeDiv = document.createElement('div');
     attributeDiv.className = 'attribute-item';
     attributeDiv.dataset.attributeIndex = attributeIndex;
+    attributeDiv.dataset.variationId = variationId;
     
     attributeDiv.innerHTML = `
         <div class="attribute-content">
@@ -365,6 +372,11 @@ function addAttribute(variationId) {
                 <label>Stock for this Option *</label>
                 <input type="number" class="attribute-stock" placeholder="e.g., 100" required min="1">
                 <small>Units available for this option</small>
+            </div>
+            <div class="form-group">
+                <label>Price for this Option (KES) *</label>
+                <input type="number" class="attribute-price" placeholder="e.g., 1200" required step="0.01" min="0">
+                <small>Price specific to this option</small>
             </div>
             <div class="form-group">
                 <label>Pieces per Unit</label>
@@ -404,19 +416,26 @@ function addAttribute(variationId) {
     // Add calculation listener
     const stockInput = attributeDiv.querySelector('.attribute-stock');
     const piecesInput = attributeDiv.querySelector('.attribute-pieces');
+    const priceInput = attributeDiv.querySelector('.attribute-price');
     
-    [stockInput, piecesInput].forEach(input => {
+    [stockInput, piecesInput, priceInput].forEach(input => {
         input.addEventListener('input', () => updateVariationCalculations());
     });
 }
+
+// Make addAttribute globally accessible
+window.addAttribute = addAttribute;
 
 /**
  * Remove an attribute from a variation
  */
 window.removeAttribute = function(variationId, attributeIndex) {
-    const attributeItem = document.querySelector(`.attribute-item[data-attribute-index="${attributeIndex}"]`);
-    if (attributeItem) {
-        attributeItem.remove();
+    const attributesList = document.querySelector(`.attributes-list[data-variation-id="${variationId}"]`);
+    if (attributesList) {
+        const attributeItem = attributesList.querySelector(`.attribute-item[data-attribute-index="${attributeIndex}"]`);
+        if (attributeItem) {
+            attributeItem.remove();
+        }
     }
     updateVariationCalculations();
 };
@@ -570,12 +589,22 @@ function updateReviewSummary() {
     
     variationRows.forEach((row, index) => {
         const title = row.querySelector('.variation-title-input').value || `Variation ${index + 1}`;
-        const attrName = row.querySelector('.variation-attr-name').value || 'Not specified';
-        const stock = parseInt(row.querySelector('.variation-stock').value) || 0;
-        const pieces = parseInt(row.querySelector('.variation-pieces').value) || 1;
-        totalStock += stock;
+        const attributeItems = row.querySelectorAll('.attribute-item');
         
-        variationsSummary += `<li><strong>${title}:</strong> ${attrName} - ${stock} units (${pieces} pieces/unit) = ${stock * pieces} total pieces</li>`;
+        let variationStockSubtotal = 0;
+        let attributesList = '';
+        
+        attributeItems.forEach(attr => {
+            const attrName = attr.querySelector('.attribute-name').value || 'Not specified';
+            const stock = parseInt(attr.querySelector('.attribute-stock').value) || 0;
+            const pieces = parseInt(attr.querySelector('.attribute-pieces').value) || 1;
+            variationStockSubtotal += stock;
+            totalStock += stock;
+            
+            attributesList += `<li>${attrName} - ${stock} units (${pieces} pieces/unit) = ${stock * pieces} total pieces</li>`;
+        });
+        
+        variationsSummary += `<li><strong>${title}</strong><ul style="margin-left: 20px; margin-top: 4px;">${attributesList}</ul></li>`;
     });
     variationsSummary += '</ul>';
     
@@ -680,6 +709,7 @@ document.getElementById('item-listing-form').addEventListener('submit', async (e
                 const attrName = attrItem.querySelector('.attribute-name').value;
                 const stock = parseInt(attrItem.querySelector('.attribute-stock').value);
                 const pieces = parseInt(attrItem.querySelector('.attribute-pieces').value);
+                const attributePrice = parseFloat(attrItem.querySelector('.attribute-price').value);
                 const imageFile = attrItem.querySelector('.attribute-image').files[0];
                 
                 let photoUrl = null;
@@ -693,7 +723,7 @@ document.getElementById('item-listing-form').addEventListener('submit', async (e
                     attr_name: attrName,
                     stock,
                     piece_count: pieces,
-                    price: finalPrice,
+                    price: attributePrice,
                     photoUrl
                 });
             }
@@ -1027,6 +1057,7 @@ async function loadEditForm(listingId) {
                     newAttr.querySelector('.attribute-name').value = attr.attr_name;
                     newAttr.querySelector('.attribute-stock').value = attr.stock;
                     newAttr.querySelector('.attribute-pieces').value = attr.piece_count;
+                    newAttr.querySelector('.attribute-price').value = attr.price;
                 });
             });
         }
