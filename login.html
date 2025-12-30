@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
+    <link rel="apple-touch-icon" href="images/logo.jpg">
     <title>Oda-Pap Login</title>
     <style>
         /* Carrot Orange Theme */
@@ -14,14 +16,16 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         .login-container {
-            background-color: #ffa500; /* Carrot Orange */
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            background-color: #ffa500;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
             max-width: 400px;
             width: 100%;
             text-align: center;
@@ -30,71 +34,113 @@
         h2 {
             color: #ffffff;
             margin-bottom: 20px;
+            font-size: 24px;
         }
 
         .login-container input[type="email"],
+        .login-container input[type="text"],
+        .login-container input[type="tel"],
         .login-container input[type="password"] {
             width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #e6e6e6;
-            border-radius: 5px;
+            padding: 12px 14px;
+            margin: 8px 0;
+            border: 2px solid transparent;
+            border-radius: 8px;
             box-sizing: border-box;
+            font-size: 15px;
+            transition: border-color 0.3s ease;
         }
 
-        .login-container input[type="email"]:focus,
-        .login-container input[type="password"]:focus {
+        .login-container input:focus {
             outline: none;
             border-color: #ff751a;
         }
 
+        .password-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .password-container input {
+            padding-right: 45px !important;
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #999;
+            font-size: 16px;
+            transition: color 0.2s;
+            padding: 5px;
+        }
+
+        .toggle-password:hover {
+            color: #ff751a;
+        }
+
         .login-button {
-            background-color: #ff751a; /* Darker carrot orange */
+            background-color: #ff751a;
             color: #ffffff;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             width: 100%;
             font-size: 16px;
-            transition: background-color 0.3s ease;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s;
+            margin-top: 10px;
         }
 
         .login-button:hover {
             background-color: #e65c00;
+            transform: translateY(-1px);
+        }
+
+        .login-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Forgot Password Link */
+        .forgot-password {
+            text-align: right;
+            margin: 5px 0 15px;
+        }
+
+        .forgot-password a {
+            color: #ffffff;
+            font-size: 13px;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .forgot-password a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
         }
 
         p {
             color: #ffffff;
             margin-top: 15px;
+            font-size: 14px;
         }
 
         p a {
-            color: #e6e6e6;
+            color: #fff;
             text-decoration: none;
+            font-weight: 600;
         }
 
         p a:hover {
             text-decoration: underline;
         }
 
-        .password-container {
-            position: relative;
-        }
-
-        .password-container input[type="password"] {
-            padding-right: 40px;
-        }
-
-        .password-container .fa-eye {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-        }
-
-        /* Google Sign-In Button Styles */
+        /* Divider */
         .divider {
             display: flex;
             align-items: center;
@@ -107,20 +153,21 @@
         .divider::after {
             content: '';
             flex: 1;
-            border-bottom: 1px solid #ffffff;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
         }
 
         .divider span {
-            padding: 0 10px;
-            font-size: 14px;
+            padding: 0 15px;
+            font-size: 13px;
+            opacity: 0.9;
         }
 
         .google-btn {
             width: 100%;
-            height: 42px;
+            height: 46px;
             background-color: #ffffff;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             cursor: pointer;
             display: flex;
@@ -129,36 +176,146 @@
             font-family: 'Roboto', Arial, sans-serif;
             font-size: 14px;
             font-weight: 500;
-            color: #757575;
-            transition: box-shadow 0.3s ease;
+            color: #555;
+            transition: box-shadow 0.3s ease, transform 0.2s;
             margin-bottom: 15px;
         }
 
         .google-btn:hover {
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: translateY(-1px);
         }
 
         .google-btn img {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             margin-right: 10px;
         }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-close:hover {
+            color: #333;
+        }
+
+        .modal-content h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .modal-content p {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e6e6e6;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+
+        .modal-content input:focus {
+            outline: none;
+            border-color: #ff751a;
+        }
+
+        .modal-btn {
+            background: #ff751a;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 600;
+        }
+
+        .modal-btn:hover {
+            background: #e65c00;
+        }
+
+        .modal-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .success-message {
+            color: #4CAF50;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .error-message {
+            color: #f44336;
+            font-size: 14px;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
     <div class="login-container">
-        <h2>Login</h2>
-        <form id="login-form">
-            <input type="email" id="login-email-input" class="email-input" placeholder="Email" required>
+        <h2>Welcome Back</h2>
+
+        <!-- Email Login Form -->
+        <form id="email-login-form">
+            <input type="email" id="login-email-input" placeholder="Email address" required>
             <div class="password-container">
-                <input type="password" id="login-password-input" class="password-input" placeholder="Password" required>
-                <i class="fas fa-eye" id="toggle-login-password"></i>
+                <input type="password" id="login-password-input" placeholder="Password" required>
+                <i class="fas fa-eye toggle-password" id="toggle-login-password"></i>
             </div>
-            <button type="submit" id="login-button" class="login-button">Login</button>
+            <div class="forgot-password">
+                <a href="#" id="forgot-password-link">Forgot password?</a>
+            </div>
+            <button type="submit" class="login-button">
+                <i class="fas fa-sign-in-alt"></i> Login
+            </button>
         </form>
         
         <div class="divider">
@@ -167,45 +324,68 @@
         
         <button id="google-login-btn" class="google-btn">
             <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo">
-            Sign in with Google
+            Continue with Google
         </button>
         
         <p>Don't have an account? <a href="signup.html">Sign Up</a></p>
     </div>
 
-    <script type="module">
-        import { loginUser, signInWithGoogle } from "./js/auth.js";
+    <!-- Forgot Password Modal -->
+    <div class="modal-overlay" id="forgot-password-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="close-modal">&times;</button>
+            <h3><i class="fas fa-lock" style="color: #ff751a;"></i> Reset Password</h3>
+            <p>Enter your email address and we'll send you a link to reset your password.</p>
+            <input type="email" id="reset-email-input" placeholder="Enter your email">
+            <button class="modal-btn" id="send-reset-btn">Send Reset Link</button>
+            <p class="success-message" id="reset-success">
+                <i class="fas fa-check-circle"></i> Password reset email sent! Check your inbox.
+            </p>
+            <p class="error-message" id="reset-error"></p>
+        </div>
+    </div>
 
-        // Form submission handler
-        const loginForm = document.getElementById('login-form');
+    <script type="module">
+        import { auth } from "./js/firebase.js";
+        import { loginUser, signInWithGoogle, sendPasswordReset } from "./js/auth.js";
+
+        // Email Login
+        const emailForm = document.getElementById('email-login-form');
         const toggleLoginPassword = document.getElementById('toggle-login-password');
         const loginPasswordInput = document.getElementById('login-password-input');
         const googleLoginBtn = document.getElementById('google-login-btn');
 
-        loginForm.addEventListener('submit', async (e) => {
+        emailForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email-input').value;
             const password = loginPasswordInput.value;
+            const submitBtn = emailForm.querySelector('.login-button');
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in...';
 
             try {
                 await loginUser(email, password);
                 window.location.href = 'index.html';
             } catch (error) {
                 alert('Login failed: ' + error.message);
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
             }
         });
 
+        // Toggle Password Visibility
         toggleLoginPassword.addEventListener('click', () => {
             const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             loginPasswordInput.setAttribute('type', type);
+            toggleLoginPassword.classList.toggle('fa-eye');
             toggleLoginPassword.classList.toggle('fa-eye-slash');
         });
 
-        // Google Sign-In handler
+        // Google Sign-In
         googleLoginBtn.addEventListener('click', async () => {
             try {
                 const result = await signInWithGoogle();
-                // Check if user needs to complete profile
                 if (result.isNewUser) {
                     window.location.href = 'complete-profile.html';
                 } else {
@@ -213,6 +393,70 @@
                 }
             } catch (error) {
                 alert('Google Sign-In failed: ' + error.message);
+            }
+        });
+
+        // Forgot Password Modal
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        const forgotPasswordModal = document.getElementById('forgot-password-modal');
+        const closeModal = document.getElementById('close-modal');
+        const sendResetBtn = document.getElementById('send-reset-btn');
+        const resetEmailInput = document.getElementById('reset-email-input');
+        const resetSuccess = document.getElementById('reset-success');
+        const resetError = document.getElementById('reset-error');
+
+        forgotPasswordLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Pre-fill with email if already entered
+            const loginEmail = document.getElementById('login-email-input').value;
+            if (loginEmail) {
+                resetEmailInput.value = loginEmail;
+            }
+            forgotPasswordModal.classList.add('active');
+        });
+
+        closeModal.addEventListener('click', () => {
+            forgotPasswordModal.classList.remove('active');
+            resetSuccess.style.display = 'none';
+            resetError.style.display = 'none';
+        });
+
+        forgotPasswordModal.addEventListener('click', (e) => {
+            if (e.target === forgotPasswordModal) {
+                forgotPasswordModal.classList.remove('active');
+                resetSuccess.style.display = 'none';
+                resetError.style.display = 'none';
+            }
+        });
+
+        sendResetBtn.addEventListener('click', async () => {
+            const email = resetEmailInput.value.trim();
+            
+            if (!email) {
+                resetError.textContent = 'Please enter your email address';
+                resetError.style.display = 'block';
+                return;
+            }
+
+            sendResetBtn.disabled = true;
+            sendResetBtn.textContent = 'Sending...';
+            resetError.style.display = 'none';
+
+            try {
+                await sendPasswordReset(email);
+                resetSuccess.style.display = 'block';
+                sendResetBtn.textContent = 'Email Sent!';
+                setTimeout(() => {
+                    forgotPasswordModal.classList.remove('active');
+                    resetSuccess.style.display = 'none';
+                    sendResetBtn.disabled = false;
+                    sendResetBtn.textContent = 'Send Reset Link';
+                }, 3000);
+            } catch (error) {
+                resetError.textContent = error.message;
+                resetError.style.display = 'block';
+                sendResetBtn.disabled = false;
+                sendResetBtn.textContent = 'Send Reset Link';
             }
         });
     </script>

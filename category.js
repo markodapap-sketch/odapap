@@ -164,29 +164,82 @@ function setCookie(name, value, days = 1) {
     document.cookie = `${name}=${encodeURIComponent(JSON.stringify(value))};expires=${expires.toUTCString()};path=/`;
 }
 
+// Get the minimum price from variations/attributes and its associated retail price
+function getMinPriceFromVariations(listing) {
+    let minPrice = listing.price || Infinity;
+    let associatedRetail = listing.initialPrice || null;
+    
+    if (listing.variations && listing.variations.length > 0) {
+        listing.variations.forEach(variation => {
+            if (variation.attributes && variation.attributes.length > 0) {
+                variation.attributes.forEach(attr => {
+                    if (attr.price && attr.price < minPrice) {
+                        minPrice = attr.price;
+                        associatedRetail = attr.retailPrice || null;
+                    }
+                });
+            } else {
+                if (variation.price && variation.price < minPrice) {
+                    minPrice = variation.price;
+                    associatedRetail = variation.retailPrice || null;
+                }
+            }
+        });
+    }
+    
+    return {
+        price: minPrice === Infinity ? (listing.price || 0) : minPrice,
+        retailPrice: associatedRetail || listing.initialPrice || null
+    };
+}
+
 // Show quantity modal for Buy Now
 function showQuantityModal(listingId, listing, isAddToCart = false) {
     let selectedVariation = null;
-    let price = listing.price;
+    let price = getMinPriceFromVariations(listing);
     let maxStock = listing.totalStock || 10;
 
-    // If there are variations, show mini-cards and select the first by default
-    let variationsHTML = '';
+    // Flatten variations with attributes into selectable options
+    let allOptions = [];
     if (listing.variations && listing.variations.length > 0) {
-        variationsHTML = '<div class="modal-variations"><h4>Available Variations:</h4><div class="variations-grid">';
-        listing.variations.forEach((variation, idx) => {
+        listing.variations.forEach((variation, vIdx) => {
+            if (variation.attributes && variation.attributes.length > 0) {
+                variation.attributes.forEach((attr, aIdx) => {
+                    allOptions.push({
+                        ...attr,
+                        variationTitle: variation.title,
+                        variationIndex: vIdx,
+                        attributeIndex: aIdx,
+                        displayName: `${variation.title}: ${attr.attr_name}`
+                    });
+                });
+            } else {
+                allOptions.push({
+                    ...variation,
+                    variationIndex: vIdx,
+                    displayName: variation.title || variation.attr_name || `Option ${vIdx + 1}`
+                });
+            }
+        });
+    }
+
+    let variationsHTML = '';
+    if (allOptions.length > 0) {
+        variationsHTML = '<div class="modal-variations"><h4>Select Option:</h4><div class="variations-grid">';
+        allOptions.forEach((option, idx) => {
+            const optionPrice = option.price || listing.price;
             variationsHTML += `
-                <div class="variation-mini-card" data-variation-index="${idx}">
-                    ${variation.photoUrl ? `<img src="${variation.photoUrl}" alt="${variation.title}">` : '<i class="fas fa-box"></i>'}
-                    <p><strong>${variation.title}</strong></p>
-                    <p class="variation-attr">${variation.attr_name}</p>
-                    <p class="variation-stock">${variation.stock} units</p>
+                <div class="variation-mini-card ${idx === 0 ? 'selected' : ''}" data-option-index="${idx}">
+                    ${option.photoUrl ? `<img src="${option.photoUrl}" alt="${option.displayName}">` : '<i class="fas fa-box"></i>'}
+                    <p><strong>${option.displayName}</strong></p>
+                    <p class="variation-price">KES ${optionPrice.toLocaleString()}</p>
+                    ${option.retailPrice ? `<p class="variation-retail"><s>KES ${option.retailPrice.toLocaleString()}</s></p>` : ''}
+                    <p class="variation-stock">${option.stock || 0} units</p>
                 </div>
             `;
         });
         variationsHTML += '</div></div>';
-        // Default to first variation
-        selectedVariation = listing.variations[0];
+        selectedVariation = allOptions[0];
         price = selectedVariation.price || listing.price;
         maxStock = selectedVariation.stock || 10;
     }
@@ -223,8 +276,8 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
     const confirmBtn = modal.querySelector('.confirm-btn');
     const stockEl = modal.querySelector('#modalStock');
 
-    // Select first variation by default if present
-    if (listing.variations && listing.variations.length > 0) {
+    // Select first option by default if present
+    if (allOptions.length > 0) {
         const cards = modal.querySelectorAll('.variation-mini-card');
         if (cards.length > 0) {
             cards[0].classList.add('selected');
@@ -233,7 +286,7 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
             card.addEventListener('click', () => {
                 cards.forEach(c => c.classList.remove('selected'));
                 card.classList.add('selected');
-                selectedVariation = listing.variations[idx];
+                selectedVariation = allOptions[idx];
                 price = selectedVariation.price || listing.price;
                 maxStock = selectedVariation.stock || 10;
                 quantityInput.max = maxStock;
@@ -363,8 +416,24 @@ function renderBreadcrumb() {
   breadcrumbContainer.innerHTML = breadcrumbHTML;
 }
 
-// Function to render subcategory cards
-function renderSubcategoryCards() {
+// Store all listings for filter calculations
+let allCategoryListings = [];
+
+// Function to load all listings for the current category (for filter calculation)
+async function loadCategoryListings() {
+  try {
+    const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
+    allCategoryListings = listingsSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(listing => listing.category === currentCategory);
+  } catch (error) {
+    console.error("Error loading category listings:", error);
+    allCategoryListings = [];
+  }
+}
+
+// Function to render subcategory cards - only shows subcategories with products
+async function renderSubcategoryCards() {
   const subcategoryContainer = document.getElementById('subcategory-cards');
   if (!subcategoryContainer) return;
 
@@ -379,71 +448,112 @@ function renderSubcategoryCards() {
     return;
   }
 
-  subcategoryContainer.style.display = 'grid';
-  subcategoryContainer.innerHTML = '';
+  // Get subcategories that have at least one product
+  const subcategoriesWithProducts = Object.keys(subcategories).filter(key => {
+    return allCategoryListings.some(listing => listing.subcategory === key);
+  });
 
-  Object.keys(subcategories).forEach(key => {
+  if (subcategoriesWithProducts.length === 0) {
+    subcategoryContainer.style.display = 'none';
+    return;
+  }
+
+  // Check localStorage for selected subcategory
+  const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
+  if (savedFilters[currentCategory]?.subcategory && subcategoriesWithProducts.includes(savedFilters[currentCategory].subcategory)) {
+    selectSubcategory(savedFilters[currentCategory].subcategory, false);
+    return;
+  }
+
+  subcategoryContainer.style.display = 'grid';
+  subcategoryContainer.innerHTML = '<h4 class="filter-section-title"><i class="fas fa-layer-group"></i> Subcategories</h4>';
+
+  subcategoriesWithProducts.forEach(key => {
     const subcategory = subcategories[key];
+    const productCount = allCategoryListings.filter(listing => listing.subcategory === key).length;
     const card = document.createElement('div');
     card.className = 'filter-card';
     card.innerHTML = `
       <i class="fas fa-folder"></i>
       <p>${subcategory.label}</p>
+      <span class="filter-count">${productCount}</span>
     `;
     card.onclick = () => selectSubcategory(key);
     subcategoryContainer.appendChild(card);
   });
 }
 
-// Function to render brand cards
+// Function to render brand cards - only shows brands with products
 async function renderBrandCards() {
   const brandContainer = document.getElementById('brand-cards');
   if (!brandContainer) return;
 
-  if (!currentSubcategory || currentBrand) {
+  if (currentBrand) {
     brandContainer.style.display = 'none';
     return;
   }
 
-  try {
-    // Get unique brands from listings
-    const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
-    const brands = new Set();
-    
-    listingsSnapshot.docs.forEach(doc => {
-      const listing = doc.data();
-      if (listing.category === currentCategory && listing.subcategory === currentSubcategory && listing.brand) {
-        brands.add(listing.brand);
-      }
-    });
-
-    if (brands.size === 0) {
-      brandContainer.style.display = 'none';
-      return;
+  // Get unique brands from listings in current category/subcategory
+  const brandsMap = new Map();
+  allCategoryListings.forEach(listing => {
+    if (currentSubcategory && listing.subcategory !== currentSubcategory) return;
+    if (listing.brand) {
+      brandsMap.set(listing.brand, (brandsMap.get(listing.brand) || 0) + 1);
     }
+  });
 
-    brandContainer.style.display = 'grid';
-    brandContainer.innerHTML = '';
+  if (brandsMap.size === 0) {
+    brandContainer.style.display = 'none';
+    return;
+  }
 
-    Array.from(brands).forEach(brand => {
+  // Check localStorage for selected brand
+  const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
+  if (savedFilters[currentCategory]?.brand && brandsMap.has(savedFilters[currentCategory].brand)) {
+    selectBrand(savedFilters[currentCategory].brand, false);
+    return;
+  }
+
+  brandContainer.style.display = 'grid';
+  brandContainer.innerHTML = '<h4 class="filter-section-title"><i class="fas fa-tags"></i> Brands</h4>';
+
+  Array.from(brandsMap.entries())
+    .sort((a, b) => b[1] - a[1]) // Sort by product count descending
+    .forEach(([brand, count]) => {
       const card = document.createElement('div');
       card.className = 'filter-card';
       card.innerHTML = `
         <i class="fas fa-tag"></i>
         <p>${brand}</p>
+        <span class="filter-count">${count}</span>
       `;
       card.onclick = () => selectBrand(brand);
       brandContainer.appendChild(card);
     });
-  } catch (error) {
-    console.error("Error loading brands:", error);
-  }
+}
+
+// Helper function to save filters to localStorage
+function saveFiltersToStorage() {
+  const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
+  savedFilters[currentCategory] = {
+    subcategory: currentSubcategory,
+    brand: currentBrand
+  };
+  localStorage.setItem('categoryFilters', JSON.stringify(savedFilters));
+}
+
+// Helper function to clear filters from localStorage
+function clearFiltersFromStorage() {
+  const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
+  delete savedFilters[currentCategory];
+  localStorage.setItem('categoryFilters', JSON.stringify(savedFilters));
 }
 
 // Navigation functions
 window.resetToCategory = function() {
   currentSubcategory = null;
   currentBrand = null;
+  clearFiltersFromStorage();
   renderBreadcrumb();
   renderSubcategoryCards();
   renderBrandCards();
@@ -452,22 +562,25 @@ window.resetToCategory = function() {
 
 window.resetToSubcategory = function() {
   currentBrand = null;
+  saveFiltersToStorage();
   renderBreadcrumb();
   renderBrandCards();
   loadFeaturedListings();
 };
 
-function selectSubcategory(subcategory) {
+function selectSubcategory(subcategory, saveToStorage = true) {
   currentSubcategory = subcategory;
   currentBrand = null;
+  if (saveToStorage) saveFiltersToStorage();
   renderBreadcrumb();
   renderSubcategoryCards();
   renderBrandCards();
   loadFeaturedListings();
 }
 
-function selectBrand(brand) {
+function selectBrand(brand, saveToStorage = true) {
   currentBrand = brand;
+  if (saveToStorage) saveFiltersToStorage();
   renderBreadcrumb();
   renderSubcategoryCards();
   renderBrandCards();
@@ -475,7 +588,7 @@ function selectBrand(brand) {
 }
 
 // Function to load and display filtered listings based on category and filter criteria
-const loadFeaturedListings = async (filterCriteria = {}) => {
+const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) => {
   showLoader();
   try {
     const listingsContainer = document.querySelector(".listings-container");
@@ -496,11 +609,13 @@ const loadFeaturedListings = async (filterCriteria = {}) => {
     categoryTitle.textContent = (categoryHierarchy[category]?.label || category.replace(/-/g, ' ')).toUpperCase();
     categoryDescription.textContent = `Browse the best deals and offers in the ${categoryHierarchy[category]?.label || category.replace(/-/g, ' ')} category.`;
 
-    const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
-    const listings = listingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Load all category listings if this is initial load or not already loaded
+    if (isInitialLoad || allCategoryListings.length === 0) {
+      await loadCategoryListings();
+    }
 
-    // Filter listings based on category, subcategory, and brand
-    let filteredListings = listings.filter(listing => listing.category === category);
+    // Filter listings based on subcategory and brand from allCategoryListings
+    let filteredListings = [...allCategoryListings];
     
     if (currentSubcategory) {
       filteredListings = filteredListings.filter(listing => listing.subcategory === currentSubcategory);
@@ -555,38 +670,53 @@ const loadFeaturedListings = async (filterCriteria = {}) => {
       listingElement.innerHTML = `
         <div class="product-item">
           <div class="profile">
-            <img src="${userData.profilePicUrl || "images/profile-placeholder.png"}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')">
-            <div>
-              <p><strong>${displayName}</strong></p>
-              <p>${listing.name}</p>
+            <img src="${userData.profilePicUrl || "images/profile-placeholder.png"}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')" loading="lazy">
+            <div class="uploader-info">
+              <p class="uploader-name"><strong>${displayName}</strong></p>
+              <p class="product-name">${listing.name}</p>
             </div>
-            <div class="product-actions">
+            <div class="product-actions profile-actions">
               <div>
                 <i class="fas fa-comments" onclick="goToChat('${sellerId}', '${listing.id}')"></i>
-                <small> Message </small>
+                <small>Message</small>
               </div>
               <div>
-                <i class="fas fa-share" onclick="shareProduct('${listing.id}', '${listing.name}', '${listing.description}', '${firstImageUrl}')"></i>
-                <small> Share </small>
+                <i class="fas fa-share" onclick="shareProduct('${listing.id}', '${listing.name}', '${listing.description || ''}', '${firstImageUrl}')"></i>
+                <small>Share</small>
               </div>
             </div>
           </div>
           <div class="product-image-container" onclick="goToProduct('${listing.id}')">
             <div class="image-slider">
-              ${imageUrls.map(url => `
-                <img src="${url}" alt="Product Image" class="product-image">
+              ${imageUrls.map((url, index) => `
+                <img src="${url}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}">
               `).join('')}
               <div class="product-tags">
                 ${listing.subcategory ? `<span class="product-condition">${listing.subcategory}</span>` : ''}
-                ${listing.brand ? `<span class="product-age">${listing.brand} </span>` : ''}
+                ${listing.brand ? `<span class="product-age">${listing.brand}</span>` : ''}
               </div>
             </div>
           </div>
-          <p class="product-price">
-            <strong>KES ${listing.price}</strong>
-            <span class="initial-price">${listing.initialPrice ? `<s>KES ${listing.initialPrice}</s>` : ''}</span>
-          </p>
-          <p class="product-description">${listing.description ? listing.description : ''}</p>
+          <div class="product-price">
+            ${(() => {
+              const priceData = getMinPriceFromVariations(listing);
+              const minPrice = priceData.price;
+              const retailPrice = priceData.retailPrice;
+              const hasVariations = listing.variations && listing.variations.length > 0;
+              return `
+              <div class="price-row">
+                <span class="price-label">${hasVariations ? 'From:' : 'Wholesale:'}</span>
+                <strong class="wholesale-amount">KES ${minPrice.toLocaleString()}</strong>
+              </div>
+              ${retailPrice && retailPrice > minPrice ? `
+              <div class="price-row retail-row">
+                <span class="price-label">Retail:</span>
+                <span class="retail-amount">KES ${retailPrice.toLocaleString()}</span>
+                <span class="profit-badge">+${Math.round(((retailPrice - minPrice) / minPrice) * 100)}%</span>
+              </div>` : ''}`;
+            })()}
+          </div>
+          <p class="product-description">${listing.description || 'No description available'}</p>
           <div class="product-actions">
             <div>
               <i class="fas fa-cart-plus add-to-cart-btn" data-listing-id="${listing.id}"></i>
@@ -852,7 +982,36 @@ const debouncedSearch = debounce((e) => {
 
 // Initialize everything when DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
-  await loadFeaturedListings();
+  // Get category from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const category = urlParams.get('category');
+  
+  if (category) {
+    currentCategory = category;
+    
+    // Load all category listings first
+    await loadCategoryListings();
+    
+    // Check localStorage for saved filters
+    const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
+    if (savedFilters[category]) {
+      if (savedFilters[category].subcategory) {
+        currentSubcategory = savedFilters[category].subcategory;
+      }
+      if (savedFilters[category].brand) {
+        currentBrand = savedFilters[category].brand;
+      }
+    }
+    
+    // Render breadcrumb with restored state
+    renderBreadcrumb();
+  }
+  
+  await loadFeaturedListings({}, true);
+  
+  // Render filter cards after listings are loaded
+  await renderSubcategoryCards();
+  await renderBrandCards();
 
   // Setup search event listeners
   if (searchInput) {

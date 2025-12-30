@@ -1,27 +1,62 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Allow read and write access to authenticated users for the Messages collection
+    // Listings collection - Public read, authenticated write
+    match /Listings/{listingId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null;
+    }
+    
+    // CategoryMetadata collection - for custom categories added by users
+    match /CategoryMetadata/{metadataId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // BrandMetadata collection - for custom brands added by users
+    match /BrandMetadata/{brandId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Users collection (for personal profile data)
+    match /Users/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 'users' collection (for app-related data including followers)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Nested collections within 'users' (cart, wishlist, etc.)
+      match /{collection=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Followers subcollection
+      match /followers/{followerId} {
+        allow read: if true;
+        allow create: if request.auth != null && request.auth.uid == followerId;
+        allow delete: if request.auth != null && request.auth.uid == followerId;
+      }
+    }
+    
+    // Chats collection
+    match /Chats/{chatId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Messages collection
     match /Messages/{messageId} {
       allow read, write: if request.auth != null;
     }
-
-    // Allow read and write access to authenticated users for the Reports collection
+    
+    // Reports collection
     match /Reports/{reportId} {
       allow read, write: if request.auth != null;
     }
-
-    // Allow read access to authenticated users for the Users collection
-    match /Users/{userId} {
-      allow read: if request.auth != null;
-    }
-
-    // Allow read access to authenticated users for the Listings collection
-    match /Listings/{listingId} {
-      allow read: if request.auth != null;
-    }
-
-    // Add other collection rules as needed
   }
 }

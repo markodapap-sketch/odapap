@@ -298,7 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.className = "category-card";
       card.innerHTML = `
         <i class="fas ${cat.icon}"></i>
-        <span>${cat.label}</span>
+        <span style="color: #ff5722;">${cat.label}</span>
       `;
       card.onclick = () => window.location.href = `category.html?category=${cat.key}`;
       categoryStrip.appendChild(card);

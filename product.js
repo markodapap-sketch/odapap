@@ -13,6 +13,35 @@ import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 
+// Get the minimum price from variations/attributes and its associated retail price
+function getMinPriceFromVariations(product) {
+    let minPrice = product.price || Infinity;
+    let associatedRetail = product.initialPrice || null;
+    
+    if (product.variations && product.variations.length > 0) {
+        product.variations.forEach(variation => {
+            if (variation.attributes && variation.attributes.length > 0) {
+                variation.attributes.forEach(attr => {
+                    if (attr.price && attr.price < minPrice) {
+                        minPrice = attr.price;
+                        associatedRetail = attr.retailPrice || null;
+                    }
+                });
+            } else {
+                if (variation.price && variation.price < minPrice) {
+                    minPrice = variation.price;
+                    associatedRetail = variation.retailPrice || null;
+                }
+            }
+        });
+    }
+    
+    return {
+        price: minPrice === Infinity ? (product.price || 0) : minPrice,
+        retailPrice: associatedRetail || product.initialPrice || null
+    };
+}
+
 class ProductPage {
     constructor() {
         this.auth = getAuth(app);
@@ -155,26 +184,52 @@ class ProductPage {
 
     displayProduct() {
         // Basic info
-        this.productNameEl.textContent = this.product.name; 
-        this.productPriceEl.textContent = `KES ${this.product.price.toLocaleString()}`;
+        this.productNameEl.textContent = this.product.name;
+        
+        // Get minimum price from variations with its associated retail
+        const priceData = getMinPriceFromVariations(this.product);
+        const minPrice = priceData.price;
+        const retailPrice = priceData.retailPrice;
+        const hasVariations = this.product.variations && this.product.variations.length > 0;
+        
+        // Display price with "From:" prefix if multiple variations exist
+        const pricePrefix = hasVariations ? 'From: ' : '';
+        this.productPriceEl.textContent = `${pricePrefix}KES ${minPrice.toLocaleString()}`;
+        
         this.productDescriptionEl.textContent = this.product.description;
-        this.productCategoryEl.textContent = this.product.category || 'N/A';
-        this.productSubcategoryEl.textContent = this.product.subcategory || 'N/A';
-        this.productBrandEl.textContent = this.product.brand || 'N/A';
+        
+        // Category with link
+        const category = this.product.category || 'N/A';
+        this.productCategoryEl.textContent = category;
+        const categoryLink = document.getElementById('productCategoryLink');
+        if (categoryLink && category !== 'N/A') {
+            categoryLink.href = `category.html?category=${encodeURIComponent(category.toLowerCase().replace(/\s+/g, '-'))}`;
+        }
+        
+        // Subcategory with link
+        const subcategory = this.product.subcategory || 'N/A';
+        this.productSubcategoryEl.textContent = subcategory;
+        const subcategoryLink = document.getElementById('productSubcategoryLink');
+        if (subcategoryLink && subcategory !== 'N/A') {
+            subcategoryLink.href = `category.html?category=${encodeURIComponent(category.toLowerCase().replace(/\s+/g, '-'))}&subcategory=${encodeURIComponent(subcategory.toLowerCase().replace(/\s+/g, '-'))}`;
+        }
+        
+        this.productBrandEl.textContent = this.product.brand || 'Unbranded';
         this.productTotalStockEl.textContent = this.product.totalStock || 0;
-        this.productLocationEl.textContent = `${this.seller?.county || ''}, ${this.seller?.ward || ''}`;
+        this.productLocationEl.textContent = `${this.seller?.county || ''}${this.seller?.ward ? ', ' + this.seller.ward : ''}`;
         this.productDateEl.textContent = new Date(this.product.createdAt).toLocaleDateString();
 
-        // Handle initial/retail price and discount
-        if (this.product.initialPrice) {
-            this.initialPriceContainer.style.display = 'block';
-            this.initialPriceEl.textContent = `KES ${this.product.initialPrice.toLocaleString()}`;
+        // Handle initial/retail price and discount - use the associated retail for min price option
+        if (retailPrice && retailPrice > minPrice) {
+            this.initialPriceContainer.style.display = 'flex';
+            this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
             
-            const discount = ((this.product.initialPrice - this.product.price) / this.product.initialPrice * 100).toFixed(0);
+            const discount = ((retailPrice - minPrice) / retailPrice * 100).toFixed(0);
             this.discountBadge.textContent = `-${discount}%`;
             this.discountBadge.style.display = 'inline-block';
         } else {
             this.initialPriceContainer.style.display = 'none';
+            this.discountBadge.style.display = 'none';
         }
 
         this.productContent.style.display = 'grid';
@@ -198,22 +253,19 @@ class ProductPage {
                 variation.attributes.forEach((attr) => {
                     const variationCard = document.createElement('div');
                     variationCard.className = 'variation-card';
+                    variationCard.dataset.stock = attr.stock;
+                    variationCard.dataset.price = attr.price;
+                    variationCard.dataset.retailPrice = attr.retailPrice || '';
+                    variationCard.dataset.photoUrl = attr.photoUrl || '';
+                    variationCard.title = `${attr.attr_name} • Stock: ${attr.stock} • KES ${attr.price.toLocaleString()}`;
                     
                     variationCard.innerHTML = `
+                        ${attr.photoUrl ? `<img src="${attr.photoUrl}" class="variation-thumb" alt="${attr.attr_name}" loading="lazy">` : ''}
                         <div class="variation-header">
-                            <h4>${variation.title || 'Variation'}</h4>
-                            ${attr.photoUrl ? `<img src="${attr.photoUrl}" class="variation-thumb" alt="${attr.attr_name}">` : ''}
+                            <h4>${attr.attr_name || 'Option'}</h4>
+                            <p class="variation-price">KES ${attr.price.toLocaleString()}</p>
+                            ${attr.retailPrice ? `<p class="variation-retail"><s>KES ${attr.retailPrice.toLocaleString()}</s></p>` : ''}
                         </div>
-                        <div class="variation-details">
-                            <p><strong>Type:</strong> ${attr.attr_name}</p>
-                            <p><strong>Stock:</strong> ${attr.stock} units</p>
-                            <p><strong>Pieces per Unit:</strong> ${attr.piece_count}</p>
-                            <p><strong>Total Pieces:</strong> ${attr.stock * attr.piece_count}</p>
-                            <p class="variation-price"><strong>Price:</strong> KES ${attr.price.toLocaleString()}/unit</p>
-                        </div>
-                        <button class="select-variation-btn" data-index="${variationIndex}">
-                            Select This Variation
-                        </button>
                     `;
                     variationsListEl.appendChild(variationCard);
                     variationIndex++;
@@ -223,37 +275,31 @@ class ProductPage {
                 const variationCard = document.createElement('div');
                 variationCard.className = 'variation-card';
                 
-                const attrName = variation.attr_name || 'N/A';
+                const attrName = variation.attr_name || variation.title || 'Option';
                 const stock = variation.stock || 0;
-                const pieceCount = variation.piece_count || 1;
                 const price = variation.price || this.product.price;
                 const photoUrl = variation.photoUrl;
                 
+                variationCard.dataset.stock = stock;
+                variationCard.dataset.price = price;
+                variationCard.dataset.photoUrl = photoUrl || '';
+                variationCard.title = `${attrName} • Stock: ${stock} • KES ${price.toLocaleString()}`;
+                
                 variationCard.innerHTML = `
+                    ${photoUrl ? `<img src="${photoUrl}" class="variation-thumb" alt="${attrName}" loading="lazy">` : ''}
                     <div class="variation-header">
-                        <h4>${variation.title || 'Variation'}</h4>
-                        ${photoUrl ? `<img src="${photoUrl}" class="variation-thumb" alt="${attrName}">` : ''}
+                        <h4>${attrName}</h4>
+                        <p class="variation-price">KES ${price.toLocaleString()}</p>
                     </div>
-                    <div class="variation-details">
-                        <p><strong>Type:</strong> ${attrName}</p>
-                        <p><strong>Stock:</strong> ${stock} units</p>
-                        <p><strong>Pieces per Unit:</strong> ${pieceCount}</p>
-                        <p><strong>Total Pieces:</strong> ${stock * pieceCount}</p>
-                        <p class="variation-price"><strong>Price:</strong> KES ${price.toLocaleString()}/unit</p>
-                    </div>
-                    <button class="select-variation-btn" data-index="${variationIndex}">
-                        Select This Variation
-                    </button>
                 `;
                 variationsListEl.appendChild(variationCard);
                 variationIndex++;
             }
         });
 
-        // Add event listeners to select buttons
-        document.querySelectorAll('.select-variation-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const index = parseInt(e.target.dataset.index);
+        // Add click event listeners to variation cards
+        document.querySelectorAll('.variation-card').forEach((card, index) => {
+            card.addEventListener('click', () => {
                 this.selectVariation(index);
             });
         });
@@ -275,6 +321,7 @@ class ProductPage {
                         stock: attr.stock,
                         piece_count: attr.piece_count,
                         price: attr.price,
+                        retailPrice: attr.retailPrice,
                         photoUrl: attr.photoUrl
                     });
                 });
@@ -305,6 +352,19 @@ class ProductPage {
         // Update price display with attribute-specific price
         const displayPrice = this.selectedVariation.price || this.product.price;
         this.productPriceEl.textContent = `KES ${displayPrice.toLocaleString()}`;
+        
+        // Update retail price and discount if available
+        const retailPrice = this.selectedVariation.retailPrice || this.product.initialPrice;
+        if (retailPrice && retailPrice > displayPrice) {
+            this.initialPriceContainer.style.display = 'flex';
+            this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
+            const discount = ((retailPrice - displayPrice) / retailPrice * 100).toFixed(0);
+            this.discountBadge.textContent = `-${discount}%`;
+            this.discountBadge.style.display = 'inline-block';
+        } else {
+            this.initialPriceContainer.style.display = 'none';
+            this.discountBadge.style.display = 'none';
+        }
         
         // Reset quantity to 1
         this.selectedQuantity = 1;
@@ -360,11 +420,15 @@ class ProductPage {
             const thumbnail = document.createElement('img');
             thumbnail.src = url;
             thumbnail.classList.add('thumbnail');
+            thumbnail.loading = 'lazy';
             thumbnail.addEventListener('click', () => this.setMainImage(index));
             this.thumbnailContainer.appendChild(thumbnail);
         });
 
         this.setMainImage(0);
+        
+        // Add click handler to main image for fullscreen view
+        this.mainImage.addEventListener('click', () => this.openFullscreenImage());
     }
 
     setMainImage(index) {
@@ -478,7 +542,7 @@ class ProductPage {
         productCard.innerHTML = `
             <div class="product-link" data-product-id="${productId}">
                 <div class="product-image">
-                    <img src="${firstImage}" alt="${product.name}">
+                    <img src="${firstImage}" alt="${product.name}" loading="lazy">
                 </div>
                 <div class="product-info">
                     <h4 class="product-name">${product.name}</h4>
@@ -494,6 +558,70 @@ class ProductPage {
         });
         
         return productCard;
+    }
+
+    openFullscreenImage() {
+        const modal = document.createElement('div');
+        modal.className = 'fullscreen-image-modal';
+        modal.innerHTML = `
+            <div class="fullscreen-image-content">
+                <button class="fullscreen-close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+                <button class="fullscreen-nav-btn fullscreen-prev" ${this.currentImageIndex === 0 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <img src="${this.imageUrls[this.currentImageIndex]}" alt="Fullscreen Product Image">
+                <button class="fullscreen-nav-btn fullscreen-next" ${this.currentImageIndex === this.imageUrls.length - 1 ? 'disabled' : ''}>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <div class="fullscreen-counter">
+                    <span>${this.currentImageIndex + 1}</span> / <span>${this.imageUrls.length}</span>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const closeBtn = modal.querySelector('.fullscreen-close-btn');
+        const prevBtn = modal.querySelector('.fullscreen-prev');
+        const nextBtn = modal.querySelector('.fullscreen-next');
+        const img = modal.querySelector('img');
+
+        let currentIndex = this.currentImageIndex;
+
+        const updateImage = (newIndex) => {
+            currentIndex = newIndex;
+            img.src = this.imageUrls[currentIndex];
+            modal.querySelector('.fullscreen-counter span:first-child').textContent = currentIndex + 1;
+            prevBtn.disabled = currentIndex === 0;
+            nextBtn.disabled = currentIndex === this.imageUrls.length - 1;
+        };
+
+        closeBtn.addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+
+        prevBtn.addEventListener('click', () => {
+            if (currentIndex > 0) updateImage(currentIndex - 1);
+        });
+
+        nextBtn.addEventListener('click', () => {
+            if (currentIndex < this.imageUrls.length - 1) updateImage(currentIndex + 1);
+        });
+
+        // Keyboard navigation
+        const handleKeyPress = (e) => {
+            if (e.key === 'Escape') modal.remove();
+            if (e.key === 'ArrowLeft' && currentIndex > 0) updateImage(currentIndex - 1);
+            if (e.key === 'ArrowRight' && currentIndex < this.imageUrls.length - 1) updateImage(currentIndex + 1);
+        };
+
+        document.addEventListener('keydown', handleKeyPress);
+        modal.addEventListener('remove', () => {
+            document.removeEventListener('keydown', handleKeyPress);
+        });
     }
 
     async handleBuyNow() {

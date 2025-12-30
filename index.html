@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
+    <link rel="apple-touch-icon" href="images/logo.jpg">
     <title>Oda Pap</title>
     <link rel="stylesheet" href="styles.css" />
     <link
@@ -54,72 +56,51 @@
             <p>Menu</p>
           </div>
           <div class="dropdown-content" id="dropdown">
-            <a href="category.html?category=student-centre" class="category">
-              <i class="fas fa-graduation-cap"></i>
-              <p>Student Centre</p>
-            </a>
-            <a href="category.html?category=electronics" class="category">
-              <i class="fas fa-tv"></i>
-              <p>Electronics</p>
-            </a>
-            <a href="category.html?category=kitchenware" class="category">
-              <i class="fas fa-blender"></i>
-              <p>Kitchenware</p>
-            </a>
-            <a href="category.html?category=furniture" class="category">
-              <i class="fas fa-couch"></i>
-              <p>Furniture</p>
-            </a>
-            <a href="category.html?category=fashion" class="category">
-              <i class="fas fa-tshirt"></i>
-              <p>Fashion</p>
-            </a>
-            <a href="category.html?category=beauty" class="category">
-              <i class="fas fa-heart"></i>
-              <p>Beauty</p>
-            </a>
-            <a href="category.html?category=rentals" class="category">
-              <i class="fas fa-building"></i>
-              <p>Rentals</p>
-            </a>
-            <a href="category.html?category=service-men" class="category">
-              <i class="fas fa-tools"></i>
-              <p>Service Men</p>
-            </a>
-            <a href="category.html?category=foodstuffs" class="category">
-              <i class="fas fa-carrot"></i>
-              <p>Foodstuffs</p>
-            </a>
-            <a href="category.html?category=phones" class="category">
-              <i class="fas fa-mobile-alt"></i>
-              <p>Phones</p>
-            </a>
-            <a href="category.html?category=accessories" class="category">
-              <i class="fas fa-headphones"></i>
-              <p>Accessories</p>
-            </a>
-            <a href="category.html?category=pharmaceutical" class="category">
-              <i class="fas fa-pills"></i>
-              <p>Pharmaceutical</p>
-            </a>
-            <a href="category.html?category=kids" class="category">
-              <i class="fas fa-hat-wizard"></i>
-              <p>Kids</p>
-            </a>
+            <!-- Categories loaded dynamically from categoryData.js -->
           </div>
 
           <script>
+            // Category icons mapping
+            const categoryMenuIcons = {
+              'student-centre': 'graduation-cap', 'electronics': 'tv', 'kitchenware': 'blender',
+              'furniture': 'couch', 'fashion': 'tshirt', 'beauty': 'heart', 'rentals': 'building',
+              'service-men': 'tools', 'foodstuffs': 'carrot', 'phones': 'mobile-alt',
+              'accessories': 'headphones', 'pharmaceutical': 'pills', 'kids': 'hat-wizard'
+            };
+            
+            // Load categories dynamically
+            function loadDropdownCategories() {
+              const dropdown = document.getElementById('dropdown');
+              const categories = [
+                'student-centre', 'electronics', 'kitchenware', 'furniture', 'fashion',
+                'beauty', 'rentals', 'service-men', 'foodstuffs', 'phones', 'accessories',
+                'pharmaceutical', 'kids'
+              ];
+              const labels = {
+                'student-centre': 'Student Centre', 'electronics': 'Electronics', 'kitchenware': 'Kitchenware',
+                'furniture': 'Furniture', 'fashion': 'Fashion', 'beauty': 'Beauty', 'rentals': 'Rentals',
+                'service-men': 'Service Men', 'foodstuffs': 'Foodstuffs', 'phones': 'Phones',
+                'accessories': 'Accessories', 'pharmaceutical': 'Pharmaceutical', 'kids': 'Kids'
+              };
+              
+              categories.forEach(cat => {
+                const link = document.createElement('a');
+                link.href = `category.html?category=${cat}`;
+                link.className = 'category';
+                link.innerHTML = `<i class="fas fa-${categoryMenuIcons[cat]}"></i><p>${labels[cat]}</p>`;
+                dropdown.appendChild(link);
+              });
+            }
+            
+            loadDropdownCategories();
+            
             function toggleMenu() {
               var dropdown = document.getElementById("dropdown");
-              dropdown.style.display =
-                dropdown.style.display === "block" ? "none" : "block";
+              dropdown.style.display = dropdown.style.display === "block" ? "none" : "block";
             }
 
             window.onclick = function (event) {
-              if (
-                !event.target.matches(".menu-icon") &&
-                !event.target.matches(".menu-icon *")
-              ) {
+              if (!event.target.matches(".menu-icon") && !event.target.matches(".menu-icon *")) {
                 var dropdown = document.getElementById("dropdown");
                 if (dropdown.style.display === "block") {
                   dropdown.style.display = "none";
@@ -178,40 +159,17 @@
       </section>
 
       <div class="border-line"></div>
-      
-      <section class="highlights">  
-        <div class="highlight-item">
-          <i class="fas fa-gift"></i>
-        </div>
-        <div class="highlight-item">
-          <i class="fas fa-fire"></i>
-        </div>
-        <div class="highlight-item">
-          <i class="fas fa-tags"></i>
-        </div>
-        <div class="highlight-item">
-          <i class="fas fa-star"></i>
-        </div>
-        <div class="highlight-item">
-          <i class="fas fa-award"></i>
-        </div>
-        <div class="highlight-item">
-          <i class="fas fa-thumbs-up"></i>
-        </div>
-      </section>
 
-      <div class="border-line"></div>
       <nav>
-        <div id="auth-status">
-          <p>User Status:</p>
+        <div id="auth-status" class="auth-status-bar">
+          <!-- Auth status populated by JavaScript -->
         </div>
       </nav>
-      <div class="border-line"></div>
 
       <!-- Featured Products Section -->
       <section class="featured-products">
         <h2>Featured Products</h2>
-        <div class="gallery" id="listings-container">
+        <div class="gallery listings-container" id="listings-container">
           <!-- Listings will be dynamically inserted here -->
         </div>
       </section>

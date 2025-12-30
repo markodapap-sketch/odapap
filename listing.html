@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>B2B Wholesale Manager</title>
+    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
+    <link rel="apple-touch-icon" href="images/logo.jpg">
+    <title>Oda Pap - Seller Hub</title>
     <link rel="stylesheet" href="listing.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
@@ -28,7 +30,10 @@
 </header>
 
 <main>
-    <h1>Wholesale Inventory Manager</h1>
+    <div class="page-header">
+        <h1><i class="fas fa-store"></i> Seller Hub</h1>
+        <p class="page-subtitle">List your products and reach thousands of wholesale buyers across Kenya</p>
+    </div>
     
     <div id="profile-incomplete-message" style="display: none;">
         <p>Your profile is incomplete. Please update your profile before listing products.</p>
@@ -72,46 +77,50 @@
             <div class="form-step active" data-step="1">
                 <div class="step-card">
                     <h2><i class="fas fa-tags"></i> Classification & Brand</h2>
-                    <p class="step-description">Categorize your wholesale product</p>
+                    <p class="step-description">Help buyers find your product by selecting the right category and brand</p>
 
                     <div class="form-group">
-                        <label for="category">Main Category *</label>
+                        <label for="category"><i class="fas fa-th-large"></i> Main Category *</label>
                         <select id="category" name="category" required>
                              <option value="">Select a category</option>
                              <!-- Categories will be populated dynamically from categoryData.js -->
                         </select>
+                        <small>Choose the main category that best describes your product</small>
                     </div>
 
                     <div class="form-group" id="subcategory-group" style="display: none;">
-                        <label for="subcategory">Sub-Category *</label>
+                        <label for="subcategory"><i class="fas fa-folder-open"></i> Sub-Category *</label>
                         <select id="subcategory" name="subcategory" required disabled>
                             <option value="">Select sub-category</option>
                         </select>
                     </div>
 
                     <div class="form-group" id="subsubcategory-group" style="display: none;">
-                        <label for="subsubcategory">Specific Type *</label>
+                        <label for="subsubcategory"><i class="fas fa-tag"></i> Specific Type *</label>
                         <select id="subsubcategory" name="subsubcategory" required disabled>
                             <option value="">Select specific type</option>
                         </select>
+                        <small>★ marked items were added by other sellers</small>
                     </div>
 
                     <div class="form-group" id="custom-subsubcategory-group" style="display: none;">
-                        <label for="custom-subsubcategory">Custom Type *</label>
+                        <label for="custom-subsubcategory"><i class="fas fa-plus-circle"></i> Custom Type *</label>
                         <input type="text" id="custom-subsubcategory" placeholder="Enter your custom product type">
-                        <small>This will be saved for future use by all sellers</small>
+                        <small><i class="fas fa-info-circle"></i> This will be saved and available for all sellers to use</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="brand-name">Brand Name *</label>
+                        <label for="brand-name"><i class="fas fa-certificate"></i> Brand Name *</label>
                         <select id="brand-name" required>
                             <option value="">Select brand</option>
                         </select>
+                        <small>★ marked brands were added by other sellers</small>
                     </div>
 
                     <div class="form-group" id="custom-brand-group" style="display: none;">
-                        <label for="custom-brand">Custom Brand Name *</label>
+                        <label for="custom-brand"><i class="fas fa-plus-circle"></i> New Brand Name *</label>
                         <input type="text" id="custom-brand" placeholder="Enter brand name">
+                        <small><i class="fas fa-info-circle"></i> This brand will be saved for future use</small>
                     </div>
                 </div>
             </div>
@@ -120,42 +129,30 @@
             <div class="form-step" data-step="2">
                 <div class="step-card">
                     <h2><i class="fas fa-info-circle"></i> Product Details</h2>
-                    <p class="step-description">Describe your product and verify with photos</p>
+                    <p class="step-description">Add compelling details and photos that convince wholesale buyers</p>
 
                     <div class="form-group">
-                        <label for="item-name">Product Name *</label>
+                        <label for="item-name"><i class="fas fa-box"></i> Product Name *</label>
                         <input type="text" id="item-name" placeholder="e.g., Premium Cotton T-Shirts - Bulk Pack" required>
-                        <small>Give a clear, descriptive name for wholesale buyers</small>
+                        <small>Use clear, descriptive names that include key features</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="description">Product Description *</label>
-                        <textarea id="description" rows="5" placeholder="Describe your product in detail: materials, features, quality, packaging, etc." required></textarea>
-                        <small>Be detailed - wholesale buyers need comprehensive information</small>
+                        <label for="description"><i class="fas fa-align-left"></i> Product Description *</label>
+                        <textarea id="description" rows="5" placeholder="Describe materials, quality, sizing, packaging details, and what makes your product stand out..." required></textarea>
+                        <small>Detailed descriptions increase buyer confidence and sales</small>
                     </div>
 
                     <div class="form-group">
                         <label class="required-label">
-                            <i class="fas fa-camera"></i> Photo Trace (Verification) *
+                            <i class="fas fa-images"></i> Product Images *
                         </label>
-                        <p class="photo-trace-info">Upload a clear photo of your actual product inventory for verification</p>
-                        <div class="photo-trace-upload">
-                            <input type="file" id="photo-trace" accept="image/*" style="display: none;" required>
-                            <label for="photo-trace" class="photo-trace-label" id="photo-trace-label">
-                                <i class="fas fa-plus"></i>
-                                <span>Upload Verification Photo</span>
-                            </label>
-                            <img id="photo-trace-preview" class="photo-trace-preview" style="display: none;">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Additional Product Images (Optional)</label>
-                        <small>Upload up to 5 additional product photos</small>
+                        <p class="photo-info">Upload at least 1 clear photo of your product (up to 5 images)</p>
                         <div class="image-upload-container">
                             <input type="file" id="media-upload-1" accept="image/*" style="display: none;">
-                            <label for="media-upload-1" class="image-upload-label" id="image-upload-label-1">
+                            <label for="media-upload-1" class="image-upload-label primary-image" id="image-upload-label-1">
                                 <i class="fas fa-plus"></i>
+                                <span class="upload-text">Main Photo *</span>
                                 <span class="delete-icon" onclick="removeImage(1)">×</span>
                             </label>
 
@@ -190,15 +187,27 @@
             <!-- Step 3: Variation Matrix -->
             <div class="form-step" data-step="3">
                 <div class="step-card">
-                    <h2><i class="fas fa-boxes"></i> Inventory Variations</h2>
-                    <p class="step-description">Set up your stock variations and wholesale units</p>
+                    <h2><i class="fas fa-boxes"></i> Inventory & Variations</h2>
+                    <p class="step-description">Set up different options like sizes, colors, or packaging - each with its own stock and price</p>
+                    
+                    <div class="variation-tips">
+                        <div class="tip-icon"><i class="fas fa-lightbulb"></i></div>
+                        <div class="tip-content">
+                            <strong>Pro Tips:</strong>
+                            <ul>
+                                <li>Select a variation type to see quick-add suggestions</li>
+                                <li>Each option can have its own stock, price, and image</li>
+                                <li>Add up to 3 different variation types (e.g., Size + Color)</li>
+                            </ul>
+                        </div>
+                    </div>
 
                     <div id="variations-container">
                         <!-- Variation rows will be added here dynamically -->
                     </div>
 
                     <button type="button" class="add-variation-btn" id="add-variation-btn">
-                        <i class="fas fa-plus"></i> Add Variation
+                        <i class="fas fa-plus"></i> Add Another Variation Type
                     </button>
                 </div>
             </div>
@@ -206,24 +215,19 @@
             <!-- Step 4: Pricing & Tiers -->
             <div class="form-step" data-step="4">
                 <div class="step-card">
-                    <h2><i class="fas fa-dollar-sign"></i> Pricing & Discounts</h2>
-                    <p class="step-description">Set your base price and optional bulk discounts</p>
+                    <h2><i class="fas fa-tag"></i> Pricing & Review</h2>
+                    <p class="step-description">Set competitive prices and offer bulk discounts to attract larger orders</p>
 
                     <div class="form-group">
-                        <label for="item-price">Base Price per Unit (KES) *</label>
+                        <label for="item-price"><i class="fas fa-money-bill"></i> Base Price per Unit (KES) *</label>
                         <input type="number" id="item-price" placeholder="e.g., 1200" step="0.01" required>
-                        <small>This is your wholesale price per unit</small>
+                        <small>Your wholesale price - a small platform fee will be added</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="initial-price">Original Retail Price (Optional)</label>
+                        <label for="initial-price"><i class="fas fa-percent"></i> Original Retail Price (Optional)</label>
                         <input type="number" id="initial-price" placeholder="e.g., 2000" step="0.01">
-                        <small>The original retail price (helps show value to buyers)</small>
-                    </div>
-
-                    <div class="pricing-calculation">
-                        <h3><i class="fas fa-calculator"></i> Price Breakdown</h3>
-                        <div id="price-breakdown"></div>
+                        <small>Show buyers the savings compared to retail price</small>
                     </div>
 
                     <div class="bulk-pricing-section">
@@ -270,8 +274,10 @@
 
     <!-- Active Listings Section -->
     <div class="listings-section">
-        <h2><i class="fas fa-store"></i> Your Active Listings</h2>
-        <p class="section-subtitle">Quick edit prices and stock directly on your listings</p>
+        <div class="section-header">
+            <h2><i class="fas fa-store"></i> Your Active Listings</h2>
+            <p class="section-subtitle">Manage your products - edit prices, update stock, or remove items</p>
+        </div>
         <div id="listings-container"></div>
     </div>
 

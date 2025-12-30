@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
+    <link rel="apple-touch-icon" href="images/logo.jpg">
     <title>Product Details - Oda Pap B2B</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="product.css">
+    <link rel="stylesheet" href="styles.css">
+    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
@@ -64,7 +67,7 @@
                     <button class="nav-btn prev" id="prevBtn">
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <img id="mainImage" src="" alt="Product Image">
+                    <img id="mainImage" src="" alt="Product Image" fetchpriority="high">
                     <button class="nav-btn next" id="nextBtn">
                         <i class="fas fa-chevron-right"></i>
                     </button>
@@ -81,69 +84,24 @@
                 <div class="product-header">
                     <div class="product-title">
                         <h1 id="productName"></h1>
-                        <div class="product-meta-date">
-                            <i class="fas fa-calendar"></i>
-                            <span id="productDate"></span>
-                        </div>
+                        <span class="product-meta-date"><i class="fas fa-calendar"></i> <span id="productDate"></span></span>
                     </div>
                 </div>
 
                 <!-- Price Section -->
                 <div class="price-section">
                     <div class="current-price">
-                        <span class="label">Wholesale Price:</span>
+                        <span class="price-label"><i class="fas fa-tag"></i> Retail Price</span>
                         <span id="productPrice" class="amount"></span>
                     </div>
                     <div class="initial-price" id="initialPriceContainer">
-                        <span class="label">Retail Price:</span>
+                        <span class="was-label">Was</span>
                         <span id="initialPrice" class="amount strikethrough"></span>
                         <span id="discountBadge" class="discount-badge"></span>
                     </div>
                 </div>
 
-                <!-- Product Info -->
-                <div class="product-info-grid">
-                    <div class="info-item">
-                        <i class="fas fa-tag"></i>
-                        <span class="label">Category:</span>
-                        <span id="productCategory"></span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-layer-group"></i>
-                        <span class="label">Sub-Category:</span>
-                        <span id="productSubcategory"></span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-copyright"></i>
-                        <span class="label">Brand:</span>
-                        <span id="productBrand"></span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-boxes"></i>
-                        <span class="label">Total Stock:</span>
-                        <span id="productTotalStock"></span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <span class="label">Location:</span>
-                        <span id="productLocation"></span>
-                    </div>
-                </div>
-
-                <!-- Variations Section -->
-                <div id="variationsContainer" class="variations-section">
-                    <h3><i class="fas fa-th-large"></i> Product Variations</h3>
-                    <p class="variations-subtitle">Select your preferred variation</p>
-                    <div id="variationsList" class="variations-list"></div>
-                </div>
-
-                <!-- Bulk Pricing Section -->
-                <div id="bulkPricingContainer" class="bulk-pricing-section">
-                    <h3><i class="fas fa-layer-group"></i> Bulk Discounts</h3>
-                    <div id="bulkPricingList" class="bulk-pricing-list"></div>
-                </div>
-
-                <!-- Quick Actions -->
+                <!-- Quick Actions - Moved up for faster interaction -->
                 <div class="quick-actions">
                     <button id="buyNowBtn" class="primary-btn">
                         <i class="fas fa-bolt"></i> Buy Now
@@ -159,39 +117,64 @@
                     </button>
                 </div>
 
+                <!-- Variations Section -->
+                <div id="variationsContainer" class="variations-section">
+                    <h3><i class="fas fa-palette"></i> Variations</h3>
+                    <div id="variationsList" class="variations-list"></div>
+                </div>
+
+                <!-- Product Info - Compact -->
+                <div class="product-info-compact">
+                    <a href="#" id="productCategoryLink" class="info-tag">
+                        <i class="fas fa-tag"></i> <span id="productCategory"></span>
+                    </a>
+                    <a href="#" id="productSubcategoryLink" class="info-tag">
+                        <i class="fas fa-layer-group"></i> <span id="productSubcategory"></span>
+                    </a>
+                    <span class="info-tag">
+                        <i class="fas fa-copyright"></i> <span id="productBrand"></span>
+                    </span>
+                    <span class="info-tag">
+                        <i class="fas fa-boxes"></i> <span id="productTotalStock"></span> in stock
+                    </span>
+                    <span class="info-tag">
+                        <i class="fas fa-map-marker-alt"></i> <span id="productLocation"></span>
+                    </span>
+                </div>
+
+                <!-- Bulk Pricing Section -->
+                <div id="bulkPricingContainer" class="bulk-pricing-section">
+                    <h3><i class="fas fa-tags"></i> Bulk Discounts</h3>
+                    <div id="bulkPricingList" class="bulk-pricing-list"></div>
+                </div>
+
                 <!-- Description -->
                 <div class="description-section">
-                    <h3><i class="fas fa-align-left"></i> Product Description</h3>
+                    <h3><i class="fas fa-align-left"></i> Description</h3>
                     <p id="productDescription"></p>
                 </div>
 
                 <!-- Seller Information -->
                 <div class="seller-section">
-                    <h3><i class="fas fa-store"></i> Seller Information</h3>
                     <div class="seller-info">
                         <img id="sellerImage" src="images/default-profile.png" alt="Seller">
                         <div class="seller-details">
                             <h4 id="sellerName"></h4>
-                            <div class="seller-stats">
-                                <span>
-                                    <i class="fas fa-star"></i> Verified Seller
-                                </span>
-                            </div>
+                            <span class="seller-badge"><i class="fas fa-check-circle"></i> Verified</span>
                         </div>
                         <button id="messageSellerBtn" class="message-btn">
-                            <i class="fas fa-comment"></i> Message Seller
+                            <i class="fas fa-comment"></i> Chat
                         </button>
                     </div>
                 </div>
 
                 <!-- Safety Tips -->
                 <div class="safety-tips">
-                    <h3><i class="fas fa-shield-alt"></i> B2B Safety Tips</h3>
+                    <h3><i class="fas fa-shield-alt"></i> Safety Tips</h3>
                     <ul>
                         <li>Verify seller credentials before bulk orders</li>
                         <li>Request samples for quality inspection</li>
                         <li>Use secure payment methods</li>
-                        <li>Confirm stock availability before ordering</li>
                     </ul>
                 </div>
             </div>
