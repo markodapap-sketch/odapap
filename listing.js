@@ -822,6 +822,145 @@ function loadDraft() {
         return false;
     }
     
+    // Calculate what data exists in the draft
+    const draftInfo = getDraftSummary(draft);
+    
+    // Show confirmation dialog
+    return new Promise((resolve) => {
+        showDraftDialog(draft, draftInfo, (accepted) => {
+            if (accepted) {
+                restoreDraftData(draft);
+                resolve(true);
+            } else {
+                safeStorage.remove(DRAFT_STORAGE_KEY);
+                showNotification('Starting fresh - previous draft discarded', 'info');
+                resolve(false);
+            }
+        });
+    });
+}
+
+// Get summary of draft data for display
+function getDraftSummary(draft) {
+    const info = {
+        hasCategory: !!draft.category,
+        hasSubcategory: !!draft.subcategory,
+        hasBrand: !!draft.brandName && draft.brandName !== '',
+        hasName: !!draft.itemName && draft.itemName.trim() !== '',
+        hasDescription: !!draft.description && draft.description.trim() !== '',
+        hasImages: draft.images && draft.images.length > 0,
+        imageCount: draft.images?.length || 0,
+        step: draft.currentStep || 1,
+        age: Math.floor((Date.now() - draft.timestamp) / (1000 * 60 * 60)) // hours ago
+    };
+    
+    // Build missing items list
+    info.missingItems = [];
+    if (!info.hasCategory) info.missingItems.push('Category');
+    if (!info.hasSubcategory) info.missingItems.push('Sub-category');
+    if (!info.hasBrand) info.missingItems.push('Brand');
+    if (!info.hasName) info.missingItems.push('Product Name');
+    if (!info.hasDescription) info.missingItems.push('Description');
+    if (!info.hasImages) info.missingItems.push('Product Images');
+    
+    return info;
+}
+
+// Show draft resumption dialog
+function showDraftDialog(draft, draftInfo, callback) {
+    // Remove existing dialog if any
+    const existingDialog = $('draft-resume-dialog');
+    if (existingDialog) existingDialog.remove();
+    
+    const ageText = draftInfo.age < 1 ? 'Just now' : 
+                    draftInfo.age < 24 ? `${draftInfo.age} hour${draftInfo.age > 1 ? 's' : ''} ago` :
+                    `${Math.floor(draftInfo.age / 24)} day${Math.floor(draftInfo.age / 24) > 1 ? 's' : ''} ago`;
+    
+    const stepNames = ['', 'Classification', 'Product Details', 'Variations', 'Review'];
+    
+    // Build status items
+    let statusHTML = '<div class="draft-status-grid">';
+    statusHTML += `<div class="status-item ${draftInfo.hasCategory ? 'complete' : 'missing'}">
+        <i class="fas ${draftInfo.hasCategory ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+        <span>Category${draftInfo.hasCategory ? `: ${draft.category}` : ''}</span>
+    </div>`;
+    statusHTML += `<div class="status-item ${draftInfo.hasBrand ? 'complete' : 'missing'}">
+        <i class="fas ${draftInfo.hasBrand ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+        <span>Brand${draftInfo.hasBrand ? `: ${draft.brandName}` : ''}</span>
+    </div>`;
+    statusHTML += `<div class="status-item ${draftInfo.hasName ? 'complete' : 'missing'}">
+        <i class="fas ${draftInfo.hasName ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+        <span>Name${draftInfo.hasName ? `: ${draft.itemName.substring(0, 20)}${draft.itemName.length > 20 ? '...' : ''}` : ''}</span>
+    </div>`;
+    statusHTML += `<div class="status-item ${draftInfo.hasImages ? 'complete' : 'missing'}">
+        <i class="fas ${draftInfo.hasImages ? 'fa-check-circle' : 'fa-times-circle'}"></i>
+        <span>Images${draftInfo.hasImages ? ` (${draftInfo.imageCount})` : ''}</span>
+    </div>`;
+    statusHTML += '</div>';
+    
+    // Missing items warning
+    let missingWarning = '';
+    if (draftInfo.missingItems.length > 0) {
+        missingWarning = `
+            <div class="draft-missing-warning">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span><strong>Missing:</strong> ${draftInfo.missingItems.join(', ')}</span>
+            </div>
+        `;
+    }
+    
+    const dialog = document.createElement('div');
+    dialog.id = 'draft-resume-dialog';
+    dialog.className = 'draft-dialog-overlay';
+    dialog.innerHTML = `
+        <div class="draft-dialog">
+            <div class="draft-dialog-header">
+                <i class="fas fa-file-alt"></i>
+                <h3>Resume Previous Work?</h3>
+            </div>
+            <div class="draft-dialog-body">
+                <p class="draft-meta">
+                    <i class="fas fa-clock"></i> Saved ${ageText} 
+                    <span class="draft-step-badge">Step ${draftInfo.step}: ${stepNames[draftInfo.step]}</span>
+                </p>
+                ${statusHTML}
+                ${missingWarning}
+            </div>
+            <div class="draft-dialog-actions">
+                <button type="button" class="draft-btn draft-btn-discard" id="draft-discard-btn">
+                    <i class="fas fa-trash-alt"></i> Start Fresh
+                </button>
+                <button type="button" class="draft-btn draft-btn-resume" id="draft-resume-btn">
+                    <i class="fas fa-play"></i> Continue Editing
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(dialog);
+    
+    // Add event listeners
+    $('draft-resume-btn').addEventListener('click', () => {
+        dialog.remove();
+        callback(true);
+    });
+    
+    $('draft-discard-btn').addEventListener('click', () => {
+        dialog.remove();
+        callback(false);
+    });
+    
+    // Close on overlay click
+    dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+            dialog.remove();
+            callback(false);
+        }
+    });
+}
+
+// Actually restore the draft data
+function restoreDraftData(draft) {
     try {
         // Restore category and trigger cascading dropdowns
         if (DOM.category) {
@@ -873,16 +1012,14 @@ function loadDraft() {
         if (draft.currentStep > 1) {
             currentStep = draft.currentStep;
             showStep(currentStep);
-            showNotification('📝 Your progress has been restored', 'success');
         }
         
-        return true;
+        showNotification('📝 Your progress has been restored', 'success');
+        
     } catch (e) {
-        console.error("Error loading draft:", e);
+        console.error("Error restoring draft:", e);
         safeStorage.remove(DRAFT_STORAGE_KEY);
     }
-    
-    return false;
 }
 
 // Update searchable dropdown display to match select value
@@ -1139,6 +1276,13 @@ function refreshSearchableDropdown(selectId) {
 }
 
 // ================= STEP NAVIGATION =================
+const stepNames = {
+    1: 'Classification',
+    2: 'Product Info', 
+    3: 'Inventory',
+    4: 'Review'
+};
+
 function updateProgressBar() {
     $$('.progress-step').forEach((step, index) => {
         const stepNum = index + 1;
@@ -1150,15 +1294,62 @@ function updateProgressBar() {
             step.classList.add('active');
         }
     });
+    
+    // Update floating nav indicator
+    updateFloatingNav();
+}
+
+function updateFloatingNav() {
+    const navIndicator = $('floating-nav-indicator');
+    if (navIndicator) {
+        const currentStepSpan = navIndicator.querySelector('.current-step');
+        if (currentStepSpan) {
+            currentStepSpan.textContent = `Step ${currentStep}: ${stepNames[currentStep]}`;
+        }
+        
+        const dots = navIndicator.querySelectorAll('.step-dot');
+        dots.forEach((dot, index) => {
+            const stepNum = index + 1;
+            dot.classList.remove('active', 'completed');
+            if (stepNum === currentStep) {
+                dot.classList.add('active');
+            } else if (stepNum < currentStep) {
+                dot.classList.add('completed');
+            }
+        });
+        
+        // Show floating nav when scrolled past the progress bar
+        const progressBar = $q('.progress-bar');
+        if (progressBar) {
+            const rect = progressBar.getBoundingClientRect();
+            if (rect.bottom < 0) {
+                navIndicator.classList.add('visible');
+            } else {
+                navIndicator.classList.remove('visible');
+            }
+        }
+    }
 }
 
 function showStep(step) {
     $$('.form-step').forEach(s => s.classList.remove('active'));
     $q(`.form-step[data-step="${step}"]`)?.classList.add('active');
     
-    $('prev-btn').style.display = step === 1 ? 'none' : 'flex';
-    $('next-btn').style.display = step === totalSteps ? 'none' : 'flex';
-    $('submit-button').style.display = step === totalSteps ? 'flex' : 'none';
+    // Update navigation buttons
+    const prevBtn = $('prev-btn');
+    const nextBtn = $('next-btn');
+    const submitBtn = $('submit-button');
+    
+    // Always show prev on step > 1
+    prevBtn.style.display = step === 1 ? 'none' : 'flex';
+    prevBtn.innerHTML = `<i class="fas fa-chevron-left"></i><span class="nav-btn-text">Back to ${stepNames[step - 1] || ''}</span>`;
+    
+    // Next button with step name
+    nextBtn.style.display = step === totalSteps ? 'none' : 'flex';
+    nextBtn.innerHTML = `<span class="nav-btn-text">${stepNames[step + 1] || 'Next'}</span><i class="fas fa-chevron-right"></i>`;
+    
+    // Submit button
+    submitBtn.style.display = step === totalSteps ? 'flex' : 'none';
     
     if (step === 4) {
         updateReviewSummary();
@@ -1166,11 +1357,17 @@ function showStep(step) {
     }
     
     updateProgressBar();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // Smooth scroll with offset for sticky nav
+    setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 50);
 }
 
 function validateStep(step) {
     const stepElement = $q(`.form-step[data-step="${step}"]`);
+    if (!stepElement) return false;
+    
     const requiredFields = stepElement.querySelectorAll('[required]');
     
     // Field name mapping for user-friendly messages
@@ -1187,17 +1384,13 @@ function validateStep(step) {
         'initial-price': 'Original Retail Price'
     };
     
-    const stepNames = {
-        1: 'Classification & Brand',
-        2: 'Product Details',
-        3: 'Inventory & Variations',
-        4: 'Pricing & Review'
-    };
+    // Collect all missing fields for this step
+    const missingFields = [];
     
     for (let field of requiredFields) {
         if (!field.value || (field.tagName === 'SELECT' && field.value === '')) {
             const fieldName = fieldNames[field.id] || field.placeholder || 'Required field';
-            return showValidationError(`Please fill in "${fieldName}" in ${stepNames[step]}`, field, step);
+            missingFields.push({ name: fieldName, element: field });
         }
     }
     
@@ -1208,21 +1401,32 @@ function validateStep(step) {
         if (subsubcategoryGroup?.style.display !== 'none') {
             if (DOM.subsubcategory?.value === 'Other' || DOM.subsubcategory?.value === 'other') {
                 if (!DOM.customSubsubcategory?.value.trim()) {
-                    return showValidationError(`Please fill in "Custom Type" in ${stepNames[1]}`, DOM.customSubsubcategory, 1);
+                    missingFields.push({ name: 'Custom Type', element: DOM.customSubsubcategory });
                 }
             } else if (!DOM.subsubcategory?.value) {
-                return showValidationError(`Please fill in "Specific Type" in ${stepNames[1]}`, DOM.subsubcategory, 1);
+                missingFields.push({ name: 'Specific Type', element: DOM.subsubcategory });
             }
         }
         
         // Check brand-name
-        if (DOM.brandName?.value === 'Other' || DOM.brandName?.value === 'other') {
+        if (DOM.brandName?.value === 'Custom/Other' || DOM.brandName?.value === 'Other' || DOM.brandName?.value === 'other') {
             if (DOM.customBrandGroup?.style.display !== 'none' && !DOM.customBrand?.value.trim()) {
-                return showValidationError(`Please fill in "New Brand Name" in ${stepNames[1]}`, DOM.customBrand, 1);
+                missingFields.push({ name: 'New Brand Name', element: DOM.customBrand });
             }
         } else if (!DOM.brandName?.value) {
-            return showValidationError(`Please fill in "Brand Name" in ${stepNames[1]}`, DOM.brandName, 1);
+            missingFields.push({ name: 'Brand Name', element: DOM.brandName });
         }
+    }
+    
+    // Show combined missing fields message
+    if (missingFields.length > 0) {
+        const fieldList = missingFields.map(f => f.name).join(', ');
+        const message = missingFields.length === 1 
+            ? `Please fill in: ${fieldList}`
+            : `Missing ${missingFields.length} fields: ${fieldList}`;
+        
+        showMissingFieldsNotification(message, missingFields);
+        return false;
     }
     
     if (step === 2) {
@@ -1243,9 +1447,15 @@ function validateStep(step) {
         }
         if (!hasImage) {
             if (hasRestoredPreview) {
-                showNotification('Your previous images were restored as previews only. Please re-select your image files to upload them.', 'warning');
+                showMissingFieldsNotification(
+                    '⚠️ Image files need re-upload. Your previous images were restored as previews only - please re-select them.',
+                    [{ name: 'Product Images', element: $('image-upload-label-1') }]
+                );
             } else {
-                showNotification('Please upload at least one product image');
+                showMissingFieldsNotification(
+                    '📸 Please upload at least 1 product image',
+                    [{ name: 'Product Images', element: $('image-upload-label-1') }]
+                );
             }
             return false;
         }
@@ -1254,7 +1464,10 @@ function validateStep(step) {
     if (step === 3) {
         const variationRows = $$('.variation-row');
         if (variationRows.length === 0) {
-            showNotification('Please add at least one product variation');
+            showMissingFieldsNotification(
+                '📦 Please add at least one product variation (e.g., Size, Color)',
+                []
+            );
             return false;
         }
         
@@ -1262,51 +1475,50 @@ function validateStep(step) {
         for (let row of variationRows) {
             const variationTitle = getVariationTitle(row);
             if (!variationTitle || variationTitle.trim() === '') {
-                showNotification('Please select or enter a variation type for all variations', 'error');
+                showMissingFieldsNotification(
+                    '🏷️ Please select or enter a variation type for all variations',
+                    [{ name: 'Variation Type', element: row.querySelector('.variation-type-select') }]
+                );
                 return false;
             }
             
             const attributes = row.querySelectorAll('.attribute-item');
             if (attributes.length === 0) {
-                showNotification(`Please add at least one option for "${variationTitle}"`, 'error');
+                showMissingFieldsNotification(
+                    `📋 Please add at least one option for "${variationTitle}"`,
+                    []
+                );
                 return false;
             }
             
             // Check each attribute has required fields with valid values
             for (let attr of attributes) {
-                const name = attr.querySelector('.attribute-name').value?.trim();
-                const stockValue = attr.querySelector('.attribute-stock').value;
-                const priceValue = attr.querySelector('.attribute-price').value;
+                const nameInput = attr.querySelector('.attribute-name');
+                const stockInput = attr.querySelector('.attribute-stock');
+                const priceInput = attr.querySelector('.attribute-price');
+                
+                const name = nameInput?.value?.trim();
+                const stockValue = stockInput?.value;
+                const priceValue = priceInput?.value;
+                
+                const attrMissing = [];
                 
                 if (!name || name === '') {
-                    showNotification(`Please enter a name for all options in "${variationTitle}"`, 'error');
-                    attr.querySelector('.attribute-name').focus();
-                    return false;
+                    attrMissing.push('Option Name');
+                }
+                if (!stockValue || stockValue === '' || parseInt(stockValue) < 1) {
+                    attrMissing.push('Stock (min 1)');
+                }
+                if (!priceValue || priceValue === '' || parseFloat(priceValue) <= 0) {
+                    attrMissing.push('Price (> 0)');
                 }
                 
-                if (!stockValue || stockValue === '') {
-                    showNotification(`Please enter stock for option "${name}"`, 'error');
-                    attr.querySelector('.attribute-stock').focus();
-                    return false;
-                }
-                
-                const stock = parseInt(stockValue);
-                if (isNaN(stock) || stock < 1) {
-                    showNotification(`Stock for "${name}" must be at least 1`, 'error');
-                    attr.querySelector('.attribute-stock').focus();
-                    return false;
-                }
-                
-                if (!priceValue || priceValue === '') {
-                    showNotification(`Please enter price for option "${name}"`, 'error');
-                    attr.querySelector('.attribute-price').focus();
-                    return false;
-                }
-                
-                const price = parseFloat(priceValue);
-                if (isNaN(price) || price <= 0) {
-                    showNotification(`Price for "${name}" must be greater than 0`, 'error');
-                    attr.querySelector('.attribute-price').focus();
+                if (attrMissing.length > 0) {
+                    const optionName = name || 'this option';
+                    showMissingFieldsNotification(
+                        `⚠️ In "${variationTitle}" > ${optionName}: Missing ${attrMissing.join(', ')}`,
+                        [{ name: attrMissing[0], element: attrMissing.includes('Option Name') ? nameInput : (attrMissing.includes('Stock') ? stockInput : priceInput) }]
+                    );
                     return false;
                 }
             }
@@ -1314,6 +1526,34 @@ function validateStep(step) {
     }
     
     return true;
+}
+
+// Enhanced notification for missing fields
+function showMissingFieldsNotification(message, fields) {
+    showNotification(message, 'warning');
+    
+    // Focus and highlight first missing field
+    if (fields.length > 0 && fields[0].element) {
+        const field = fields[0].element;
+        setTimeout(() => {
+            // Handle searchable dropdowns
+            if (field.classList?.contains('searchable-select-hidden')) {
+                const wrapper = field.nextElementSibling;
+                if (wrapper?.classList.contains('searchable-dropdown')) {
+                    wrapper.querySelector('.dropdown-trigger')?.classList.add('field-error');
+                    wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => wrapper.querySelector('.dropdown-trigger')?.classList.remove('field-error'), 3000);
+                    return;
+                }
+            }
+            
+            // Regular fields
+            field.classList?.add('field-error');
+            field.focus?.();
+            field.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => field.classList?.remove('field-error'), 3000);
+        }, 100);
+    }
 }
 
 $('next-btn').addEventListener('click', () => {
@@ -1327,6 +1567,20 @@ $('prev-btn').addEventListener('click', () => {
     currentStep--;
     showStep(currentStep);
 });
+
+// Floating nav visibility on scroll
+window.addEventListener('scroll', throttle(() => {
+    const navIndicator = $('floating-nav-indicator');
+    const progressBar = $q('.progress-bar');
+    if (navIndicator && progressBar) {
+        const rect = progressBar.getBoundingClientRect();
+        if (rect.bottom < -50) {
+            navIndicator.classList.add('visible');
+        } else {
+            navIndicator.classList.remove('visible');
+        }
+    }
+}, 100));
 
 // ================= CATEGORY HIERARCHY =================
 $('category').addEventListener('change', function() {
@@ -1577,6 +1831,17 @@ const metadataCache = {
 };
 
 async function saveCustomCategory(category, subcategory, customType) {
+    // Validate inputs
+    if (!category || !subcategory || !customType) {
+        console.warn("saveCustomCategory: Missing required parameters");
+        return false;
+    }
+    
+    const normalizedType = String(customType).trim();
+    if (!normalizedType) {
+        return false;
+    }
+    
     try {
         const cacheKey = `${category}_${subcategory}`;
         const metadataRef = doc(db, "CategoryMetadata", cacheKey);
@@ -1587,14 +1852,18 @@ async function saveCustomCategory(category, subcategory, customType) {
         if (cached && Date.now() - cached.timestamp < metadataCache.cacheExpiry) {
             types = [...cached.types];
         } else {
-            const metadataDoc = await getDoc(metadataRef);
-            if (metadataDoc.exists()) {
-                types = metadataDoc.data().types || [];
+            try {
+                const metadataDoc = await getDoc(metadataRef);
+                if (metadataDoc.exists()) {
+                    types = metadataDoc.data().types || [];
+                }
+            } catch (readError) {
+                console.warn("Could not read existing categories, will create new:", readError.message);
+                types = [];
             }
         }
         
-        const normalizedType = customType.trim();
-        if (normalizedType && !types.some(t => t.toLowerCase() === normalizedType.toLowerCase())) {
+        if (!types.some(t => t.toLowerCase() === normalizedType.toLowerCase())) {
             types.push(normalizedType);
             await setDoc(metadataRef, { 
                 types,
@@ -1607,13 +1876,27 @@ async function saveCustomCategory(category, subcategory, customType) {
             metadataCache.categories[cacheKey] = { types, timestamp: Date.now() };
             console.log(`Saved custom type: ${normalizedType}`);
         }
+        return true;
     } catch (error) {
         console.error("Error saving custom category:", error);
+        // Don't throw - just log and continue
+        return false;
     }
 }
 
 // Save custom brand to Firestore with caching
 async function saveCustomBrand(category, brandName) {
+    // Validate inputs
+    if (!category || !brandName) {
+        console.warn("saveCustomBrand: Missing required parameters");
+        return false;
+    }
+    
+    const normalizedBrand = String(brandName).trim();
+    if (!normalizedBrand) {
+        return false;
+    }
+    
     try {
         const brandsRef = doc(db, "BrandMetadata", category);
         
@@ -1623,14 +1906,18 @@ async function saveCustomBrand(category, brandName) {
         if (cached && Date.now() - cached.timestamp < metadataCache.cacheExpiry) {
             brands = [...cached.brands];
         } else {
-            const brandsDoc = await getDoc(brandsRef);
-            if (brandsDoc.exists()) {
-                brands = brandsDoc.data().brands || [];
+            try {
+                const brandsDoc = await getDoc(brandsRef);
+                if (brandsDoc.exists()) {
+                    brands = brandsDoc.data().brands || [];
+                }
+            } catch (readError) {
+                console.warn("Could not read existing brands, will create new:", readError.message);
+                brands = [];
             }
         }
         
-        const normalizedBrand = brandName.trim();
-        if (normalizedBrand && !brands.some(b => b.toLowerCase() === normalizedBrand.toLowerCase())) {
+        if (!brands.some(b => b.toLowerCase() === normalizedBrand.toLowerCase())) {
             brands.push(normalizedBrand);
             await setDoc(brandsRef, { 
                 brands,
@@ -1642,19 +1929,30 @@ async function saveCustomBrand(category, brandName) {
             metadataCache.brands[category] = { brands, timestamp: Date.now() };
             console.log(`Saved custom brand: ${normalizedBrand}`);
         }
+        return true;
     } catch (error) {
         console.error("Error saving custom brand:", error);
+        // Don't throw - just log and continue
+        return false;
     }
 }
 
-// Load custom categories from Firestore with caching
+// Load custom categories from Firestore with caching (mobile-optimized)
 async function loadCustomCategories(category, subcategory) {
+    if (!category || !subcategory) return [];
+    
     const cacheKey = `${category}_${subcategory}`;
     
-    // Check cache first
+    // Check cache first - extends cache time on mobile for offline support
     const cached = metadataCache.categories[cacheKey];
-    if (cached && Date.now() - cached.timestamp < metadataCache.cacheExpiry) {
+    const cacheTime = navigator.onLine ? metadataCache.cacheExpiry : metadataCache.cacheExpiry * 10;
+    if (cached && Date.now() - cached.timestamp < cacheTime) {
         return cached.types;
+    }
+    
+    // If offline, return cached or empty
+    if (!navigator.onLine) {
+        return cached?.types || [];
     }
     
     try {
@@ -1668,17 +1966,27 @@ async function loadCustomCategories(category, subcategory) {
             return types;
         }
     } catch (error) {
-        console.error("Error loading custom categories:", error);
+        console.warn("Error loading custom categories:", error.message);
+        // Return cached data if available on error
+        if (cached?.types) return cached.types;
     }
     return [];
 }
 
-// Load custom brands from Firestore with caching
+// Load custom brands from Firestore with caching (mobile-optimized)
 async function loadCustomBrands(category) {
-    // Check cache first
+    if (!category) return [];
+    
+    // Check cache first - extends cache time on mobile for offline support
     const cached = metadataCache.brands[category];
-    if (cached && Date.now() - cached.timestamp < metadataCache.cacheExpiry) {
+    const cacheTime = navigator.onLine ? metadataCache.cacheExpiry : metadataCache.cacheExpiry * 10;
+    if (cached && Date.now() - cached.timestamp < cacheTime) {
         return cached.brands;
+    }
+    
+    // If offline, return cached or empty
+    if (!navigator.onLine) {
+        return cached?.brands || [];
     }
     
     try {
@@ -1692,7 +2000,9 @@ async function loadCustomBrands(category) {
             return brands;
         }
     } catch (error) {
-        console.error("Error loading custom brands:", error);
+        console.warn("Error loading custom brands:", error.message);
+        // Return cached data if available on error
+        if (cached?.brands) return cached.brands;
     }
     return [];
 }
@@ -2572,17 +2882,40 @@ $('item-listing-form').addEventListener('submit', async (event) => {
         
         const listingId = DOM.submitButton?.dataset.id;
         
-        // Save custom brand if user added a new one
+        // Save custom brand/category in background (non-blocking)
+        // These are "nice to have" saves - don't let them block the main listing
+        const metadataSaves = [];
+        
         if (formData.brandName === 'Custom/Other') {
-            const customBrand = formData.customBrand.trim();
-            if (customBrand) {
-                await saveCustomBrand(formData.category, customBrand);
+            const customBrand = (formData.customBrand || '').trim();
+            if (customBrand && formData.category) {
+                // Fire and forget - don't await
+                metadataSaves.push(
+                    saveCustomBrand(formData.category, customBrand)
+                        .catch(e => console.warn('Background brand save failed:', e.message))
+                );
             }
         }
         
-        // Save custom subcategory if user added a new one
         if (formData.subsubcategory === 'custom' && formData.customSubsubcategory) {
-            await saveCustomCategory(formData.category, formData.subcategory, formData.customSubsubcategory);
+            const customType = (formData.customSubsubcategory || '').trim();
+            if (customType && formData.category && formData.subcategory) {
+                // Fire and forget - don't await
+                metadataSaves.push(
+                    saveCustomCategory(formData.category, formData.subcategory, customType)
+                        .catch(e => console.warn('Background category save failed:', e.message))
+                );
+            }
+        }
+        
+        // Let metadata saves run in background, don't wait for them
+        if (metadataSaves.length > 0) {
+            Promise.allSettled(metadataSaves).then(results => {
+                const failed = results.filter(r => r.status === 'rejected').length;
+                if (failed > 0) {
+                    console.warn(`${failed} metadata save(s) failed - listing still submitted`);
+                }
+            });
         }
         
         // Create listing data object for queue
