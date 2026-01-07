@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/jpeg" href="images/logo.jpg">
     <link rel="apple-touch-icon" href="images/logo.jpg">
-    <title>Admin Dashboard - Oda Pap B2B</title>
+    <title>Admin Dashboard - Oda Pap </title>
     <link rel="stylesheet" href="admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
@@ -189,15 +189,37 @@
             <!-- Products Section -->
             <section id="products-section" class="content-section">
                 <div class="section-header">
-                    <h2>Product Listings</h2>
-                    <div class="search-box">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="productSearch" placeholder="Search products...">
+                    <h2>Product Listings Management</h2>
+                    <div class="header-actions">
+                        <button class="btn-export" id="exportListingsBtn" onclick="adminDashboard.exportListingsToExcel()">
+                            <i class="fas fa-file-excel"></i> Export to Excel
+                        </button>
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="productSearch" placeholder="Search products...">
+                        </div>
                     </div>
                 </div>
 
-                <div class="products-grid" id="productsGrid">
-                    <!-- Products will be populated here -->
+                <div class="listings-table-container">
+                    <table class="data-table" id="listingsTable">
+                        <thead>
+                            <tr>
+                                <th>Image</th>
+                                <th>Product Name</th>
+                                <th>Seller</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listingsTableBody">
+                            <!-- Listings will be populated here -->
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="pagination" id="productsPagination"></div>
