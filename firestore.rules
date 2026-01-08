@@ -3,10 +3,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Listings collection - Public read, authenticated write
+    // Helper function to check if user is an admin
+    function isAdmin() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/Admins/$(request.auth.uid));
+    }
+    
+    // Helper function to check if user is master admin
+    function isMasterAdmin() {
+      return request.auth != null && 
+             request.auth.token.email == 'admin@odapap.com';
+    }
+    
+    // Admins collection - Only master admin can manage other admins
+    match /Admins/{adminId} {
+      allow read: if request.auth != null && 
+                    (request.auth.uid == adminId || isMasterAdmin() || isAdmin());
+      allow create: if isMasterAdmin();
+      allow update, delete: if isMasterAdmin() && request.auth.uid != adminId;
+      // Allow self-creation for master admin
+      allow create: if request.auth != null && 
+                      request.auth.token.email == 'admin@odapap.com' && 
+                      request.auth.uid == adminId;
+    }
+    
+    // Listings collection - Public read, authenticated write, admin can manage all
     match /Listings/{listingId} {
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null && 
+                      (resource.data.uploaderId == request.auth.uid || isAdmin());
     }
     
     // CategoryMetadata collection - for custom categories added by users
@@ -24,24 +50,46 @@ service cloud.firestore {
     // Users collection (for personal profile data)
     match /Users/{userId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      // Users can edit their own profile, admins can edit any profile
+      allow write: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
     }
     
     // 'users' collection (for app-related data including followers)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Users can access their own data, admins can access all
+      allow read: if request.auth != null && 
+                    (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && 
+                     (request.auth.uid == userId || isAdmin());
       
       // Nested collections within 'users' (cart, wishlist, etc.)
       match /{collection=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if request.auth != null && 
+                             (request.auth.uid == userId || isAdmin());
       }
       
       // Followers subcollection
       match /followers/{followerId} {
         allow read: if true;
         allow create: if request.auth != null && request.auth.uid == followerId;
-        allow delete: if request.auth != null && request.auth.uid == followerId;
+        allow delete: if request.auth != null && 
+                        (request.auth.uid == followerId || isAdmin());
       }
+    }
+    
+    // Orders collection - Users can read their own, admins can read/write all
+    match /Orders/{orderId} {
+      allow read: if request.auth != null && 
+                    (resource.data.buyerId == request.auth.uid || 
+                     resource.data.sellerId == request.auth.uid || 
+                     isAdmin());
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+                      (resource.data.buyerId == request.auth.uid || 
+                       resource.data.sellerId == request.auth.uid || 
+                       isAdmin());
+      allow delete: if isAdmin();
     }
     
     // Chats collection
@@ -54,9 +102,23 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
-    // Reports collection
+    // Reports collection - Users can create, admins can manage
     match /Reports/{reportId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && 
+                    (resource.data.reporterId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // Analytics collection - Only admins can access
+    match /Analytics/{docId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Settings collection - Public read for app settings, admin write
+    match /Settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

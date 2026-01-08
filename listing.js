@@ -27,7 +27,10 @@ const state = {
     cropper: null,
     editingImgIdx: null,
     touchStartX: 0,
-    touchEndX: 0
+    touchEndX: 0,
+    profileComplete: false,
+    uploadQueue: [],
+    isUploading: false
 };
 
 const $ = id => document.getElementById(id);
@@ -987,19 +990,84 @@ function initForm() {
 async function handleSubmit(e) {
     e.preventDefault();
     
+    // Check if profile is complete
+    if (!state.profileComplete) {
+        toast('Please complete your profile before listing products', 'error', 5000);
+        $('profile-warning').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+    
     // Comprehensive validation of ALL steps before upload
     if (!validateAllBeforeUpload()) return;
     
     const user = auth.currentUser;
     if (!user) { toast('Please login', 'error'); return; }
     
-    showLoader('Publishing...');
+    // Create upload job with all current form data
+    const uploadJob = {
+        id: Date.now(),
+        productName: $('product-name').value.trim(),
+        images: [...state.images],
+        variants: JSON.parse(JSON.stringify(state.variants)),
+        bulkTiers: [...state.bulkTiers],
+        formData: {
+            category: $('category').value,
+            subcategory: $('subcategory').value,
+            productType: $('product-type').value,
+            customType: $('custom-type').value,
+            brand: $('brand').value,
+            customBrand: $('custom-brand').value,
+            description: $('description').value.trim()
+        },
+        editingId: state.editingId,
+        status: 'pending',
+        progress: 0
+    };
+    
+    // Add to upload queue
+    state.uploadQueue.push(uploadJob);
+    
+    // Show upload notification
+    toast(`Uploading "${uploadJob.productName}" in background...`, 'info', 3000);
+    
+    // Display upload progress UI
+    showUploadProgress(uploadJob);
+    
+    // Reset form immediately to allow new listings
+    clearDraft();
+    resetForm();
+    
+    // Start upload if not already uploading
+    if (!state.isUploading) {
+        processUploadQueue();
+    }
+}
+
+// Background upload processor
+async function processUploadQueue() {
+    if (state.uploadQueue.length === 0) {
+        state.isUploading = false;
+        return;
+    }
+    
+    state.isUploading = true;
+    const job = state.uploadQueue[0];
+    const user = auth.currentUser;
+    
+    if (!user) {
+        state.uploadQueue.shift();
+        updateUploadProgress(job.id, 'error', 'User not logged in');
+        processUploadQueue();
+        return;
+    }
     
     try {
+        updateUploadProgress(job.id, 'uploading', 0);
+        
         // Upload images
         const imageUrls = [];
-        for (let i = 0; i < state.images.length; i++) {
-            const img = state.images[i];
+        for (let i = 0; i < job.images.length; i++) {
+            const img = job.images[i];
             
             // Skip if already a URL (editing)
             if (img.isExisting && img.dataUrl?.startsWith('http')) {
@@ -1007,7 +1075,8 @@ async function handleSubmit(e) {
                 continue;
             }
             
-            showLoader(`Uploading photo ${i + 1}/${state.images.length}...`);
+            const progress = Math.floor((i / job.images.length) * 40);
+            updateUploadProgress(job.id, 'uploading', progress, `Uploading photo ${i + 1}/${job.images.length}`);
             
             const fileRef = storageRef(storage, `listings/${user.uid}/${Date.now()}_${i}.jpg`);
             const blob = await fetch(img.dataUrl).then(r => r.blob());
@@ -1016,10 +1085,10 @@ async function handleSubmit(e) {
         }
         
         // Process variants and upload variant images
-        showLoader('Processing variants...');
+        updateUploadProgress(job.id, 'uploading', 45, 'Processing variants...');
         const variations = [];
         
-        for (const v of state.variants) {
+        for (const v of job.variants) {
             const attributes = [];
             
             for (const o of v.options) {
@@ -1030,12 +1099,10 @@ async function handleSubmit(e) {
                 
                 // Upload variant option image if exists
                 if (o.image && o.imageFile) {
-                    showLoader(`Uploading ${o.name} photo...`);
                     const varImgRef = storageRef(storage, `listings/${user.uid}/variants/${Date.now()}_${o.name.replace(/\s+/g, '_')}.jpg`);
                     await uploadBytes(varImgRef, o.imageFile);
                     imageUrl = await getDownloadURL(varImgRef);
                 } else if (o.image?.startsWith('http')) {
-                    // Keep existing URL if editing
                     imageUrl = o.image;
                 }
                 
@@ -1056,6 +1123,7 @@ async function handleSubmit(e) {
         }
         
         // Calculate totals
+        updateUploadProgress(job.id, 'uploading', 80, 'Finalizing...');
         let totalStock = 0, lowestPrice = Infinity;
         variations.forEach(v => {
             v.attributes.forEach(a => {
@@ -1064,46 +1132,118 @@ async function handleSubmit(e) {
             });
         });
         
-        const brand = $('brand').value === 'Other' ? $('custom-brand').value.trim() : $('brand').value;
-        const finalType = $('product-type').value === 'custom' ? $('custom-type').value : $('product-type').value;
+        const brand = job.formData.brand === 'Other' ? job.formData.customBrand.trim() : job.formData.brand;
+        const finalType = job.formData.productType === 'custom' ? job.formData.customType : job.formData.productType;
         
         const data = {
             uploaderId: user.uid,
-            category: $('category').value,
-            subcategory: $('subcategory').value,
+            category: job.formData.category,
+            subcategory: job.formData.subcategory,
             subsubcategory: finalType,
-            name: $('product-name').value.trim(),
+            name: job.productName,
             brand,
-            description: $('description').value.trim(),
+            description: job.formData.description,
             imageUrls,
             variations,
-            bulkPricing: state.bulkTiers.length > 0 ? state.bulkTiers.map(t => ({ minQuantity: t.qty, discountPercent: t.discount })) : null,
+            bulkPricing: job.bulkTiers.length > 0 ? job.bulkTiers.map(t => ({ minQuantity: t.qty, discountPercent: t.discount })) : null,
             totalStock,
             price: lowestPrice,
             originalPrice: lowestPrice,
             updatedAt: new Date().toISOString()
         };
         
-        if (state.editingId) {
-            await updateDoc(doc(db, "Listings", state.editingId), data);
-            toast('Listing updated!', 'success');
+        updateUploadProgress(job.id, 'uploading', 90, 'Publishing...');
+        
+        if (job.editingId) {
+            await updateDoc(doc(db, "Listings", job.editingId), data);
         } else {
             data.createdAt = new Date().toISOString();
             await addDoc(collection(db, "Listings"), data);
-            toast('Listing published!', 'success');
         }
         
-        clearDraft();
-        resetForm();
-        switchTab('my-listings');
+        updateUploadProgress(job.id, 'complete', 100, 'Published!');
+        
+        // Remove from queue
+        state.uploadQueue.shift();
+        
+        // Auto-remove success notification after 5 seconds
+        setTimeout(() => removeUploadProgress(job.id), 5000);
         
     } catch (err) {
-        console.error('Submit error:', err);
-        toast('Failed to publish. Please try again.', 'error');
-    } finally {
-        hideLoader();
+        console.error('Upload error:', err);
+        updateUploadProgress(job.id, 'error', 0, err.message || 'Upload failed');
+        state.uploadQueue.shift();
+    }
+    
+    // Process next item in queue
+    setTimeout(() => processUploadQueue(), 1000);
+}
+
+// Upload progress UI management
+function showUploadProgress(job) {
+    let container = $('upload-progress-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'upload-progress-container';
+        container.className = 'upload-progress-container';
+        document.body.appendChild(container);
+    }
+    
+    const progressEl = document.createElement('div');
+    progressEl.id = `upload-${job.id}`;
+    progressEl.className = 'upload-progress-item';
+    progressEl.innerHTML = `
+        <div class="upload-info">
+            <strong class="upload-name">${job.productName}</strong>
+            <span class="upload-status">Queued...</span>
+        </div>
+        <div class="upload-bar">
+            <div class="upload-bar-fill" style="width: 0%"></div>
+        </div>
+        <button class="upload-cancel" onclick="cancelUpload(${job.id})"><i class="fas fa-times"></i></button>
+    `;
+    container.appendChild(progressEl);
+}
+
+function updateUploadProgress(jobId, status, progress, message) {
+    const el = $(`upload-${jobId}`);
+    if (!el) return;
+    
+    const statusEl = el.querySelector('.upload-status');
+    const barFill = el.querySelector('.upload-bar-fill');
+    
+    if (status === 'uploading') {
+        statusEl.textContent = message || `${progress}%`;
+        barFill.style.width = `${progress}%`;
+        el.className = 'upload-progress-item uploading';
+    } else if (status === 'complete') {
+        statusEl.textContent = 'Published!';
+        barFill.style.width = '100%';
+        el.className = 'upload-progress-item complete';
+    } else if (status === 'error') {
+        statusEl.textContent = message || 'Failed';
+        el.className = 'upload-progress-item error';
     }
 }
+
+function removeUploadProgress(jobId) {
+    const el = $(`upload-${jobId}`);
+    if (el) el.remove();
+    
+    const container = $('upload-progress-container');
+    if (container && container.children.length === 0) {
+        container.remove();
+    }
+}
+
+window.cancelUpload = function(jobId) {
+    const idx = state.uploadQueue.findIndex(j => j.id === jobId);
+    if (idx !== -1) {
+        state.uploadQueue.splice(idx, 1);
+        removeUploadProgress(jobId);
+        toast('Upload cancelled', 'info');
+    }
+};
 
 function resetForm() {
     $('listing-form').reset();
@@ -1718,9 +1858,23 @@ async function loadProfile(user) {
                 $('profile-pic').src = d.profilePicUrl || user.photoURL;
             }
             
-            // Show warning only if profile incomplete
+            // Check profile completion - name, location/county, and phone required
             const complete = d.name && (d.county || d.location) && d.phone;
-            $('profile-warning').style.display = complete ? 'none' : 'flex';
+            state.profileComplete = complete;
+            
+            // Show warning and disable form if profile incomplete
+            const warningEl = $('profile-warning');
+            warningEl.style.display = complete ? 'none' : 'flex';
+            
+            // Disable new listing tab if profile incomplete
+            const newListingSection = $('new-listing');
+            if (!complete) {
+                newListingSection.style.pointerEvents = 'none';
+                newListingSection.style.opacity = '0.5';
+            } else {
+                newListingSection.style.pointerEvents = '';
+                newListingSection.style.opacity = '';
+            }
         }
     } catch (e) {
         console.error('Profile load error:', e);
