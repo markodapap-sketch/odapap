@@ -1,203 +1,728 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
-    <title>User Profile - Oda Pap</title>
-    
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="user.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/jpeg" href="images/logo.png">
+  <link rel="apple-touch-icon" href="images/logo.png">
+  <title>Seller Profile - Oda Pap</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding-bottom: 20px;
+    }
 
+    /* Header */
+    .header {
+      background: #fff;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid #eee;
+    }
+    .back-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: #f5f5f5;
+      color: #333;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .header-title {
+      flex: 1;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .header-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: #f5f5f5;
+      color: #333;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* Profile Card */
+    .profile-card {
+      background: linear-gradient(135deg, #ff5722, #e64a19);
+      padding: 20px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .profile-pic {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: 3px solid white;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .profile-info {
+      flex: 1;
+      color: white;
+      min-width: 0;
+    }
+    .profile-name {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .verified-icon {
+      color: #4caf50;
+      font-size: 0.9rem;
+    }
+    .profile-location {
+      font-size: 0.75rem;
+      opacity: 0.9;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .profile-location i { font-size: 0.7rem; }
+    .profile-joined {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin-top: 4px;
+    }
+
+    /* Stats Row */
+    .stats-row {
+      background: white;
+      display: flex;
+      border-bottom: 1px solid #eee;
+    }
+    .stat-item {
+      flex: 1;
+      text-align: center;
+      padding: 12px 8px;
+      border-right: 1px solid #eee;
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-value {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #ff5722;
+    }
+    .stat-label {
+      font-size: 0.65rem;
+      color: #888;
+      text-transform: uppercase;
+    }
+
+    /* Action Buttons */
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      padding: 12px;
+      background: white;
+      border-bottom: 1px solid #eee;
+    }
+    .action-btn {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-message {
+      background: #ff5722;
+      color: white;
+    }
+    .btn-follow {
+      background: #fff3e0;
+      color: #ff5722;
+      border: 1px solid #ffcc80;
+    }
+    .btn-follow.following {
+      background: #4caf50;
+      color: white;
+      border-color: #4caf50;
+    }
+
+    /* Seller Info */
+    .seller-info {
+      background: white;
+      margin: 12px;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .info-header {
+      padding: 10px 12px;
+      background: #fafafa;
+      border-bottom: 1px solid #eee;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .info-header i { color: #ff5722; }
+    .info-row {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #f5f5f5;
+      font-size: 0.85rem;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row i {
+      width: 28px;
+      height: 28px;
+      background: #fff3e0;
+      color: #ff5722;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+    }
+    .info-row span { color: #333; }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: white;
+      margin: 0 12px;
+      border-radius: 10px 10px 0 0;
+      overflow: hidden;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px 8px;
+      border: none;
+      background: white;
+      color: #888;
+      font-size: 0.75rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .tab-btn.active {
+      color: #ff5722;
+      border-bottom-color: #ff5722;
+      background: #fff8f5;
+    }
+    .tab-btn i { font-size: 1rem; }
+
+    /* Tab Content */
+    .tab-content {
+      display: none;
+      background: white;
+      margin: 0 12px 12px;
+      border-radius: 0 0 10px 10px;
+      padding: 12px;
+    }
+    .tab-content.active { display: block; }
+
+    /* Items Grid */
+    .items-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .item-card {
+      background: #fafafa;
+      border-radius: 8px;
+      overflow: hidden;
+      text-decoration: none;
+    }
+    .item-card img {
+      width: 100%;
+      height: 100px;
+      object-fit: cover;
+    }
+    .item-info {
+      padding: 8px;
+    }
+    .item-title {
+      font-size: 0.8rem;
+      color: #333;
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-clamp: 2;
+    }
+    .item-price {
+      font-size: 0.85rem;
+      color: #ff5722;
+      font-weight: 700;
+    }
+    .item-stock {
+      font-size: 0.65rem;
+      color: #4caf50;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+    }
+    .empty-state i {
+      font-size: 2rem;
+      color: #ddd;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .empty-state h3 {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .empty-state p {
+      font-size: 0.8rem;
+    }
+
+    /* Reviews */
+    .review-card {
+      padding: 12px;
+      border-bottom: 1px solid #f5f5f5;
+    }
+    .review-card:last-child { border-bottom: none; }
+    .review-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .review-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+    .review-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .review-date {
+      font-size: 0.7rem;
+      color: #999;
+    }
+    .review-stars {
+      color: #ffc107;
+      font-size: 0.75rem;
+      margin-bottom: 4px;
+    }
+    .review-text {
+      font-size: 0.8rem;
+      color: #666;
+      line-height: 1.4;
+    }
+
+    /* Sort */
+    .sort-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .sort-row span {
+      font-size: 0.8rem;
+      color: #666;
+    }
+    .sort-row select {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      font-size: 0.75rem;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 30px;
+      color: #999;
+    }
+    .loading i {
+      font-size: 1.5rem;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="css/header.css">
 </head>
 <body>
-    <header>
-        <div class="top-bar">
-            <div class="logo-container">
-                <img src="images/logo.jpg" alt="Oda Pap Logo" class="logo">
-                <span class="logo-text">Oda Pap</span>
+  <header class="oda-header">
+    <div class="header-top-bar">
+      <div class="header-logo" onclick="location.href='index.html'">
+        <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+        <span class="header-logo-text">Oda Pap</span>
+      </div>
+      <button onclick="window.history.back()" class="header-back-btn">
+        <i class="fas fa-arrow-left"></i> Back
+      </button>
+      <button onclick="shareProfile()" class="header-back-btn">
+        <i class="fas fa-share-alt"></i>
+      </button>
+    </div>
+    <div class="header-divider"></div>
+    <nav class="header-nav">
+      <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+      <button class="header-nav-btn" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span class="header-nav-counter" id="notification-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span class="header-nav-counter" id="cart-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i><span class="header-nav-counter" id="wishlist-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+    </nav>
+  </header>
+
+  <!-- Profile Card -->
+  <div class="profile-card">
+    <img src="images/profile-placeholder.png" alt="Profile" class="profile-pic" id="userProfilePic">
+    <div class="profile-info">
+      <div class="profile-name">
+        <span id="userName">Loading...</span>
+        <i class="fas fa-check-circle verified-icon" id="verifiedIcon" style="display: none;"></i>
+      </div>
+      <div class="profile-location">
+        <i class="fas fa-map-marker-alt"></i>
+        <span id="userLocation">Location</span>
+      </div>
+      <div class="profile-joined" id="userJoinDate">Member since ...</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-item">
+      <div class="stat-value" id="itemsCount">0</div>
+      <div class="stat-label">Listings</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="reviewsCount">0</div>
+      <div class="stat-label">Reviews</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="followersCount">0</div>
+      <div class="stat-label">Followers</div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="action-buttons" id="actionButtons">
+    <button class="action-btn btn-message" id="messageBtn">
+      <i class="fas fa-comment"></i> Message
+    </button>
+    <button class="action-btn btn-follow" id="followBtn">
+      <i class="fas fa-heart"></i> Follow
+    </button>
+  </div>
+
+  <!-- Seller Info -->
+  <div class="seller-info">
+    <div class="info-header">
+      <i class="fas fa-store"></i> Seller Information
+    </div>
+    <div class="info-row">
+      <i class="fas fa-map-marker-alt"></i>
+      <span id="userFullAddress">-</span>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="items">
+      <i class="fas fa-box"></i>
+      Items
+    </button>
+    <button class="tab-btn" data-tab="reviews">
+      <i class="fas fa-star"></i>
+      Reviews
+    </button>
+    <button class="tab-btn" data-tab="about">
+      <i class="fas fa-info-circle"></i>
+      About
+    </button>
+  </div>
+
+  <!-- Items Tab -->
+  <div class="tab-content active" id="items-tab">
+    <div class="sort-row">
+      <span>Listed Items</span>
+      <select id="sortItems">
+        <option value="newest">Newest</option>
+        <option value="price-low">Price: Low</option>
+        <option value="price-high">Price: High</option>
+      </select>
+    </div>
+    <div id="userItemsList" class="items-grid">
+      <div class="loading" style="grid-column: 1/-1;"><i class="fas fa-spinner"></i></div>
+    </div>
+  </div>
+
+  <!-- Reviews Tab -->
+  <div class="tab-content" id="reviews-tab">
+    <div id="reviewsList">
+      <div class="empty-state">
+        <i class="fas fa-star"></i>
+        <h3>No reviews yet</h3>
+        <p>This seller hasn't received any reviews</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- About Tab -->
+  <div class="tab-content" id="about-tab">
+    <p id="userBio" style="font-size: 0.85rem; color: #666; line-height: 1.5;">
+      No bio provided by this seller.
+    </p>
+  </div>
+
+  <script type="module">
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { app } from "./js/firebase.js";
+    import { showNotification } from './notifications.js';
+
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let profileUserId = null;
+    let isOwnProfile = false;
+
+    // Get userId from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    profileUserId = urlParams.get('userId');
+
+    if (!profileUserId) {
+      showNotification('User not found', 'error');
+      setTimeout(() => window.history.back(), 1500);
+    }
+
+    // Tab Navigation
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tabName = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`${tabName}-tab`).classList.add('active');
+      });
+    });
+
+    // Auth check
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user && user.uid === profileUserId) {
+        isOwnProfile = true;
+        document.getElementById('actionButtons').style.display = 'none';
+      }
+      await loadUserProfile();
+      await loadUserItems();
+    });
+
+    async function loadUserProfile() {
+      try {
+        const userDoc = await getDoc(doc(db, 'Users', profileUserId));
+        if (!userDoc.exists()) {
+          showNotification('User not found', 'error');
+          return;
+        }
+
+        const userData = userDoc.data();
+        
+        document.getElementById('userProfilePic').src = userData.profilePicUrl || 'images/profile-placeholder.png';
+        document.getElementById('userName').textContent = userData.name || 'Seller';
+        
+        // Location - collapsed
+        const locationParts = [userData.county, userData.region].filter(Boolean);
+        document.getElementById('userLocation').textContent = locationParts.join(', ') || 'Kenya';
+        
+        // Full address for info section
+        const fullAddress = [userData.ward, userData.constituency, userData.county].filter(Boolean).join(', ') || 'Not provided';
+        document.getElementById('userFullAddress').textContent = fullAddress;
+
+        // Join date
+        const joinDate = userData.createdAt ? new Date(userData.createdAt).toLocaleDateString('en-US', { 
+          year: 'numeric', month: 'short' 
+        }) : 'Unknown';
+        document.getElementById('userJoinDate').textContent = `Member since ${joinDate}`;
+
+        // Verified badge
+        if (userData.verified) {
+          document.getElementById('verifiedIcon').style.display = 'inline';
+        }
+
+        // Bio
+        if (userData.bio) {
+          document.getElementById('userBio').textContent = userData.bio;
+        }
+
+        // Stats - followers count
+        document.getElementById('followersCount').textContent = userData.followers?.length || 0;
+
+        // Check if current user is following
+        if (currentUser) {
+          const currentUserDoc = await getDoc(doc(db, 'Users', currentUser.uid));
+          const currentUserData = currentUserDoc.data() || {};
+          if (currentUserData.following?.includes(profileUserId)) {
+            document.getElementById('followBtn').classList.add('following');
+            document.getElementById('followBtn').innerHTML = '<i class="fas fa-heart"></i> Following';
+          }
+        }
+
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        showNotification('Error loading profile', 'error');
+      }
+    }
+
+    async function loadUserItems() {
+      try {
+        const itemsQuery = query(collection(db, 'Listings'), where('uploaderId', '==', profileUserId));
+        const snapshot = await getDocs(itemsQuery);
+        
+        const itemsContainer = document.getElementById('userItemsList');
+        document.getElementById('itemsCount').textContent = snapshot.size;
+
+        if (snapshot.empty) {
+          itemsContainer.innerHTML = `
+            <div class="empty-state" style="grid-column: 1/-1;">
+              <i class="fas fa-box-open"></i>
+              <h3>No items listed</h3>
+              <p>This seller hasn't listed any items yet</p>
             </div>
-            <button onclick="window.history.back()" class="back-button">
-                <i class="fas fa-arrow-left"></i> Back
-            </button>
-        </div>
-        <div class="border-line"></div>
-        <div class="nav-bar" id="nav-bar">
-            <button class="home-button" onclick="location.href='index.html'">
-                <i class="fas fa-home"></i>
-            </button>
-            <button class="home-button" onclick="location.href='notification.html'">
-                <i class="fas fa-bell" id="notification-icon"></i>
-            </button>
-            <button class="home-button" onclick="location.href='cart.html'">
-                <i class="fas fa-shopping-cart" id="cart-icon"></i>
-            </button>
-            <button class="home-button" onclick="location.href='wishlist.html'">
-                <i class="fas fa-heart"></i>
-            </button>
-            <button class="home-button" onclick="location.href='profile.html'" style="position: relative;">
-                <i class="fas fa-user-circle"></i>
-                <span id="profile-notification" class="blinking-notification" style="display: none;"></span>
-            </button>
-        </div>
-    </header>
+          `;
+          return;
+        }
 
-    <main class="user-profile-page">
-        <!-- Profile Header Section -->
-        <section class="profile-header-section">
-            <div class="profile-cover"></div>
-            
-            <div class="profile-card">
-                <div class="profile-image-wrapper">
-                    <img id="userProfilePic" src="images/profile-placeholder.png" alt="User Profile" class="profile-image">
-                    <span id="verifiedBadge" class="verified-badge" style="display: none;">
-                        <i class="fas fa-check-circle"></i>
-                    </span>
-                </div>
+        let html = '';
+        snapshot.forEach(doc => {
+          const item = doc.data();
+          const price = item.sellingPrice || item.price || 0;
+          const image = item.images?.[0] || item.imageUrl || 'images/profile-placeholder.png';
+          
+          html += `
+            <a href="product.html?id=${doc.id}" class="item-card">
+              <img src="${image}" alt="${item.name}" onerror="this.src='images/profile-placeholder.png'">
+              <div class="item-info">
+                <div class="item-title">${item.name || 'Unnamed Item'}</div>
+                <div class="item-price">KES ${price.toLocaleString()}</div>
+                <div class="item-stock">${item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}</div>
+              </div>
+            </a>
+          `;
+        });
 
-                <div class="profile-header-info">
-                    <h1 id="userName">User Name</h1>
-                    <div class="profile-meta">
-                        <div class="meta-item">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span id="userLocation">Location</span>
-                        </div>
-                        <div class="meta-item">
-                            <i class="fas fa-calendar-alt"></i>
-                            <span id="userJoinDate">Joined</span>
-                        </div>
-                    </div>
+        itemsContainer.innerHTML = html;
+      } catch (error) {
+        console.error('Error loading items:', error);
+        document.getElementById('userItemsList').innerHTML = `
+          <div class="empty-state" style="grid-column: 1/-1;">
+            <i class="fas fa-exclamation-circle"></i>
+            <h3>Error loading items</h3>
+            <p>Please try again later</p>
+          </div>
+        `;
+      }
+    }
 
-                    <div class="profile-stats">
-                        <div class="stat">
-                            <span class="stat-value" id="itemsCount">0</span>
-                            <span class="stat-label">Items Listed</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-value" id="reviewsCount">0</span>
-                            <span class="stat-label">Reviews</span>
-                        </div>
-                        <div class="stat">
-                            <span class="stat-value" id="followersCount">0</span>
-                            <span class="stat-label">Followers</span>
-                        </div>
-                    </div>
+    // Message button
+    document.getElementById('messageBtn').addEventListener('click', () => {
+      if (!currentUser) {
+        showNotification('Please login to send messages', 'warning');
+        return;
+      }
+      window.location.href = `chat.html?userId=${profileUserId}`;
+    });
 
-                    <p id="userBio" class="user-bio"></p>
+    // Follow button
+    document.getElementById('followBtn').addEventListener('click', async () => {
+      if (!currentUser) {
+        showNotification('Please login to follow', 'warning');
+        return;
+      }
 
-                    <div class="profile-actions">
-                        <button id="messageBtn" class="action-btn message-btn">
-                            <i class="fas fa-comment"></i> Message
-                        </button>
-                        <button id="followBtn" class="action-btn follow-btn">
-                            <i class="fas fa-heart"></i> Follow
-                        </button>
-                        <button id="editProfileBtn" class="action-btn edit-btn" style="display: none;">
-                            <i class="fas fa-edit"></i> Edit Profile
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </section>
+      const followBtn = document.getElementById('followBtn');
+      const isFollowing = followBtn.classList.contains('following');
+      const currentUserRef = doc(db, 'Users', currentUser.uid);
+      const followersCountEl = document.getElementById('followersCount');
+      let currentCount = parseInt(followersCountEl.textContent) || 0;
 
-        <!-- Tabs Navigation -->
-        <section class="tabs-section">
-            <div class="tabs-container">
-                <button class="tab-btn active" data-tab="items">
-                    <i class="fas fa-box"></i> Items (<span id="tabItemsCount">0</span>)
-                </button>
-                <button class="tab-btn" data-tab="orders">
-                    <i class="fas fa-shopping-bag"></i> Orders
-                </button>
-                <button class="tab-btn" data-tab="reviews">
-                    <i class="fas fa-star"></i> Reviews
-                </button>
-                <button class="tab-btn" id="manageBtn" data-tab="manage" style="display: none;">
-                    <i class="fas fa-cogs"></i> Manage
-                </button>
-            </div>
-        </section>
+      try {
+        if (isFollowing) {
+          await updateDoc(currentUserRef, { following: arrayRemove(profileUserId) });
+          followBtn.classList.remove('following');
+          followBtn.innerHTML = '<i class="fas fa-heart"></i> Follow';
+          followersCountEl.textContent = Math.max(0, currentCount - 1);
+          showNotification('Unfollowed');
+        } else {
+          await updateDoc(currentUserRef, { following: arrayUnion(profileUserId) });
+          followBtn.classList.add('following');
+          followBtn.innerHTML = '<i class="fas fa-heart"></i> Following';
+          followersCountEl.textContent = currentCount + 1;
+          showNotification('Following!');
+        }
+      } catch (error) {
+        console.error('Follow error:', error);
+        showNotification('Error updating follow status', 'error');
+      }
+    });
 
-        <!-- Tab Content: Items -->
-        <section class="tab-content active" id="items-tab">
-            <div class="section-header">
-                <h2>Listed Items</h2>
-                <div class="section-controls">
-                    <select id="sortItems" class="sort-select">
-                        <option value="newest">Newest First</option>
-                        <option value="oldest">Oldest First</option>
-                        <option value="price-low">Price: Low to High</option>
-                        <option value="price-high">Price: High to Low</option>
-                    </select>
-                </div>
-            </div>
-            <div id="userItemsList" class="items-grid">
-                <!-- Items will be dynamically inserted here -->
-            </div>
-        </section>
+    // Share profile
+    window.shareProfile = () => {
+      const url = window.location.href;
+      if (navigator.share) {
+        navigator.share({ title: 'Check out this seller on Oda Pap', url: url });
+      } else {
+        navigator.clipboard.writeText(url);
+        showNotification('Profile link copied!');
+      }
+    };
 
-        <!-- Tab Content: Orders -->
-        <section class="tab-content" id="orders-tab">
-            <div class="section-header">
-                <h2>Order History</h2>
-                <div class="order-filter-tabs">
-                    <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="pending">Pending</button>
-                    <button class="filter-btn" data-filter="delivered">Delivered</button>
-                </div>
-            </div>
-            <div id="ordersList" class="orders-list">
-                <!-- Orders will be dynamically inserted here -->
-            </div>
-            <div id="emptyOrders" class="empty-state" style="display: none;">
-                <i class="fas fa-shopping-bag"></i>
-                <h3>No orders yet</h3>
-                <p>Your order history will appear here</p>
-                <a href="index.html" class="btn-primary">Start Shopping</a>
-            </div>
-        </section>
+    // Sort items
+    document.getElementById('sortItems').addEventListener('change', async (e) => {
+      const sortBy = e.target.value;
+      const items = [...document.querySelectorAll('.item-card')];
+      const container = document.getElementById('userItemsList');
 
-        <!-- Tab Content: Reviews -->
-        <section class="tab-content" id="reviews-tab">
-            <div class="section-header">
-                <h2>Customer Reviews</h2>
-            </div>
-            <div id="reviewsList" class="reviews-list">
-                <!-- Reviews will be dynamically inserted here -->
-            </div>
-        </section>
+      items.sort((a, b) => {
+        const priceA = parseInt(a.querySelector('.item-price').textContent.replace(/\D/g, ''));
+        const priceB = parseInt(b.querySelector('.item-price').textContent.replace(/\D/g, ''));
 
-        <!-- Tab Content: Manage Items (Owner Only) -->
-        <section class="tab-content" id="manage-tab">
-            <div class="section-header">
-                <h2>Manage Your Items</h2>
-                <a href="listing.html" class="btn-primary">
-                    <i class="fas fa-plus"></i> Add New Listing
-                </a>
-            </div>
+        if (sortBy === 'price-low') return priceA - priceB;
+        if (sortBy === 'price-high') return priceB - priceA;
+        return 0;
+      });
 
-            <div class="manage-filters">
-                <input type="text" id="searchItems" placeholder="Search your items...">
-                <select id="filterItems">
-                    <option value="">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="sold">Sold</option>
-                    <option value="inactive">Inactive</option>
-                </select>
-            </div>
-
-            <div id="manageItemsList" class="manage-items-grid">
-                <!-- Editable items will be dynamically inserted here -->
-            </div>
-        </section>
-    </main>
-
-    <footer>
-        <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
-    </footer>
-
-    <script type="module" src="user.js"></script>
+      items.forEach(item => container.appendChild(item));
+    });
+  </script>
 </body>
 </html>

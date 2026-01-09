@@ -1,187 +1,664 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
-    <title>Notifications - Chat History</title>
-    <link rel="stylesheet" href="notifications.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/jpeg" href="images/logo.png">
+  <link rel="apple-touch-icon" href="images/logo.png">
+  <title>Messages - Oda Pap</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding-bottom: 20px;
+    }
+
+    /* Header - Like Cart/Index */
+    header {
+      background-color: #ffffff;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 15px;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .logo {
+      width: 40px;
+      height: 40px;
+      margin-right: 10px;
+      border-radius: 8px;
+    }
+    .logo-text {
+      font-size: 18px;
+      font-weight: bold;
+      color: #333;
+    }
+    .search-container {
+      flex: 1;
+      max-width: 400px;
+      margin: 0 15px;
+      position: relative;
+    }
+    .search-container form {
+      display: flex;
+    }
+    .search-container input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 1px solid #ddd;
+      border-radius: 25px 0 0 25px;
+      outline: none;
+      font-size: 14px;
+    }
+    .search-container button {
+      background: #ff5722;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 0 25px 25px 0;
+      color: white;
+      cursor: pointer;
+    }
+    .border-line {
+      height: 1px;
+      background: #eee;
+    }
+    .nav-bar {
+      display: flex;
+      justify-content: space-around;
+      padding: 8px 10px;
+      background: white;
+    }
+    .nav-btn {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 8px;
+      position: relative;
+    }
+    .nav-btn:hover { background: #f5f5f5; }
+    .nav-btn.active { color: #ff5722; }
+
+    /* Privacy Notice */
+    .privacy-notice {
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      padding: 12px 14px;
+      margin: 12px;
+      border-radius: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .privacy-notice i {
+      color: #1976d2;
+      font-size: 1.2rem;
+      margin-top: 2px;
+    }
+    .privacy-notice-content {
+      flex: 1;
+    }
+    .privacy-notice h4 {
+      font-size: 0.85rem;
+      color: #1565c0;
+      margin-bottom: 4px;
+    }
+    .privacy-notice p {
+      font-size: 0.75rem;
+      color: #1976d2;
+      line-height: 1.4;
+    }
+    .privacy-notice .close-notice {
+      background: none;
+      border: none;
+      color: #1976d2;
+      cursor: pointer;
+      padding: 4px;
+    }
+
+    /* Search */
+    .search-bar {
+      padding: 0 12px 12px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      background: white;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: #ff5722;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      background: white;
+      margin: 0 12px;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      background: white;
+      color: #888;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .tab-btn.active {
+      color: #ff5722;
+      border-bottom-color: #ff5722;
+    }
+    .tab-badge {
+      background: #ff5722;
+      color: white;
+      font-size: 0.65rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    /* Chat List */
+    .chat-list {
+      padding: 0 12px;
+    }
+    .chat-item {
+      background: white;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .chat-item:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .chat-item.unread {
+      background: #fff8f5;
+      border-left: 3px solid #ff5722;
+    }
+    .chat-avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .chat-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .chat-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .chat-time {
+      font-size: 0.7rem;
+      color: #999;
+    }
+    .chat-preview {
+      font-size: 0.8rem;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chat-item.unread .chat-preview {
+      color: #333;
+      font-weight: 500;
+    }
+    .unread-badge {
+      width: 10px;
+      height: 10px;
+      background: #ff5722;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* Pinned Chat */
+    .chat-item.pinned-chat {
+      background: linear-gradient(135deg, #fff8f5 0%, #fff 100%);
+      border: 1px solid #ffccbc;
+      position: relative;
+    }
+    .chat-item.pinned-chat::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #ff5722, #ff9800);
+    }
+    
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 50px 30px;
+    }
+    .empty-state i {
+      font-size: 3rem;
+      color: #ddd;
+      margin-bottom: 12px;
+    }
+    .empty-state h3 {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    .empty-state p {
+      font-size: 0.85rem;
+      color: #999;
+      margin-bottom: 16px;
+    }
+    .empty-state .browse-btn {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #ff5722;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+    .loading i {
+      font-size: 1.5rem;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+  <link rel="stylesheet" href="css/header.css">
 </head>
 <body>
-    <header>
-        <div class="top-bar"></div>
-        <div class="logo-container">
-            <img src="images/logo.jpg" alt="Oda Pap Logo" class="logo">
-            <span class="logo-text">Oda Pap</span>
-        </div>
-        <div class="border-line"></div>
-        <div class="nav-bar" id="nav-bar">
-            <button class="home-button" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
-            <button class="home-button" onclick="location.href='notification.html'"><i class="fas fa-bell" id="notification-icon"></i></button>
-            <button class="home-button" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i></button>
-            <button class="home-button" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
-        </div>
-    </header>
-    <main>
-        <div id="chat-container" class="chat-container">
-            <!-- Chat messages will be dynamically added here -->
-        </div>
-    </main>
-    <div class="notification-container">
-        <div class="notification-header">
-            <h1>Chats</h1>
-        </div>
-        <ul id="notification-list" class="notification-list">
-            <!-- Chat items will be dynamically populated here -->
-        </ul>
+  <header class="oda-header">
+    <div class="header-top-bar">
+      <div class="header-logo" onclick="location.href='index.html'">
+        <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+        <span class="header-logo-text">Oda Pap</span>
+      </div>
+      <div class="header-search">
+        <form id="searchForm" action="search-results.html" method="GET">
+          <input type="text" name="q" id="headerSearchInput" placeholder="Search products..." autocomplete="off">
+          <button type="submit"><i class="fas fa-search"></i></button>
+        </form>
+      </div>
+      <div class="header-menu-toggle" onclick="toggleOdaMenu()">
+        <i class="fas fa-th-large"></i>
+        <span>Menu</span>
+      </div>
     </div>
-    <footer>
-        <button class="floating-button" onclick="location.href='customercare.html'">
-            <i class="fas fa-headset"></i>
-            <span class="button-text">Customer Care</span>
-        </button>
-    </footer>
-    <script type="module">
-        import { app } from "./js/firebase.js";
-        import { getAuth } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, or } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-        import { showNotification } from './notifications.js';
-        const auth = getAuth(app);
-        const firestore = getFirestore(app);
+    <div class="header-divider"></div>
+    <nav class="header-nav">
+      <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+      <button class="header-nav-btn active" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span class="header-nav-counter" id="notification-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span class="header-nav-counter" id="cart-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i><span class="header-nav-counter" id="wishlist-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+    </nav>
+  </header>
 
-        const notificationList = document.getElementById("notification-list");
+  <!-- Mega Menu -->
+  <div class="oda-menu-overlay" id="odaMenuOverlay" onclick="closeOdaMenu()"></div>
+  <div class="oda-mega-menu" id="odaMegaMenu">
+    <div class="mega-menu-header">
+      <h3><i class="fas fa-th-large"></i> Quick Menu</h3>
+      <button class="mega-menu-close" onclick="closeOdaMenu()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="mega-menu-section">
+      <h4>Categories</h4>
+      <div class="mega-menu-grid">
+        <a href="category.html?category=electronics"><i class="fas fa-tv"></i> Electronics</a>
+        <a href="category.html?category=fashion"><i class="fas fa-tshirt"></i> Fashion</a>
+        <a href="category.html?category=beauty"><i class="fas fa-heart"></i> Beauty</a>
+        <a href="category.html?category=phones"><i class="fas fa-mobile-alt"></i> Phones</a>
+        <a href="category.html?category=kitchenware"><i class="fas fa-blender"></i> Kitchenware</a>
+        <a href="category.html?category=foodstuffs"><i class="fas fa-carrot"></i> Foodstuffs</a>
+      </div>
+    </div>
+    <div class="mega-menu-section">
+      <h4>Quick Links</h4>
+      <div class="mega-menu-links">
+        <a href="listing.html"><i class="fas fa-plus-circle"></i> Sell Product</a>
+        <a href="orderTracking.html"><i class="fas fa-truck"></i> Track Orders</a>
+        <a href="profile.html"><i class="fas fa-user-cog"></i> My Account</a>
+      </div>
+    </div>
+  </div>
 
-        // Function to display chat history item
-        async function displayChat(chatData) {
-            const chatItem = document.createElement("li");
-            chatItem.classList.add("notification-item");
+  <!-- Page Title -->
+  <div style="padding: 12px 16px; background: white; border-bottom: 1px solid #eee;">
+    <h2 style="font-size: 1.1rem; color: #333;"><i class="fas fa-comments" style="color: #ff5722;"></i> Messages</h2>
+  </div>
 
-            // Get profile picture of the seller/buyer
-            let profilePicUrl = "images/profile-placeholder.png";
-            if (chatData.profilePic) {
-                profilePicUrl = chatData.profilePic;
+  <!-- Privacy Notice -->
+  <div class="privacy-notice" id="privacyNotice">
+    <i class="fas fa-shield-alt"></i>
+    <div class="privacy-notice-content">
+      <h4>Keep Your Information Safe</h4>
+      <p>Never share phone numbers, passwords, M-Pesa PINs, or personal details in chat. Violating this policy may result in account suspension.</p>
+    </div>
+    <button class="close-notice" onclick="closeNotice()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <input type="text" class="search-input" id="searchInput" placeholder="Search conversations...">
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="all">
+      <i class="fas fa-comments"></i> All Chats
+    </button>
+    <button class="tab-btn" data-tab="unread">
+      <i class="fas fa-envelope"></i> Unread
+      <span class="tab-badge" id="unreadCount" style="display: none;">0</span>
+    </button>
+  </div>
+
+  <!-- Chat List -->
+  <div class="chat-list" id="chatList">
+    <div class="loading"><i class="fas fa-spinner"></i></div>
+  </div>
+
+  <script type="module">
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+    import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, or, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { app } from "./js/firebase.js";
+    import { showNotification } from './notifications.js';
+
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let allChats = [];
+    let currentFilter = 'all';
+
+    // Check if notice was dismissed
+    if (localStorage.getItem('chatNoticeRead')) {
+      document.getElementById('privacyNotice').style.display = 'none';
+    }
+
+    window.closeNotice = () => {
+      document.getElementById('privacyNotice').style.display = 'none';
+      localStorage.setItem('chatNoticeRead', 'true');
+    };
+
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.tab;
+        renderChats();
+      });
+    });
+
+    // Search
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      renderChats(e.target.value.toLowerCase());
+    });
+
+    // Auth
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+        return;
+      }
+      currentUser = user;
+      loadChats();
+    });
+
+    async function loadChats() {
+      try {
+        const messagesRef = collection(db, 'Messages');
+        // Use or() without orderBy to avoid index requirement - sort locally
+        const q = query(
+          messagesRef,
+          or(
+            where('senderId', '==', currentUser.uid),
+            where('recipientId', '==', currentUser.uid)
+          )
+        );
+
+        onSnapshot(q, async (snapshot) => {
+          const chatGroups = {};
+
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            const otherUserId = data.senderId === currentUser.uid ? data.recipientId : data.senderId;
+            
+            if (!chatGroups[otherUserId]) {
+              chatGroups[otherUserId] = {
+                otherUserId,
+                lastMessage: data.message || (data.imageUrl ? '📷 Image' : ''),
+                timestamp: data.timestamp,
+                isUnread: data.recipientId === currentUser.uid && data.status === 'sent'
+              };
             }
+          });
 
-            chatItem.innerHTML = `
-                <div class="chat-item">
-                    <div class="profile-picture">
-                        <img src="${profilePicUrl}" alt="Profile Picture" class="profile-img" onclick="goToUserProfile('${chatData.sellerId}')">
-                    </div>
-                    <div class="chat-details">
-                        <p class="chat-name">${chatData.sellerName}</p>
-                        <p class="chat-message">${chatData.lastMessage}</p>
-                    </div>
-                    <div class="chat-time">
-                        <small>${new Date(chatData.timestamp.seconds * 1000).toLocaleString()}</small>
-                    </div>
-                </div>
-            `;
-
-            // Handle redirection to chat page
-            chatItem.onclick = function () {
-                window.location.href = `chat.html?sellerId=${chatData.sellerId}`;
-            };
-
-            notificationList.appendChild(chatItem);
-        }
-
-        // Function to redirect to user profile page
-        window.goToUserProfile = function(userId) {
-            window.location.href = `user.html?userId=${userId}`;
-        };
-
-        // Listen for authentication changes
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                loadChats(user.uid);
-            } else {
-                showNotification("Please log in to view your chats.");
-                window.location.href = "login.html";
+          // Fetch user details
+          allChats = [];
+          for (const otherUserId in chatGroups) {
+            try {
+              const userDoc = await getDoc(doc(db, 'Users', otherUserId));
+              const userData = userDoc.exists() ? userDoc.data() : {};
+              
+              allChats.push({
+                ...chatGroups[otherUserId],
+                userName: userData.name || 'User',
+                userPic: userData.profilePicUrl || 'images/profile-placeholder.png'
+              });
+            } catch (e) {
+              allChats.push({
+                ...chatGroups[otherUserId],
+                userName: 'User',
+                userPic: 'images/profile-placeholder.png'
+              });
             }
+          }
+
+          // Sort by timestamp
+          allChats.sort((a, b) => {
+            const timeA = a.timestamp?.seconds || 0;
+            const timeB = b.timestamp?.seconds || 0;
+            return timeB - timeA;
+          });
+
+          // Update unread count
+          const unreadCount = allChats.filter(c => c.isUnread).length;
+          const unreadBadge = document.getElementById('unreadCount');
+          if (unreadCount > 0) {
+            unreadBadge.textContent = unreadCount;
+            unreadBadge.style.display = 'inline';
+          } else {
+            unreadBadge.style.display = 'none';
+          }
+
+          renderChats();
         });
+      } catch (error) {
+        console.error('Error loading chats:', error);
+        document.getElementById('chatList').innerHTML = `
+          <div class="empty-state">
+            <i class="fas fa-exclamation-circle"></i>
+            <h3>Error loading chats</h3>
+            <p>Please try again later</p>
+          </div>
+        `;
+      }
+    }
 
-        // Load chat history for the user
-        async function loadChats(userId) {
-            const chatRef = collection(firestore, "Messages");
-            const chatQuery = query(chatRef, or(where("buyerId", "==", userId), where("sellerId", "==", userId)));
+    function renderChats(searchTerm = '') {
+      const container = document.getElementById('chatList');
+      const SUPPORT_ID = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+      
+      let filteredChats = allChats;
 
-            onSnapshot(chatQuery, async (snapshot) => {
-                notificationList.innerHTML = ""; // Clear previous chats
-                const chatGroups = {};
-                snapshot.forEach((docSnap) => {
-                    const chatData = docSnap.data();
-                    const otherUserId = chatData.buyerId === userId ? chatData.sellerId : chatData.buyerId;
-                    if (!chatGroups[otherUserId]) {
-                        chatGroups[otherUserId] = [];
-                    }
-                    chatGroups[otherUserId].push(chatData);
-                });
+      // Filter by tab
+      if (currentFilter === 'unread') {
+        filteredChats = filteredChats.filter(c => c.isUnread);
+      }
 
-                for (const otherUserId in chatGroups) {
-                    const chatData = chatGroups[otherUserId][0];
-                    const otherUserDoc = await getDoc(doc(firestore, "Users", otherUserId));
-                    const otherUserData = otherUserDoc.exists() ? otherUserDoc.data() : { name: "Unknown User" };
-                    let profilePicUrl = "images/profile-placeholder.png";
-                    if (otherUserData.profilePicUrl) {
-                        profilePicUrl = otherUserData.profilePicUrl;
-                    }
-                    displayChat({
-                        sellerId: chatData.sellerId,
-                        sellerName: otherUserData.name,
-                        profilePic: profilePicUrl,
-                        lastMessage: chatData.message || "No messages yet.",
-                        timestamp: chatData.timestamp
-                    });
-                }
-            });
-        }
+      // Filter by search
+      if (searchTerm) {
+        filteredChats = filteredChats.filter(c => 
+          c.userName.toLowerCase().includes(searchTerm) ||
+          c.lastMessage.toLowerCase().includes(searchTerm)
+        );
+      }
 
-        // Real-time listener for messages
-        function listenForMessages() {
-            const user = auth.currentUser;
-            if (!user) return;
+      if (filteredChats.length === 0) {
+        // Still show customer support even if no other chats
+        container.innerHTML = `
+          <div class="chat-item pinned-chat" onclick="openChat('${SUPPORT_ID}')">
+            <img src="images/support-avatar.png" alt="" class="chat-avatar" onerror="this.src='images/profile-placeholder.png'">
+            <div class="chat-content">
+              <div class="chat-header">
+                <span class="chat-name"><i class="fas fa-headset" style="color: #ff5722; margin-right: 4px;"></i>Customer Support</span>
+                <span class="chat-time" style="color: #ff5722; font-size: 0.65rem;">24/7</span>
+              </div>
+              <div class="chat-preview">Get help with orders, payments, or any issues</div>
+            </div>
+            <i class="fas fa-thumbtack" style="color: #ff5722; font-size: 0.7rem; margin-left: auto;"></i>
+          </div>
+          <div class="empty-state">
+            <i class="fas fa-comments"></i>
+            <h3>${currentFilter === 'unread' ? 'No unread messages' : 'No conversations yet'}</h3>
+            <p>Start a conversation with sellers to negotiate deals</p>
+            <a href="index.html" class="browse-btn">Browse Products</a>
+          </div>
+        `;
+        return;
+      }
 
-            const q = query(collection(firestore, "Messages"), where("recipientId", "==", user.uid));
-            onSnapshot(q, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    if (change.type === "added") {
-                        const message = change.doc.data();
-                        showNotification(`New message from ${message.senderId}`);
-                        updateChatInterface(message);
-                    }
-                });
-            });
-        }
+      // Pinned Customer Support chat - always at top
+      let html = `
+        <div class="chat-item pinned-chat" onclick="openChat('${SUPPORT_ID}')">
+          <img src="images/support-avatar.png" alt="" class="chat-avatar" onerror="this.src='images/profile-placeholder.png'">
+          <div class="chat-content">
+            <div class="chat-header">
+              <span class="chat-name"><i class="fas fa-headset" style="color: #ff5722; margin-right: 4px;"></i>Customer Support</span>
+              <span class="chat-time" style="color: #ff5722; font-size: 0.65rem;">24/7</span>
+            </div>
+            <div class="chat-preview">Get help with orders, payments, or any issues</div>
+          </div>
+          <i class="fas fa-thumbtack" style="color: #ff5722; font-size: 0.7rem; margin-left: auto;"></i>
+        </div>
+      `;
 
-        // Function to update chat interface
-        function updateChatInterface(message) {
-            const chatContainer = document.getElementById('chat-container');
-            const messageElement = document.createElement('div');
-            messageElement.className = 'chat-message';
-            messageElement.innerHTML = `
-                <div class="message-bubble">
-                    <p>${message.message}</p>
-                    <span class="timestamp">${new Date(message.timestamp).toLocaleTimeString()}</span>
-                </div>
-            `;
-            chatContainer.appendChild(messageElement);
-        }
+      // Filter out support from regular chats to avoid duplicate
+      filteredChats = filteredChats.filter(c => c.otherUserId !== SUPPORT_ID);
 
-        // Function to update notification count
-        function updateNotificationCount() {
-            const user = auth.currentUser;
-            if (!user) return;
+      filteredChats.forEach(chat => {
+        const time = chat.timestamp ? formatTime(chat.timestamp.toDate()) : '';
+        
+        html += `
+          <div class="chat-item ${chat.isUnread ? 'unread' : ''}" onclick="openChat('${chat.otherUserId}')">
+            <img src="${chat.userPic}" alt="" class="chat-avatar" onerror="this.src='images/profile-placeholder.png'">
+            <div class="chat-content">
+              <div class="chat-header">
+                <span class="chat-name">${escapeHtml(chat.userName)}</span>
+                <span class="chat-time">${time}</span>
+              </div>
+              <div class="chat-preview">${escapeHtml(chat.lastMessage) || 'No messages'}</div>
+            </div>
+            ${chat.isUnread ? '<div class="unread-badge"></div>' : ''}
+          </div>
+        `;
+      });
 
-            const q = query(collection(firestore, "Messages"), where("recipientId", "==", user.uid), where("status", "==", "sent"));
-            onSnapshot(q, (snapshot) => {
-                const unreadCount = snapshot.size;
-                const notificationIcon = document.getElementById('notification-icon');
-                notificationIcon.textContent = unreadCount;
-            });
-        }
-    </script>
+      container.innerHTML = html;
+    }
+
+    function formatTime(date) {
+      const now = new Date();
+      const diff = now - date;
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+      if (days === 0) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } else if (days === 1) {
+        return 'Yesterday';
+      } else if (days < 7) {
+        return date.toLocaleDateString([], { weekday: 'short' });
+      } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    window.openChat = (userId) => {
+      window.location.href = `chat.html?userId=${userId}`;
+    };
+
+    // Menu toggle functions
+    window.toggleOdaMenu = function() {
+      document.getElementById('odaMenuOverlay').classList.add('open');
+      document.getElementById('odaMegaMenu').classList.add('open');
+      document.body.style.overflow = 'hidden';
+    };
+    window.closeOdaMenu = function() {
+      document.getElementById('odaMenuOverlay').classList.remove('open');
+      document.getElementById('odaMegaMenu').classList.remove('open');
+      document.body.style.overflow = '';
+    };
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOdaMenu(); });
+  </script>
 </body>
 </html>

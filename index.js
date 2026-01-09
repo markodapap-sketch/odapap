@@ -1,5 +1,5 @@
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, collection, getDocs, addDoc, query, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, collection, getDocs, addDoc, query, limit, orderBy, where } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./js/firebase.js";
 import { logoutUser, onAuthChange } from "./js/auth.js";
 import { showNotification } from './notifications.js';
@@ -11,23 +11,74 @@ import { initializeImageSliders } from './imageSlider.js';
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// ===== ENHANCED CACHING SYSTEM =====
+const CACHE_KEYS = {
+  LISTINGS: 'oda_listings_cache',
+  USERS: 'oda_users_cache',
+  HERO_SLIDES: 'oda_hero_cache',
+  CATEGORIES: 'oda_categories_cache'
+};
+
+const CACHE_DURATIONS = {
+  LISTINGS: 5 * 60 * 1000,      // 5 minutes
+  USERS: 10 * 60 * 1000,        // 10 minutes
+  HERO_SLIDES: 30 * 60 * 1000,  // 30 minutes
+  CATEGORIES: 15 * 60 * 1000    // 15 minutes
+};
+
 // State
 let allListings = [];
 let listingsCache = null;
 let listingsCacheTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
-// User cache to avoid repeated reads
+// Memory cache for users
 const userCache = new Map();
-const USER_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// ===== LOCAL STORAGE CACHE HELPERS =====
+function getLocalCache(key) {
+  try {
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      return { data, timestamp, valid: true };
+    }
+  } catch (e) {}
+  return { data: null, timestamp: 0, valid: false };
+}
+
+function setLocalCache(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    // Storage full, clear old caches
+    Object.values(CACHE_KEYS).forEach(k => {
+      if (k !== key) localStorage.removeItem(k);
+    });
+    try {
+      localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e2) {}
+  }
+}
+
+function isCacheValid(timestamp, duration) {
+  return (Date.now() - timestamp) < duration;
+}
 
 // Category Icons
 const catIcons = {
-  'fashion': 'tshirt', 'electronics': 'tv', 'phones': 'mobile-alt', 'beauty': 'heart',
+  'general-shop': 'star', 'fashion': 'tshirt', 'electronics': 'tv', 'phones': 'mobile-alt', 'beauty': 'heart',
   'kitchenware': 'blender', 'furniture': 'couch', 'accessories': 'headphones',
   'foodstuffs': 'carrot', 'pharmaceutical': 'pills', 'kids': 'hat-wizard',
   'rentals': 'building', 'service-men': 'tools', 'student-centre': 'graduation-cap'
 };
+
+// Hero Carousel State
+let heroSlides = [];
+let currentSlide = 0;
+let slideInterval = null;
 
 // ===== HELPERS =====
 const $ = id => document.getElementById(id);
@@ -140,6 +191,26 @@ function getGreeting() {
   return 'Hello';
 }
 
+// ===== UPDATE MEGA MENU USER INFO =====
+function updateMegaMenu(user, userData = {}) {
+  const userPic = $('megaUserPic');
+  const userName = $('megaUserName');
+  const userStatus = $('megaUserStatus');
+  const quickStats = $('megaQuickStats');
+  
+  if (user) {
+    if (userPic) userPic.src = userData.profilePicUrl || user.photoURL || 'images/profile-placeholder.png';
+    if (userName) userName.textContent = userData.name || user.displayName || user.email?.split('@')[0] || 'User';
+    if (userStatus) userStatus.textContent = userData.county ? `📍 ${userData.county}` : 'Welcome back!';
+    if (quickStats) quickStats.style.display = 'flex';
+  } else {
+    if (userPic) userPic.src = 'images/profile-placeholder.png';
+    if (userName) userName.textContent = 'Welcome!';
+    if (userStatus) userStatus.innerHTML = '<a href="login.html" style="color: var(--primary-color);">Login</a> to access all features';
+    if (quickStats) quickStats.style.display = 'none';
+  }
+}
+
 // ===== AUTH STATUS =====
 async function updateAuthStatus(user) {
   const el = $('auth-status');
@@ -147,10 +218,17 @@ async function updateAuthStatus(user) {
   
   if (user) {
     let name = user.email?.split('@')[0] || 'User';
+    let userData = {};
     try {
       const userDoc = await getDoc(doc(db, "Users", user.uid));
-      if (userDoc.exists()) name = userDoc.data().name || userDoc.data().username || name;
+      if (userDoc.exists()) {
+        userData = userDoc.data();
+        name = userData.name || userData.username || name;
+      }
     } catch {}
+    
+    // Update mega menu
+    updateMegaMenu(user, userData);
     
     el.innerHTML = `
       <div class="welcome">
@@ -162,6 +240,8 @@ async function updateAuthStatus(user) {
       </div>
     `;
   } else {
+    updateMegaMenu(null);
+    
     const cartCount = getGuestCart().length;
     el.innerHTML = `
       <div class="welcome">
@@ -178,40 +258,192 @@ async function updateAuthStatus(user) {
 
 window.logout = async () => {
   await logoutUser();
+  localStorage.removeItem(CACHE_KEYS.USERS);
   location.reload();
 };
 
 // ===== CACHED USER FETCH =====
 async function getCachedUser(userId) {
-  const now = Date.now();
-  const cached = userCache.get(userId);
+  // Check memory cache first
+  const memCached = userCache.get(userId);
+  if (memCached && isCacheValid(memCached.time, CACHE_DURATIONS.USERS)) {
+    return memCached.data;
+  }
   
-  if (cached && (now - cached.time) < USER_CACHE_DURATION) {
-    return cached.data;
+  // Check localStorage cache
+  const localCache = getLocalCache(CACHE_KEYS.USERS);
+  if (localCache.valid && localCache.data?.[userId] && isCacheValid(localCache.timestamp, CACHE_DURATIONS.USERS)) {
+    userCache.set(userId, { data: localCache.data[userId], time: localCache.timestamp });
+    return localCache.data[userId];
   }
   
   try {
     const u = await getDoc(doc(db, "Users", userId));
     const data = u.exists() ? u.data() : {};
-    userCache.set(userId, { data, time: now });
+    userCache.set(userId, { data, time: Date.now() });
+    
+    // Update localStorage cache
+    const existingCache = localCache.data || {};
+    existingCache[userId] = data;
+    setLocalCache(CACHE_KEYS.USERS, existingCache);
+    
     return data;
   } catch {
+    // Return from stale cache if available
+    if (localCache.data?.[userId]) {
+      return localCache.data[userId];
+    }
     return {};
   }
 }
 
 // ===== CACHED LISTINGS FETCH =====
 async function getCachedListings() {
-  const now = Date.now();
-  
-  if (listingsCache && (now - listingsCacheTime) < CACHE_DURATION) {
+  // Check memory cache first
+  if (listingsCache && isCacheValid(listingsCacheTime, CACHE_DURATIONS.LISTINGS)) {
     return listingsCache;
   }
   
-  const snap = await getDocs(collection(db, "Listings"));
-  listingsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  listingsCacheTime = now;
-  return listingsCache;
+  // Check localStorage cache
+  const localCache = getLocalCache(CACHE_KEYS.LISTINGS);
+  if (localCache.valid && localCache.data && isCacheValid(localCache.timestamp, CACHE_DURATIONS.LISTINGS)) {
+    listingsCache = localCache.data;
+    listingsCacheTime = localCache.timestamp;
+    return listingsCache;
+  }
+  
+  // Check if we're offline
+  if (!navigator.onLine) {
+    // Return stale cache if available
+    if (localCache.data) {
+      listingsCache = localCache.data;
+      listingsCacheTime = localCache.timestamp;
+      return listingsCache;
+    }
+    throw new Error('Offline and no cached data');
+  }
+  
+  try {
+    const snap = await getDocs(collection(db, "Listings"));
+    listingsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    listingsCacheTime = Date.now();
+    
+    // Save to localStorage
+    setLocalCache(CACHE_KEYS.LISTINGS, listingsCache);
+    
+    return listingsCache;
+  } catch (e) {
+    // Return stale cache on error
+    if (localCache.data) {
+      listingsCache = localCache.data;
+      listingsCacheTime = localCache.timestamp;
+      return listingsCache;
+    }
+    throw e;
+  }
+}
+
+// ===== HERO CAROUSEL - DYNAMIC =====
+async function loadHeroSlides() {
+  const track = $('carouselTrack');
+  const dotsContainer = $('carouselDots');
+  if (!track || !dotsContainer) return;
+  
+  try {
+    const snap = await getDocs(query(collection(db, "HeroSlides"), orderBy("order", "asc")));
+    heroSlides = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.active !== false);
+    
+    // Fallback default slides if none exist
+    if (heroSlides.length === 0) {
+      heroSlides = [
+        { title: 'Source. Stock. Sell.', subtitle: 'Wholesale prices on quality products', gradient: 'gradient-1', icon: 'fa-store' },
+        { title: 'General Shop', subtitle: 'Hand-picked quality items by our team', btnText: 'Shop Now', btnLink: 'category.html?prime=generalShop', gradient: 'gradient-2', icon: 'fa-star' },
+        { title: 'Start Selling Today', subtitle: 'Join 1000+ sellers. List products free!', btnText: 'List Now', btnLink: 'listing.html', gradient: 'gradient-3', icon: 'fa-rocket' }
+      ];
+    }
+    
+    // Render slides
+    track.innerHTML = heroSlides.map((slide, idx) => `
+      <div class="carousel-slide ${idx === 0 ? 'active' : ''}">
+        <div class="slide-content ${slide.gradient || 'gradient-1'}" ${slide.bgImage ? `style="background-image:linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(${slide.bgImage});background-size:cover;background-position:center;"` : ''}>
+          <div class="slide-text">
+            <h2>${slide.title || ''}</h2>
+            <p>${slide.subtitle || ''}</p>
+            ${slide.btnText ? `<a href="${slide.btnLink || '#'}" class="slide-btn">${slide.btnText} <i class="fas fa-arrow-right"></i></a>` : ''}
+          </div>
+          <div class="slide-icon"><i class="fas ${slide.icon || 'fa-star'}"></i></div>
+        </div>
+      </div>
+    `).join('');
+    
+    // Render dots
+    dotsContainer.innerHTML = heroSlides.map((_, idx) => 
+      `<span class="dot ${idx === 0 ? 'active' : ''}" data-slide="${idx}"></span>`
+    ).join('');
+    
+    // Initialize carousel
+    initHeroCarousel();
+    
+  } catch (err) {
+    console.error('Error loading hero slides:', err);
+  }
+}
+
+function initHeroCarousel() {
+  const slides = document.querySelectorAll('.carousel-slide');
+  const dots = document.querySelectorAll('.dot');
+  const track = $('carouselTrack');
+  const carousel = $('heroCarousel');
+  
+  if (!slides.length) return;
+  
+  const goToSlide = (n) => {
+    slides[currentSlide]?.classList.remove('active');
+    dots[currentSlide]?.classList.remove('active');
+    currentSlide = (n + slides.length) % slides.length;
+    slides[currentSlide]?.classList.add('active');
+    dots[currentSlide]?.classList.add('active');
+    track.style.transform = `translateX(-${currentSlide * 100}%)`;
+  };
+  
+  // Dot clicks
+  dots.forEach((dot, i) => {
+    dot.addEventListener('click', () => goToSlide(i));
+  });
+  
+  // Auto-slide
+  if (slideInterval) clearInterval(slideInterval);
+  slideInterval = setInterval(() => goToSlide(currentSlide + 1), 5000);
+  
+  // Touch swipe support - improved
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+  
+  carousel?.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+    touchStartY = e.changedTouches[0].screenY;
+    isSwiping = true;
+  }, { passive: true });
+  
+  carousel?.addEventListener('touchmove', e => {
+    if (!isSwiping) return;
+    const diffX = e.changedTouches[0].screenX - touchStartX;
+    const diffY = e.changedTouches[0].screenY - touchStartY;
+    // If horizontal swipe is greater than vertical, prevent scroll
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+  
+  carousel?.addEventListener('touchend', e => {
+    if (!isSwiping) return;
+    isSwiping = false;
+    const diff = touchStartX - e.changedTouches[0].screenX;
+    if (Math.abs(diff) > 50) {
+      goToSlide(diff > 0 ? currentSlide + 1 : currentSlide - 1);
+    }
+  }, { passive: true });
 }
 
 // ===== CATEGORIES =====
@@ -227,9 +459,9 @@ async function loadCategories() {
     counts[cat] = (counts[cat] || 0) + 1;
   });
   
-  // Render
+  // Render - exclude general-shop from regular categories
   strip.innerHTML = Object.keys(categoryHierarchy)
-    .filter(k => counts[k] > 0)
+    .filter(k => counts[k] > 0 && k !== 'general-shop')
     .map(k => `
       <a href="category.html?category=${k}" class="cat-card">
         <i class="fas fa-${catIcons[k] || 'box'}"></i>
@@ -237,6 +469,90 @@ async function loadCategories() {
         <span class="count">${counts[k]}</span>
       </a>
     `).join('');
+}
+
+// ===== FEATURED ITEMS (Prime Categories - General Shop) =====
+async function loadFeaturedItems() {
+  const container = $('featuredItems');
+  if (!container) return;
+  
+  try {
+    // Use cached listings and filter for primeCategories.generalShop
+    const listings = await getCachedListings();
+    const featured = listings.filter(l => l.primeCategories?.generalShop === true);
+    
+    if (featured.length === 0) {
+      // Hide section if no featured items
+      const section = container.closest('.featured-section');
+      if (section) section.style.display = 'none';
+      return;
+    }
+    
+    // Get seller IDs for featured items
+    const sellerIds = new Set();
+    featured.forEach(l => sellerIds.add(l.uploaderId || l.userId));
+    
+    // Batch fetch sellers
+    const sellers = {};
+    await Promise.all([...sellerIds].map(async id => {
+      sellers[id] = await getCachedUser(id);
+    }));
+    
+    // Build featured items HTML
+    container.innerHTML = featured.map(data => {
+      const sellerId = data.uploaderId || data.userId;
+      const seller = sellers[sellerId] || {};
+      const priceData = getMinPriceFromVariations(data);
+      const imageUrls = data.imageUrls || [];
+      const mainImg = imageUrls[0] || 'images/placeholder.png';
+      const isVerified = seller.isVerified === true;
+      
+      const margin = priceData.retailPrice && priceData.retailPrice > priceData.price 
+        ? Math.round(((priceData.retailPrice - priceData.price) / priceData.price) * 100) 
+        : 0;
+      
+      return `
+        <article class="featured-card" onclick="location.href='product.html?id=${data.id}'">
+          <div class="featured-badge"><i class="fas fa-star"></i> Featured</div>
+          <div class="featured-img">
+            <img src="${mainImg}" alt="${data.name}" loading="lazy">
+          </div>
+          <div class="featured-info">
+            <h3>${data.name}</h3>
+            <div class="featured-seller">
+              <img src="${seller.profilePicUrl || 'images/profile-placeholder.png'}" alt="">
+              <span>${seller.name || 'Seller'}${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</span>
+            </div>
+            <div class="featured-price">
+              <span class="price">Ksh ${priceData.price?.toLocaleString() || '0'}</span>
+              ${margin > 0 ? `<span class="margin">+${margin}% margin</span>` : ''}
+            </div>
+          </div>
+        </article>
+      `;
+    }).join('');
+    
+  } catch (err) {
+    console.error('Featured load error:', err);
+  }
+}
+
+// ===== POPULARITY SCORE CALCULATION =====
+function calculatePopularity(listing) {
+  // Popularity based on: views, wishlist adds, orders, recency
+  const viewCount = listing.viewCount || 0;
+  const wishlistCount = listing.wishlistCount || 0;
+  const orderCount = listing.orderCount || 0;
+  const daysOld = listing.createdAt 
+    ? Math.max(1, (Date.now() - (listing.createdAt.toDate?.() || new Date(listing.createdAt)).getTime()) / (1000 * 60 * 60 * 24))
+    : 30;
+  
+  // Weighted score - orders matter most, then wishlists, then views
+  // Decay by age to favor newer items
+  const recencyBoost = Math.max(0.5, 1 - (daysOld / 60)); // Decays over 60 days
+  const score = ((orderCount * 10) + (wishlistCount * 3) + (viewCount * 0.1)) * recencyBoost;
+  
+  return score;
 }
 
 // ===== PRODUCTS - Match Category Page Gallery Style =====
@@ -269,21 +585,19 @@ async function loadProducts() {
         sellerName: seller.name || seller.username || 'Seller',
         sellerPic: seller.profilePicUrl || 'images/profile-placeholder.png',
         sellerUid: seller.uid || sellerId,
+        isVerified: seller.isVerified === true,
         minPrice: priceData.price,
         retailPrice: priceData.retailPrice,
         packInfo: packInfo,
         margin: priceData.retailPrice && priceData.retailPrice > priceData.price 
           ? Math.round(((priceData.retailPrice - priceData.price) / priceData.price) * 100) 
-          : 0
+          : 0,
+        popularity: calculatePopularity(data)
       };
     });
     
-    // Sort by newest
-    allListings.sort((a, b) => {
-      const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
-      const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
-      return dateB - dateA;
-    });
+    // Default sort by best margin
+    allListings.sort((a, b) => b.margin - a.margin);
     
     renderProducts();
     
@@ -317,7 +631,7 @@ function renderProducts() {
           <div class="profile">
             <img src="${listing.sellerPic}" alt="${listing.sellerName}" onclick="goToUserProfile('${listing.sellerUid}')" loading="lazy">
             <div class="uploader-info">
-              <p class="uploader-name"><strong>${listing.sellerName}</strong></p>
+              <p class="uploader-name"><strong>${listing.sellerName}</strong>${listing.isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
               <p class="product-name">${listing.name}</p>
               ${listing.packInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${listing.packInfo}</p>` : ''}
             </div>
@@ -386,6 +700,8 @@ $('sortSelect')?.addEventListener('change', function() {
     case 'price-low': allListings.sort((a, b) => a.minPrice - b.minPrice); break;
     case 'price-high': allListings.sort((a, b) => b.minPrice - a.minPrice); break;
     case 'profit': allListings.sort((a, b) => b.margin - a.margin); break;
+    case 'popular': allListings.sort((a, b) => b.popularity - a.popularity); break;
+    case 'newest': 
     default: allListings.sort((a, b) => {
       const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
       const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
@@ -624,15 +940,87 @@ function showQuantityModal(id, listing, isCart) {
 }
 
 // ===== SEARCH =====
-$('searchForm')?.addEventListener('submit', e => {
-  e.preventDefault();
-  const q = $('searchInput').value.trim();
-  if (q) location.href = `search-results.html?q=${encodeURIComponent(q)}`;
+function setupSearch() {
+  // Full header search form
+  const searchForm = $('searchForm');
+  const searchInput = $('searchInput');
+  
+  if (searchForm) {
+    searchForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const q = searchInput?.value.trim();
+      if (q) location.href = `search-results.html?q=${encodeURIComponent(q)}`;
+    });
+  }
+  
+  // Compact header search
+  const compactSearchInput = $('compactSearchInput');
+  if (compactSearchInput) {
+    compactSearchInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const q = compactSearchInput.value.trim();
+        if (q) location.href = `search-results.html?q=${encodeURIComponent(q)}`;
+      }
+    });
+    
+    // Also listen for search icon click
+    const compactSearch = compactSearchInput.closest('.compact-search');
+    if (compactSearch) {
+      const icon = compactSearch.querySelector('i.fa-search');
+      if (icon) {
+        icon.style.cursor = 'pointer';
+        icon.addEventListener('click', () => {
+          const q = compactSearchInput.value.trim();
+          if (q) location.href = `search-results.html?q=${encodeURIComponent(q)}`;
+        });
+      }
+    }
+  }
+}
+
+// ===== SYNC BADGE COUNTS =====
+function syncBadgeCounts() {
+  // Sync cart count from main nav to compact header and mega menu
+  const mainCart = document.getElementById('cart-count');
+  const compactCart = document.getElementById('cart-count-compact');
+  const megaCart = document.getElementById('megaCartCount');
+  
+  if (mainCart && compactCart) compactCart.textContent = mainCart.textContent || '';
+  if (mainCart && megaCart) megaCart.textContent = mainCart.textContent || '0';
+  
+  // Sync wishlist
+  const mainWish = document.getElementById('wishlist-count');
+  const megaWish = document.getElementById('megaWishlistCount');
+  if (mainWish && megaWish) megaWish.textContent = mainWish.textContent || '0';
+  
+  // Sync notifications
+  const mainNotif = document.getElementById('notification-count');
+  const compactNotif = document.getElementById('notif-count-compact');
+  const megaNotif = document.getElementById('megaNotifCount');
+  if (mainNotif && compactNotif) compactNotif.textContent = mainNotif.textContent || '';
+  if (mainNotif && megaNotif) megaNotif.textContent = mainNotif.textContent || '0';
+}
+
+// Observer to sync badges when they change
+const badgeObserver = new MutationObserver(syncBadgeCounts);
+['cart-count', 'wishlist-count', 'notification-count'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) badgeObserver.observe(el, { childList: true, characterData: true, subtree: true });
 });
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
-  await Promise.all([loadCategories(), loadProducts()]);
+  // Setup search handlers
+  setupSearch();
+  
+  // Load hero slides first for fast initial display
+  loadHeroSlides();
+  
+  await Promise.all([loadCategories(), loadProducts(), loadFeaturedItems()]);
+  
+  // Initial badge sync
+  setTimeout(syncBadgeCounts, 500);
   
   onAuthStateChanged(auth, async user => {
     updateAuthStatus(user);
@@ -640,6 +1028,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateCartCounter(db, user.uid);
       updateWishlistCounter(db, user.uid);
       updateChatCounter(db, user.uid);
+      // Sync after counters update
+      setTimeout(syncBadgeCounts, 1000);
     }
   });
 });

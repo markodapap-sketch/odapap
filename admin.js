@@ -1,1218 +1,1797 @@
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-import { getFirestore, collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, setDoc, orderBy, limit, startAfter, Timestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, getDocs, getDoc, doc, updateDoc, deleteDoc, setDoc, orderBy, limit, Timestamp, addDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Allowed admin emails - admin@odapap.com is the master admin
+const storage = getStorage(app);
 const MASTER_ADMIN_EMAIL = 'admin@odapap.com';
 
-class AdminDashboard {
-    constructor() {
-        this.currentSection = 'dashboard';
-        this.currentPage = 1;
-        this.itemsPerPage = 20;
-        this.charts = {};
-        this.orders = [];
-        this.users = [];
-        this.products = [];
-        this.isMasterAdmin = false;
+// ============= DOM Elements =============
+const $ = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+
+// ============= State =============
+const state = {
+    user: null,
+    isMaster: false,
+    section: 'dashboard',
+    orders: [],
+    users: [],
+    products: [],
+    productsPage: 0,
+    productsLoaded: 0,
+    PRODUCTS_PER_PAGE: 24,
+    viewingUserId: null,
+    charts: {},
+    editImages: [], // For product image management
+    imagesToDelete: [] // URLs of images to delete
+};
+
+// ============= Initialize =============
+document.addEventListener('DOMContentLoaded', () => {
+    setupMobileMenu();
+    setupNav();
+    setupEventListeners();
+    updateDate();
+    
+    onAuthStateChanged(auth, handleAuth);
+});
+
+// ============= Auth =============
+async function handleAuth(user) {
+    if (!user) return window.location.href = 'login.html';
+    
+    const isAdmin = await checkAdmin(user.email, user.uid);
+    if (!isAdmin) {
+        showNotification('Access denied. Admin privileges required.', 'error');
+        return setTimeout(() => window.location.href = 'index.html', 2000);
+    }
+    
+    state.user = user;
+    state.isMaster = user.email === MASTER_ADMIN_EMAIL;
+    $('adminBadge').textContent = state.isMaster ? 'Master' : 'Admin';
+    loadDashboard();
+}
+
+async function checkAdmin(email, uid) {
+    if (email === MASTER_ADMIN_EMAIL) {
+        const ref = doc(db, "Admins", uid);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+            await setDoc(ref, { email, role: 'master_admin', createdAt: Timestamp.now() });
+        }
+        return true;
+    }
+    const q = query(collection(db, "Admins"), where("email", "==", email));
+    return !(await getDocs(q)).empty;
+}
+
+// ============= Mobile Menu =============
+function setupMobileMenu() {
+    const menuBtn = $('menuBtn');
+    const sidebar = $('sidebar');
+    const overlay = $('overlay');
+    
+    const closeSidebar = () => {
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    };
+    
+    menuBtn?.addEventListener('click', () => {
+        sidebar.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    });
+    
+    overlay?.addEventListener('click', closeSidebar);
+    
+    $$('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 1024) closeSidebar();
+        });
+    });
+}
+
+// ============= Navigation =============
+function setupNav() {
+    $$('.nav-link').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            const section = link.dataset.section;
+            if (section) switchSection(section);
+        });
+    });
+    
+    $$('.view-all').forEach(link => {
+        link.addEventListener('click', e => {
+            e.preventDefault();
+            const section = link.dataset.section;
+            if (section) switchSection(section);
+        });
+    });
+}
+
+function switchSection(section) {
+    $$('.nav-link').forEach(l => l.classList.remove('active'));
+    document.querySelector(`[data-section="${section}"]`)?.classList.add('active');
+    
+    $$('.page').forEach(p => p.classList.remove('active'));
+    $(`${section}-page`)?.classList.add('active');
+    
+    $('mobileTitle').textContent = getTitle(section);
+    state.section = section;
+    
+    // Reset user listings view when switching sections
+    if (section !== 'users') {
+        hideUserListings();
+    }
+    
+    // Load section data
+    const loaders = {
+        orders: loadOrders,
+        products: loadProducts,
+        users: loadUsers,
+        analytics: loadAnalytics,
+        transactions: loadTransactions,
+        verifications: loadVerifications,
+        settings: loadSettings
+    };
+    loaders[section]?.();
+}
+
+function getTitle(s) {
+    const t = { dashboard: 'Dashboard', orders: 'Orders', products: 'Products', users: 'Users', analytics: 'Analytics', transactions: 'Transactions', verifications: 'Verifications', settings: 'Settings' };
+    return t[s] || 'Dashboard';
+}
+
+// ============= Event Listeners =============
+function setupEventListeners() {
+    // Logout
+    $('logoutBtn')?.addEventListener('click', async () => {
+        if (confirm('Logout?')) {
+            await signOut(auth);
+            window.location.href = 'login.html';
+        }
+    });
+    
+    // Filters
+    $('orderFilter')?.addEventListener('change', filterOrders);
+    $('orderSearch')?.addEventListener('input', e => searchOrders(e.target.value));
+    $('productSearch')?.addEventListener('input', e => searchProducts(e.target.value));
+    $('userSearch')?.addEventListener('input', e => searchUsers(e.target.value));
+    $('transactionFilter')?.addEventListener('change', filterTransactions);
+    $('analyticsPeriod')?.addEventListener('change', loadAnalytics);
+    
+    // Products load more
+    $('loadMoreProducts')?.addEventListener('click', loadMoreProducts);
+    
+    // Back to users
+    $('backToUsersBtn')?.addEventListener('click', hideUserListings);
+    
+    // Modal
+    $('closeModal')?.addEventListener('click', () => $('orderModal').classList.remove('active'));
+    $('orderModal')?.addEventListener('click', e => {
+        if (e.target === $('orderModal')) $('orderModal').classList.remove('active');
+    });
+    
+    // Export
+    $('exportBtn')?.addEventListener('click', exportProducts);
+    $('exportReportBtn')?.addEventListener('click', exportReport);
+    
+    // Settings
+    $('addAdminBtn')?.addEventListener('click', addAdmin);
+    
+    // Product modal
+    $('addProductBtn')?.addEventListener('click', openAddModal);
+    $('closeProductModal')?.addEventListener('click', closeProductModal);
+    $('productModal')?.addEventListener('click', e => {
+        if (e.target === $('productModal')) closeProductModal();
+    });
+    $('productForm')?.addEventListener('submit', handleProductFormSubmit);
+    
+    // Image upload handler
+    $('imageInput')?.addEventListener('change', e => {
+        handleImageUpload(e.target.files);
+        e.target.value = ''; // Reset input
+    });
+}
+
+// Handle product form submit
+async function handleProductFormSubmit(e) {
+    e.preventDefault();
+    
+    const id = $('editProductId').value;
+    const saveBtn = $('saveProductBtn');
+    const originalText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+    
+    try {
+        // Upload new images first
+        const imageUrls = [];
+        for (const img of state.editImages) {
+            if (img.isExisting && img.url) {
+                imageUrls.push(img.url);
+            } else if (img.file) {
+                // Upload new image
+                const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+                const fileRef = storageRef(storage, `listings/${state.user.uid}/${fileName}`);
+                await uploadBytes(fileRef, img.file);
+                const url = await getDownloadURL(fileRef);
+                imageUrls.push(url);
+            }
+        }
         
-        this.initializeAuth();
-        this.setupEventListeners();
-    }
-
-    async initializeAuth() {
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                window.location.href = 'login.html';
-                return;
+        // Delete removed images
+        for (const url of state.imagesToDelete) {
+            try {
+                const imgRef = storageRef(storage, url);
+                await deleteObject(imgRef);
+            } catch (e) {
+                console.warn('Could not delete image:', e);
             }
-
-            // Check if user is admin
-            const isAdmin = await this.checkAdminStatus(user.email, user.uid);
-            if (!isAdmin) {
-                showNotification('Access denied. Admin privileges required.', 'error');
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
-                return;
-            }
-
-            this.currentUser = user;
-            this.isMasterAdmin = user.email === MASTER_ADMIN_EMAIL;
-            await this.loadAdminProfile();
-            await this.loadDashboardData();
-        });
-    }
-
-    async checkAdminStatus(email, uid) {
-        try {
-            // Master admin always has access
-            if (email === MASTER_ADMIN_EMAIL) {
-                // Ensure master admin document exists
-                const masterAdminRef = doc(db, "Admins", uid);
-                const masterAdminDoc = await getDoc(masterAdminRef);
-                if (!masterAdminDoc.exists()) {
-                    await setDoc(masterAdminRef, {
-                        email: MASTER_ADMIN_EMAIL,
-                        role: 'master_admin',
-                        createdAt: Timestamp.now(),
-                        permissions: ['all']
-                    });
-                }
-                return true;
-            }
-            
-            // Check if email is in allowed admins collection
-            const adminQuery = query(collection(db, "Admins"), where("email", "==", email));
-            const adminSnapshot = await getDocs(adminQuery);
-            return !adminSnapshot.empty;
-        } catch (error) {
-            console.error('Error checking admin status:', error);
-            return false;
         }
-    }
-
-    async loadAdminProfile() {
-        try {
-            const userDoc = await getDoc(doc(db, "Users", this.currentUser.uid));
-            if (userDoc.exists()) {
-                const userData = userDoc.data();
-                document.getElementById('adminName').textContent = userData.name || this.currentUser.email;
-            } else {
-                document.getElementById('adminName').textContent = this.currentUser.email;
-            }
-        } catch (error) {
-            console.error('Error loading admin profile:', error);
-        }
-    }
-
-    setupEventListeners() {
-        // Sidebar navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = item.dataset.section;
-                this.switchSection(section);
-            });
-        });
-
-        // Menu toggle
-        document.getElementById('menuToggle').addEventListener('click', () => {
-            document.querySelector('.sidebar').classList.toggle('collapsed');
-        });
-
-        // Logout
-        document.getElementById('logoutBtn').addEventListener('click', async () => {
-            if (confirm('Are you sure you want to logout?')) {
-                await signOut(auth);
-                window.location.href = 'login.html';
-            }
-        });
-
-        // Order filters
-        document.getElementById('orderStatusFilter')?.addEventListener('change', () => {
-            this.filterOrders();
-        });
-
-        document.getElementById('orderSearch')?.addEventListener('input', (e) => {
-            this.searchOrders(e.target.value);
-        });
-
-        // Product search
-        document.getElementById('productSearch')?.addEventListener('input', (e) => {
-            this.searchProducts(e.target.value);
-        });
-
-        // User search
-        document.getElementById('userSearch')?.addEventListener('input', (e) => {
-            this.searchUsers(e.target.value);
-        });
-
-        // Close modal
-        document.querySelector('.close-modal')?.addEventListener('click', () => {
-            document.getElementById('orderDetailModal').style.display = 'none';
-        });
-    }
-
-    switchSection(section) {
-        // Update active nav item
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
-        });
-        document.querySelector(`[data-section="${section}"]`).classList.add('active');
-
-        // Hide all sections
-        document.querySelectorAll('.content-section').forEach(sec => {
-            sec.classList.remove('active');
-        });
-
-        // Show selected section
-        document.getElementById(`${section}-section`).classList.add('active');
-        document.getElementById('pageTitle').textContent = this.getSectionTitle(section);
-
-        this.currentSection = section;
-
-        // Load section data
-        switch(section) {
-            case 'orders':
-                this.loadOrders();
-                break;
-            case 'products':
-                this.loadProducts();
-                break;
-            case 'users':
-                this.loadUsers();
-                break;
-            case 'transactions':
-                this.loadTransactions();
-                break;
-            case 'verifications':
-                this.loadVerifications();
-                break;
-            case 'analytics':
-                this.loadAnalytics();
-                break;
-            case 'settings':
-                this.loadAdminList();
-                break;
-        }
-    }
-
-    getSectionTitle(section) {
-        const titles = {
-            dashboard: 'Dashboard',
-            orders: 'Order Management',
-            products: 'Product Listings',
-            users: 'User Management',
-            transactions: 'Transactions',
-            verifications: 'Payment Verifications',
-            analytics: 'Analytics & Reports',
-            settings: 'Settings'
+        
+        const data = {
+            name: $('editName').value.trim(),
+            category: $('editCategory').value.trim(),
+            brand: $('editBrand').value.trim(),
+            price: Number($('editPrice').value),
+            totalStock: Number($('editStock').value),
+            description: $('editDescription').value.trim(),
+            status: $('editStatus').value,
+            imageUrls: imageUrls,
+            updatedAt: Timestamp.now()
         };
-        return titles[section] || 'Dashboard';
-    }
-
-    async loadDashboardData() {
-        try {
-            // Load all statistics
-            await Promise.all([
-                this.loadOrderStats(),
-                this.loadUserStats(),
-                this.loadProductStats(),
-                this.loadRevenueStats(),
-                this.loadRecentOrders()
-            ]);
-
-            // Initialize charts
-            this.initializeCharts();
-        } catch (error) {
-            console.error('Error loading dashboard:', error);
-        }
-    }
-
-    async loadOrderStats() {
-        try {
-            const ordersSnapshot = await getDocs(collection(db, "Orders"));
-            const orders = [];
-            let pendingCount = 0;
-            let todayCount = 0;
-            const today = new Date().setHours(0, 0, 0, 0);
-
-            ordersSnapshot.forEach(doc => {
-                const order = doc.data();
-                orders.push(order);
-
-                if (order.orderStatus === 'pending') pendingCount++;
-                
-                const orderDate = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
-                if (orderDate >= today) todayCount++;
-            });
-
-            this.orders = orders;
-            document.getElementById('totalOrders').textContent = orders.length;
-            document.getElementById('pendingOrders').textContent = pendingCount;
-            document.getElementById('todayOrders').textContent = todayCount;
-            document.getElementById('pendingOrdersBadge').textContent = pendingCount;
-        } catch (error) {
-            console.error('Error loading order stats:', error);
-        }
-    }
-
-    async loadUserStats() {
-        try {
-            const usersSnapshot = await getDocs(collection(db, "Users"));
-            this.users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            document.getElementById('totalUsers').textContent = usersSnapshot.size;
-        } catch (error) {
-            console.error('Error loading user stats:', error);
-        }
-    }
-
-    async loadProductStats() {
-        try {
-            const listingsSnapshot = await getDocs(collection(db, "Listings"));
-            document.getElementById('totalListings').textContent = listingsSnapshot.size;
-            this.products = listingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        } catch (error) {
-            console.error('Error loading product stats:', error);
-        }
-    }
-
-    async loadRevenueStats() {
-        try {
-            let totalRevenue = 0;
-            this.orders.forEach(order => {
-                if (order.paymentStatus === 'completed') {
-                    totalRevenue += order.totalAmount;
-                }
-            });
-            document.getElementById('totalRevenue').textContent = `KES ${totalRevenue.toLocaleString()}`;
-        } catch (error) {
-            console.error('Error loading revenue stats:', error);
-        }
-    }
-
-    async loadRecentOrders() {
-        const recentOrders = this.orders
-            .sort((a, b) => {
-                const dateA = a.orderDate?.toDate ? a.orderDate.toDate() : new Date(a.orderDate);
-                const dateB = b.orderDate?.toDate ? b.orderDate.toDate() : new Date(b.orderDate);
-                return dateB - dateA;
-            })
-            .slice(0, 5);
-
-        const listEl = document.getElementById('recentOrdersList');
-        listEl.innerHTML = '';
-
-        if (recentOrders.length === 0) {
-            listEl.innerHTML = '<p style="text-align: center; color: #999;">No orders yet</p>';
-            return;
-        }
-
-        recentOrders.forEach(order => {
-            const orderDate = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
-            const item = document.createElement('div');
-            item.className = 'recent-item';
-            item.innerHTML = `
-                <div>
-                    <strong>${order.orderId}</strong>
-                    <p>${order.buyerDetails?.name || 'Unknown'}</p>
-                </div>
-                <div>
-                    <span class="status-badge ${order.orderStatus}">${order.orderStatus}</span>
-                    <p class="text-small">${orderDate.toLocaleDateString()}</p>
-                </div>
-                <div>
-                    <strong>KES ${order.totalAmount.toLocaleString()}</strong>
-                </div>
-            `;
-            item.addEventListener('click', () => this.viewOrderDetails(order));
-            listEl.appendChild(item);
-        });
-    }
-
-    async loadOrders() {
-        try {
-            const ordersSnapshot = await getDocs(collection(db, "Orders"));
-            this.orders = [];
-            
-            ordersSnapshot.forEach(doc => {
-                this.orders.push({ id: doc.id, ...doc.data() });
-            });
-
-            this.displayOrders();
-        } catch (error) {
-            console.error('Error loading orders:', error);
-        }
-    }
-
-    displayOrders(ordersToDisplay = this.orders) {
-        const tbody = document.getElementById('ordersTableBody');
-        tbody.innerHTML = '';
-
-        if (ordersToDisplay.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No orders found</td></tr>';
-            return;
-        }
-
-        ordersToDisplay.forEach(order => {
-            const orderDate = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td><strong>${order.orderId}</strong></td>
-                <td>${order.buyerDetails?.name || 'N/A'}</td>
-                <td>${order.items?.length || 0} items</td>
-                <td>KES ${order.totalAmount.toLocaleString()}</td>
-                <td><span class="badge ${order.paymentMethod}">${order.paymentMethod}</span></td>
-                <td>
-                    <select class="status-select" data-order-id="${order.id}" data-current-status="${order.orderStatus}">
-                        <option value="pending" ${order.orderStatus === 'pending' ? 'selected' : ''}>Pending</option>
-                        <option value="confirmed" ${order.orderStatus === 'confirmed' ? 'selected' : ''}>Confirmed</option>
-                        <option value="out_for_delivery" ${order.orderStatus === 'out_for_delivery' ? 'selected' : ''}>Out for Delivery</option>
-                        <option value="delivered" ${order.orderStatus === 'delivered' ? 'selected' : ''}>Delivered</option>
-                        <option value="cancelled" ${order.orderStatus === 'cancelled' ? 'selected' : ''}>Cancelled</option>
-                    </select>
-                </td>
-                <td>${orderDate.toLocaleDateString()}</td>
-                <td>
-                    <button class="btn-icon" onclick="adminDashboard.viewOrderDetails(${JSON.stringify(order).replace(/"/g, '&quot;')})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-
-        // Add change listeners to status selects
-        document.querySelectorAll('.status-select').forEach(select => {
-            select.addEventListener('change', (e) => {
-                this.updateOrderStatus(e.target.dataset.orderId, e.target.value, e.target.dataset.currentStatus);
-            });
-        });
-    }
-
-    async updateOrderStatus(orderId, newStatus, oldStatus) {
-        try {
-            if (confirm(`Update order status to "${newStatus}"?`)) {
-                await updateDoc(doc(db, "Orders", orderId), {
-                    orderStatus: newStatus,
-                    updatedAt: Timestamp.now()
-                });
-                showNotification('Order status updated successfully');
-                await this.loadOrders();
-                await this.loadOrderStats();
-            } else {
-                // Revert select to old status
-                const select = document.querySelector(`[data-order-id="${orderId}"]`);
-                if (select) select.value = oldStatus;
-            }
-        } catch (error) {
-            console.error('Error updating order status:', error);
-            showNotification('Error updating order status');
-        }
-    }
-
-    viewOrderDetails(order) {
-        const modal = document.getElementById('orderDetailModal');
-        const content = document.getElementById('orderDetailContent');
         
-        const orderDate = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
+        if (id) {
+            // Update existing
+            await updateDoc(doc(db, "Listings", id), data);
+            const product = state.products.find(p => p.id === id);
+            if (product) Object.assign(product, data);
+            showNotification('Product updated');
+        } else {
+            // Create new
+            data.uploaderId = state.user.uid;
+            data.createdAt = Timestamp.now();
+            const docRef = await addDoc(collection(db, "Listings"), data);
+            state.products.unshift({ id: docRef.id, ...data });
+            showNotification('Product added');
+        }
         
-        let itemsHTML = '<div class="order-items-list">';
-        order.items.forEach(item => {
-            itemsHTML += `
-                <div class="order-item-detail">
-                    <div>
-                        <strong>${item.productName}</strong>
-                        ${item.selectedVariation ? `<p class="text-small">${item.selectedVariation.title}: ${item.selectedVariation.attr_name}</p>` : ''}
-                    </div>
-                    <div>
-                        <p>Qty: ${item.quantity}</p>
-                        <p>KES ${item.pricePerUnit.toLocaleString()} × ${item.quantity}</p>
-                        <strong>KES ${item.totalPrice.toLocaleString()}</strong>
-                    </div>
-                </div>
-            `;
-        });
-        itemsHTML += '</div>';
+        closeProductModal();
+        renderProducts();
+        updateMetrics();
+    } catch (err) {
+        console.error('Save error:', err);
+        showNotification('Failed to save product', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
+    }
+}
 
-        content.innerHTML = `
-            <div class="order-detail-header">
-                <h2>Order Details</h2>
-                <span class="status-badge large ${order.orderStatus}">${order.orderStatus}</span>
+function updateDate() {
+    const now = new Date();
+    const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    $('dateDisplay').textContent = now.toLocaleDateString('en-US', opts);
+}
+
+// ============= Dashboard =============
+async function loadDashboard() {
+    try {
+        await Promise.all([loadOrders(), loadUsers(), loadProducts()]);
+        updateMetrics();
+        renderRecentOrders();
+        initCharts();
+    } catch (err) {
+        console.error('Dashboard error:', err);
+    }
+}
+
+async function loadOrders() {
+    try {
+        const snap = await getDocs(collection(db, "Orders"));
+        state.orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        updateOrdersBadge();
+        if (state.section === 'orders') renderOrders();
+    } catch (err) {
+        console.error('Orders error:', err);
+    }
+}
+
+async function loadUsers() {
+    try {
+        const snap = await getDocs(collection(db, "Users"));
+        state.users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (state.section === 'users') renderUsers();
+    } catch (err) {
+        console.error('Users error:', err);
+    }
+}
+
+async function loadProducts() {
+    try {
+        const snap = await getDocs(collection(db, "Listings"));
+        state.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        state.productsLoaded = 0;
+        state.productsPage = 0;
+        if (state.section === 'products') renderProducts();
+    } catch (err) {
+        console.error('Products error:', err);
+    }
+}
+
+function updateMetrics() {
+    const orders = state.orders;
+    const pending = orders.filter(o => o.orderStatus === 'pending').length;
+    const delivered = orders.filter(o => o.orderStatus === 'delivered');
+    
+    let revenue = 0, productsSold = 0;
+    delivered.forEach(o => {
+        revenue += o.totalAmount || 0;
+        o.items?.forEach(i => productsSold += i.quantity || 1);
+    });
+    
+    let storeValue = 0;
+    state.products.forEach(p => storeValue += (p.price || 0) * (p.totalStock || 0));
+    
+    $('metricOrders').textContent = orders.length;
+    $('metricPending').textContent = pending;
+    $('metricRevenue').textContent = `KES ${revenue.toLocaleString()}`;
+    $('metricUsers').textContent = state.users.length;
+    $('metricProducts').textContent = state.products.length;
+    $('metricStoreValue').textContent = `KES ${storeValue.toLocaleString()}`;
+}
+
+function updateOrdersBadge() {
+    const pending = state.orders.filter(o => o.orderStatus === 'pending').length;
+    $('ordersBadge').textContent = pending;
+    $('ordersBadge').style.display = pending > 0 ? '' : 'none';
+}
+
+// ============= Recent Orders =============
+function renderRecentOrders() {
+    const container = $('recentOrders');
+    const recent = [...state.orders]
+        .sort((a, b) => getDate(b.orderDate) - getDate(a.orderDate))
+        .slice(0, 5);
+    
+    if (!recent.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:20px;">No orders yet</p>';
+        return;
+    }
+    
+    container.innerHTML = recent.map(o => `
+        <div class="recent-order" onclick="viewOrder('${o.id}')">
+            <div>
+                <span class="order-id">${o.orderId || o.id.slice(0, 8)}</span>
+                <span class="customer">${o.buyerDetails?.name || 'N/A'}</span>
             </div>
-            <div class="order-detail-grid">
-                <div class="detail-section">
-                    <h3><i class="fas fa-info-circle"></i> Order Information</h3>
-                    <p><strong>Order ID:</strong> ${order.orderId}</p>
-                    <p><strong>Date:</strong> ${orderDate.toLocaleString()}</p>
-                    <p><strong>Source:</strong> ${order.orderSource || 'cart'}</p>
-                </div>
-                <div class="detail-section">
-                    <h3><i class="fas fa-user"></i> Customer Details</h3>
-                    <p><strong>Name:</strong> ${order.buyerDetails?.name || 'N/A'}</p>
-                    <p><strong>Phone:</strong> ${order.buyerDetails?.phone || 'N/A'}</p>
-                    <p><strong>Location:</strong> ${order.buyerDetails?.location || 'N/A'}</p>
-                    <p><strong>Delivery Address:</strong> ${order.buyerDetails?.deliveryAddress || 'N/A'}</p>
-                </div>
-                <div class="detail-section">
-                    <h3><i class="fas fa-credit-card"></i> Payment Information</h3>
-                    <p><strong>Method:</strong> ${order.paymentMethod}</p>
-                    <p><strong>Status:</strong> <span class="badge ${order.paymentStatus}">${order.paymentStatus}</span></p>
-                    ${order.mpesaTransactionId ? `<p><strong>M-Pesa Code:</strong> ${order.mpesaTransactionId}</p>` : ''}
-                </div>
-            </div>
-            <div class="detail-section">
-                <h3><i class="fas fa-shopping-bag"></i> Order Items</h3>
-                ${itemsHTML}
-            </div>
-            <div class="detail-section">
-                <h3><i class="fas fa-calculator"></i> Order Summary</h3>
-                <div class="order-summary-detail">
-                    <p><span>Subtotal:</span> <span>KES ${order.subtotal.toLocaleString()}</span></p>
-                    <p><span>Shipping Fee:</span> <span>KES ${order.shippingFee.toLocaleString()}</span></p>
-                    ${order.discount > 0 ? `<p><span>Discount:</span> <span>- KES ${order.discount.toLocaleString()}</span></p>` : ''}
-                    <p class="total-row"><span><strong>Total Amount:</strong></span> <span><strong>KES ${order.totalAmount.toLocaleString()}</strong></span></p>
-                </div>
-            </div>
-        `;
+            <span class="status ${o.orderStatus}">${o.orderStatus}</span>
+            <span class="amount">KES ${(o.totalAmount || 0).toLocaleString()}</span>
+        </div>
+    `).join('');
+}
 
-        modal.style.display = 'flex';
-    }
-
-    filterOrders() {
-        const status = document.getElementById('orderStatusFilter').value;
-        let filtered = this.orders;
-
-        if (status !== 'all') {
-            filtered = this.orders.filter(order => order.orderStatus === status);
-        }
-
-        this.displayOrders(filtered);
-    }
-
-    searchOrders(searchTerm) {
-        const filtered = this.orders.filter(order => 
-            order.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.buyerDetails?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            order.buyerDetails?.phone?.includes(searchTerm)
-        );
-        this.displayOrders(filtered);
-    }
-
-    searchProducts(searchTerm) {
-        const filtered = this.products.filter(product =>
-            product.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.sellerInfo?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        this.displayProducts(filtered);
-    }
-
-    searchUsers(searchTerm) {
-        const filtered = this.users.filter(user =>
-            user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.phoneNumber?.includes(searchTerm) ||
-            user.phone?.includes(searchTerm)
-        );
-        this.displayUsers(filtered);
-    }
-
-    displayUsers(usersToDisplay = this.users) {
-        const tbody = document.getElementById('usersTableBody');
-        tbody.innerHTML = '';
-
-        if (usersToDisplay.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No users found</td></tr>';
-            return;
-        }
-
-        usersToDisplay.forEach(async (user) => {
-            // Get user's listing count
-            const listingsQuery = query(collection(db, "Listings"), where("uploaderId", "==", user.id));
-            const listingsSnapshot = await getDocs(listingsQuery);
-
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>
-                    <div class="user-cell">
-                        <img src="${user.profilePicUrl || 'images/profile-placeholder.png'}" alt="${user.name}" class="user-avatar">
-                        <div>
-                            <strong>${user.name || 'N/A'}</strong>
-                            <span class="text-small">${user.id.slice(0, 8)}...</span>
-                        </div>
-                    </div>
-                </td>
-                <td>${user.email || 'N/A'}</td>
-                <td>${user.phoneNumber || user.phone || 'N/A'}</td>
-                <td>${user.county || 'N/A'}</td>
-                <td>${listingsSnapshot.size}</td>
-                <td>
-                    <span class="badge ${user.isVerified ? 'verified' : 'unverified'}">
-                        ${user.isVerified ? '<i class="fas fa-check-circle"></i> Verified' : 'Not Verified'}
-                    </span>
-                </td>
-                <td class="text-small">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn-icon ${user.isVerified ? 'btn-warning' : 'btn-success'}" 
-                            onclick="adminDashboard.toggleVerification('${user.id}', ${user.isVerified || false})"
-                            title="${user.isVerified ? 'Remove Verification' : 'Verify Seller'}">
-                            <i class="fas fa-${user.isVerified ? 'times-circle' : 'check-circle'}"></i>
-                        </button>
-                        <button class="btn-icon btn-primary" onclick="adminDashboard.messageUser('${user.id}', '${user.name || 'User'}')" title="Message User">
-                            <i class="fas fa-comment"></i>
-                        </button>
-                        <button class="btn-icon btn-primary" onclick="adminDashboard.viewUserDetails('${user.id}')" title="View Details">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn-icon btn-danger" onclick="adminDashboard.deleteUser('${user.id}')" title="Delete User">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    async messageUser(userId, userName) {
-        if (!userId) {
-            showNotification('User information not available', 'error');
-            return;
-        }
-        
-        // Redirect to chat page with user
-        window.location.href = `chat.html?userId=${userId}&name=${encodeURIComponent(userName)}`;
-    }
-
-    async loadProducts() {
-        try {
-            const listingsSnapshot = await getDocs(collection(db, "Listings"));
-            this.products = [];
-            
-            for (const docSnap of listingsSnapshot.docs) {
-                const product = { id: docSnap.id, ...docSnap.data() };
-                
-                // Get seller info
-                if (product.uploaderId) {
-                    const sellerDoc = await getDoc(doc(db, "Users", product.uploaderId));
-                    if (sellerDoc.exists()) {
-                        product.sellerInfo = sellerDoc.data();
-                    }
-                }
-                
-                this.products.push(product);
-            }
-            
-            this.displayProducts();
-        } catch (error) {
-            console.error('Error loading products:', error);
-        }
-    }
-
-    displayProducts(productsToDisplay = this.products) {
-        const tbody = document.getElementById('listingsTableBody');
-        if (!tbody) return;
-        
-        tbody.innerHTML = '';
-
-        if (productsToDisplay.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No listings found</td></tr>';
-            return;
-        }
-
-        productsToDisplay.forEach(product => {
-            const row = document.createElement('tr');
-            const isHidden = product.isHidden || false;
-            const isSuspended = product.isSuspended || false;
-            const createdDate = product.createdAt ? new Date(product.createdAt.toDate ? product.createdAt.toDate() : product.createdAt) : new Date();
-            
-            if (isHidden) row.classList.add('listing-hidden');
-            if (isSuspended) row.classList.add('listing-suspended');
-            
-            row.innerHTML = `
-                <td><img src="${product.photoTraceUrl || product.imageUrls?.[0] || 'images/placeholder.png'}" 
-                    alt="${product.name}" class="listing-image-thumb"></td>
-                <td><strong>${product.name}</strong><br><small>${product.brand || ''}</small></td>
-                <td>
-                    <div class="user-cell">
-                        <img src="${product.sellerInfo?.profilePicUrl || 'images/profile-placeholder.png'}" 
-                            alt="Seller" class="user-avatar" style="width: 30px; height: 30px;">
-                        <div>
-                            <strong style="font-size: 13px;">${product.sellerInfo?.name || 'Unknown'}</strong>
-                            <span class="text-small">${product.uploaderName || ''}</span>
-                        </div>
-                    </div>
-                </td>
-                <td>${product.category || 'N/A'}</td>
-                <td><strong>KES ${product.price?.toLocaleString() || 0}</strong></td>
-                <td>${product.totalStock || 0}</td>
-                <td>
-                    <span class="status-badge ${isSuspended ? 'suspended' : isHidden ? 'hidden' : 'active'}">
-                        ${isSuspended ? 'Suspended' : isHidden ? 'Hidden' : 'Active'}
-                    </span>
-                </td>
-                <td class="text-small">${createdDate.toLocaleDateString()}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn-icon btn-primary" onclick="adminDashboard.editListing('${product.id}')" title="Edit Listing">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn-icon ${isHidden ? 'btn-success' : 'btn-warning'}" 
-                            onclick="adminDashboard.toggleListingVisibility('${product.id}', ${isHidden})" 
-                            title="${isHidden ? 'Show Listing' : 'Hide Listing'}">
-                            <i class="fas fa-eye${isHidden ? '' : '-slash'}"></i>
-                        </button>
-                        <button class="btn-icon ${isSuspended ? 'btn-success' : 'btn-danger'}" 
-                            onclick="adminDashboard.toggleListingSuspension('${product.id}', ${isSuspended})" 
-                            title="${isSuspended ? 'Unsuspend' : 'Suspend'}">
-                            <i class="fas fa-${isSuspended ? 'check' : 'ban'}"></i>
-                        </button>
-                        <button class="btn-icon btn-primary" onclick="adminDashboard.messageSellerFromListing('${product.uploaderId}', '${product.sellerInfo?.name || 'Seller'}')" title="Message Seller">
-                            <i class="fas fa-comment"></i>
-                        </button>
-                        <button class="btn-icon btn-danger" onclick="adminDashboard.deleteListing('${product.id}')" title="Delete Listing">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(row);
-        });
-    }
-
-    async toggleListingVisibility(listingId, currentlyHidden) {
-        try {
-            const newState = !currentlyHidden;
-            await updateDoc(doc(db, "Listings", listingId), {
-                isHidden: newState,
-                hiddenAt: newState ? Timestamp.now() : null,
-                hiddenBy: newState ? this.currentUser.uid : null
-            });
-            showNotification(`Listing ${newState ? 'hidden' : 'shown'} successfully`);
-            await this.loadProducts();
-        } catch (error) {
-            console.error('Error toggling listing visibility:', error);
-            showNotification('Error updating listing visibility', 'error');
-        }
-    }
-
-    async toggleListingSuspension(listingId, currentlySuspended) {
-        try {
-            const newState = !currentlySuspended;
-            const reason = newState ? prompt('Enter suspension reason:') : null;
-            
-            if (newState && !reason) {
-                showNotification('Suspension reason is required', 'error');
-                return;
-            }
-            
-            await updateDoc(doc(db, "Listings", listingId), {
-                isSuspended: newState,
-                suspensionReason: newState ? reason : null,
-                suspendedAt: newState ? Timestamp.now() : null,
-                suspendedBy: newState ? this.currentUser.uid : null
-            });
-            showNotification(`Listing ${newState ? 'suspended' : 'unsuspended'} successfully`);
-            await this.loadProducts();
-        } catch (error) {
-            console.error('Error toggling listing suspension:', error);
-            showNotification('Error updating listing suspension', 'error');
-        }
-    }
-
-    async deleteListing(listingId) {
-        if (!confirm('Are you sure you want to delete this listing? This action cannot be undone.')) return;
-        
-        try {
-            await deleteDoc(doc(db, "Listings", listingId));
-            showNotification('Listing deleted successfully');
-            await this.loadProducts();
-            await this.loadProductStats();
-        } catch (error) {
-            console.error('Error deleting listing:', error);
-            showNotification('Error deleting listing', 'error');
-        }
-    }
-
-    async editListing(listingId) {
-        const listing = this.products.find(p => p.id === listingId);
-        if (!listing) return;
-        
-        const modal = document.getElementById('orderDetailModal');
-        const content = document.getElementById('orderDetailContent');
-        
-        content.innerHTML = `
-            <div class="order-detail-header">
-                <h2>Edit Listing</h2>
-            </div>
-            <div class="edit-listing-form">
-                <div class="form-group">
-                    <label>Product Name:</label>
-                    <input type="text" id="editName" value="${listing.name}" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Price (KES):</label>
-                    <input type="number" id="editPrice" value="${listing.price}" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Stock:</label>
-                    <input type="number" id="editStock" value="${listing.totalStock || 0}" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Description:</label>
-                    <textarea id="editDescription" class="form-input" rows="4">${listing.description || ''}</textarea>
-                </div>
-                <div class="form-actions">
-                    <button class="btn-success" onclick="adminDashboard.saveListingEdit('${listingId}')">
-                        <i class="fas fa-save"></i> Save Changes
-                    </button>
-                    <button class="btn-danger" onclick="document.getElementById('orderDetailModal').style.display='none'">
-                        <i class="fas fa-times"></i> Cancel
-                    </button>
-                </div>
-            </div>
-        `;
-        modal.style.display = 'flex';
-    }
-
-    async saveListingEdit(listingId) {
-        try {
-            const name = document.getElementById('editName').value;
-            const price = parseFloat(document.getElementById('editPrice').value);
-            const stock = parseInt(document.getElementById('editStock').value);
-            const description = document.getElementById('editDescription').value;
-            
-            if (!name || !price || price < 0 || stock < 0) {
-                showNotification('Please fill all fields with valid values', 'error');
-                return;
-            }
-            
-            await updateDoc(doc(db, "Listings", listingId), {
-                name: name,
-                price: price,
-                totalStock: stock,
-                description: description,
-                lastEditedBy: this.currentUser.uid,
-                lastEditedAt: Timestamp.now()
-            });
-            
-            document.getElementById('orderDetailModal').style.display = 'none';
-            showNotification('Listing updated successfully');
-            await this.loadProducts();
-        } catch (error) {
-            console.error('Error saving listing edit:', error);
-            showNotification('Error saving changes', 'error');
-        }
-    }
-
-    async messageSellerFromListing(sellerId, sellerName) {
-        if (!sellerId) {
-            showNotification('Seller information not available', 'error');
-            return;
-        }
-        
-        // Redirect to chat page with seller
-        window.location.href = `chat.html?userId=${sellerId}&name=${encodeURIComponent(sellerName)}`;
-    }
-
-    async exportListingsToExcel() {
-        try {
-            showNotification('Preparing Excel export...');
-            
-            // Prepare data for export
-            const exportData = this.products.map(product => ({
-                'Product ID': product.id,
-                'Product Name': product.name,
-                'Brand': product.brand || 'N/A',
-                'Category': product.category || 'N/A',
-                'Price (KES)': product.price || 0,
-                'Stock': product.totalStock || 0,
-                'Seller Name': product.sellerInfo?.name || 'Unknown',
-                'Seller Email': product.sellerInfo?.email || 'N/A',
-                'Seller Phone': product.sellerInfo?.phoneNumber || product.sellerInfo?.phone || 'N/A',
-                'Status': product.isSuspended ? 'Suspended' : product.isHidden ? 'Hidden' : 'Active',
-                'Description': product.description || 'N/A',
-                'Created Date': product.createdAt ? new Date(product.createdAt.toDate ? product.createdAt.toDate() : product.createdAt).toLocaleDateString() : 'N/A',
-                'Views': product.views || 0,
-                'Condition': product.condition || 'N/A',
-                'Location': product.location || 'N/A'
-            }));
-
-            // Convert to CSV
-            const headers = Object.keys(exportData[0]);
-            const csvContent = [
-                headers.join(','),
-                ...exportData.map(row => 
-                    headers.map(header => {
-                        const value = row[header]?.toString() || '';
-                        // Escape commas and quotes in CSV
-                        return `\"${value.replace(/\"/g, '\"\"')}\"`;
-                    }).join(',')
-                )
-            ].join('\\n');
-
-            // Create download
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `OdaPap_Listings_${new Date().toISOString().split('T')[0]}.csv`);
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            showNotification('Listings exported successfully!');
-        } catch (error) {
-            console.error('Error exporting listings:', error);
-            showNotification('Error exporting to Excel', 'error');
-        }
-    }
-
-    async loadUsers() {
-        try {
-            const usersSnapshot = await getDocs(collection(db, "Users"));
-            this.users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            this.displayUsers();
-        } catch (error) {
-            console.error('Error loading users:', error);
-        }
-    }
-
-    async toggleVerification(userId, currentStatus) {
-        const action = currentStatus ? 'remove verification from' : 'verify';
-        if (!confirm(`Are you sure you want to ${action} this seller?`)) return;
-        
-        try {
-            await updateDoc(doc(db, "Users", userId), {
-                isVerified: !currentStatus,
-                verifiedAt: !currentStatus ? Timestamp.now() : null,
-                verifiedBy: !currentStatus ? this.currentUser.uid : null
-            });
-            showNotification(`Seller ${currentStatus ? 'unverified' : 'verified'} successfully`);
-            await this.loadUserStats();
-            await this.loadUsers();
-        } catch (error) {
-            console.error('Error toggling verification:', error);
-            showNotification('Error updating verification status', 'error');
-        }
-    }
-
-    async viewUserDetails(userId) {
-        const user = this.users.find(u => u.id === userId);
-        if (!user) return;
-        
-        const modal = document.getElementById('orderDetailModal');
-        const content = document.getElementById('orderDetailContent');
-        
-        // Get user's listings
-        const listingsQuery = query(collection(db, "Listings"), where("uploaderId", "==", userId));
-        const listingsSnapshot = await getDocs(listingsQuery);
-        
-        // Get user's orders
-        const ordersQuery = query(collection(db, "Orders"), where("userId", "==", userId));
-        const ordersSnapshot = await getDocs(ordersQuery);
-        
-        content.innerHTML = `
-            <div class="order-detail-header">
-                <h2>User Details</h2>
-                <span class="badge ${user.isVerified ? 'verified' : 'unverified'}">
-                    ${user.isVerified ? '<i class="fas fa-check-circle"></i> Verified Seller' : 'Not Verified'}
-                </span>
-            </div>
-            <div class="user-detail-profile">
-                <img src="${user.profilePicUrl || 'images/profile-placeholder.png'}" alt="${user.name}" class="user-detail-avatar">
-                <div>
-                    <h3>${user.name || 'No Name'}</h3>
-                    <p>${user.email || 'No Email'}</p>
-                    <p>${user.phoneNumber || user.phone || 'No Phone'}</p>
-                </div>
-            </div>
-            <div class="order-detail-grid">
-                <div class="detail-section">
-                    <h3><i class="fas fa-map-marker-alt"></i> Location</h3>
-                    <p><strong>County:</strong> ${user.county || 'N/A'}</p>
-                    <p><strong>Sub-County:</strong> ${user.subCounty || 'N/A'}</p>
-                    <p><strong>Ward:</strong> ${user.ward || 'N/A'}</p>
-                </div>
-                <div class="detail-section">
-                    <h3><i class="fas fa-chart-bar"></i> Statistics</h3>
-                    <p><strong>Total Listings:</strong> ${listingsSnapshot.size}</p>
-                    <p><strong>Total Orders:</strong> ${ordersSnapshot.size}</p>
-                    <p><strong>Joined:</strong> ${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}</p>
-                </div>
-            </div>
-        `;
-        modal.style.display = 'flex';
-    }
-
-    async deleteUser(userId) {
-        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
-        if (!confirm('This will also delete all their listings. Continue?')) return;
-        
-        try {
-            // Delete user's listings
-            const listingsQuery = query(collection(db, "Listings"), where("uploaderId", "==", userId));
-            const listingsSnapshot = await getDocs(listingsQuery);
-            for (const docSnap of listingsSnapshot.docs) {
-                await deleteDoc(doc(db, "Listings", docSnap.id));
-            }
-            
-            // Delete user document
-            await deleteDoc(doc(db, "Users", userId));
-            
-            showNotification('User and their listings deleted successfully');
-            await this.loadUserStats();
-            await this.loadUsers();
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            showNotification('Error deleting user', 'error');
-        }
-    }
-
-    // Admin Account Management
-    async addAdminAccount() {
-        if (!this.isMasterAdmin) {
-            showNotification('Only master admin can add new admins', 'error');
-            return;
-        }
-        
-        const emailInput = document.getElementById('newAdminEmail');
-        const email = emailInput.value.trim().toLowerCase();
-        
-        if (!email || !email.includes('@')) {
-            showNotification('Please enter a valid email', 'error');
-            return;
-        }
-        
-        try {
-            // Check if already admin
-            const existingQuery = query(collection(db, "Admins"), where("email", "==", email));
-            const existingSnapshot = await getDocs(existingQuery);
-            
-            if (!existingSnapshot.empty) {
-                showNotification('This email is already an admin', 'error');
-                return;
-            }
-            
-            // Add new admin
-            await addDoc(collection(db, "Admins"), {
-                email: email,
-                role: 'admin',
-                createdAt: Timestamp.now(),
-                addedBy: this.currentUser.email,
-                permissions: ['orders', 'products', 'users', 'verifications']
-            });
-            
-            emailInput.value = '';
-            showNotification('Admin account added successfully');
-            await this.loadAdminList();
-        } catch (error) {
-            console.error('Error adding admin:', error);
-            showNotification('Error adding admin account', 'error');
-        }
-    }
-
-    async removeAdminAccount(adminDocId, email) {
-        if (!this.isMasterAdmin) {
-            showNotification('Only master admin can remove admins', 'error');
-            return;
-        }
-        
-        if (email === MASTER_ADMIN_EMAIL) {
-            showNotification('Cannot remove master admin', 'error');
-            return;
-        }
-        
-        if (!confirm(`Remove admin privileges from ${email}?`)) return;
-        
-        try {
-            await deleteDoc(doc(db, "Admins", adminDocId));
-            showNotification('Admin account removed');
-            await this.loadAdminList();
-        } catch (error) {
-            console.error('Error removing admin:', error);
-            showNotification('Error removing admin', 'error');
-        }
-    }
-
-    async loadAdminList() {
-        const container = document.getElementById('adminList');
-        if (!container) return;
-        
-        try {
-            const adminsSnapshot = await getDocs(collection(db, "Admins"));
-            container.innerHTML = '<h4>Current Admins:</h4>';
-            
-            adminsSnapshot.forEach(docSnap => {
-                const admin = docSnap.data();
-                const isMaster = admin.email === MASTER_ADMIN_EMAIL;
-                const div = document.createElement('div');
-                div.className = 'admin-item';
-                div.innerHTML = `
-                    <span>
-                        <i class="fas fa-user-shield"></i>
-                        ${admin.email}
-                        ${isMaster ? '<span class="badge master">Master</span>' : ''}
-                    </span>
-                    ${!isMaster && this.isMasterAdmin ? `
-                        <button class="btn-icon btn-danger" onclick="adminDashboard.removeAdminAccount('${docSnap.id}', '${admin.email}')">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    ` : ''}
-                `;
-                container.appendChild(div);
-            });
-        } catch (error) {
-            console.error('Error loading admin list:', error);
-        }
-    }
-
-    async loadTransactions() {
-        try {
-            const transactionsSnapshot = await getDocs(collection(db, "Transactions"));
-            const tbody = document.getElementById('transactionsTableBody');
-            tbody.innerHTML = '';
-
-            if (transactionsSnapshot.empty) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No transactions found</td></tr>';
-                return;
-            }
-
-            transactionsSnapshot.forEach(doc => {
-                const transaction = doc.data();
-                const date = transaction.createdAt?.toDate() || new Date();
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${transaction.mpesaTransactionId || doc.id}</td>
-                    <td>${transaction.userId?.slice(0, 8)}...</td>
-                    <td>${transaction.phoneNumber || 'N/A'}</td>
-                    <td>KES ${transaction.amount?.toLocaleString()}</td>
-                    <td><span class="badge ${transaction.status}">${transaction.status}</span></td>
-                    <td>${date.toLocaleString()}</td>
-                `;
-                tbody.appendChild(row);
-            });
-        } catch (error) {
-            console.error('Error loading transactions:', error);
-        }
-    }
-
-    async loadVerifications() {
-        try {
-            const verificationsSnapshot = await getDocs(
-                query(collection(db, "ManualVerifications"), where("status", "==", "pending"))
-            );
-            
-            const container = document.getElementById('verificationsContainer');
-            container.innerHTML = '';
-
-            document.getElementById('verificationsBadge').textContent = verificationsSnapshot.size;
-
-            if (verificationsSnapshot.empty) {
-                container.innerHTML = '<p style="text-align: center; color: #999;">No pending verifications</p>';
-                return;
-            }
-
-            verificationsSnapshot.forEach(doc => {
-                const verification = doc.data();
-                const card = document.createElement('div');
-                card.className = 'verification-card';
-                card.innerHTML = `
-                    <div class="verification-header">
-                        <h4>Manual Verification Request</h4>
-                        <span class="badge pending">Pending</span>
-                    </div>
-                    <div class="verification-body">
-                        <p><strong>Transaction Code:</strong> ${verification.transactionCode}</p>
-                        <p><strong>Amount:</strong> KES ${verification.amount?.toLocaleString()}</p>
-                        <p><strong>Phone:</strong> ${verification.phoneNumber}</p>
-                        <p><strong>Date:</strong> ${verification.createdAt?.toDate().toLocaleString()}</p>
-                    </div>
-                    <div class="verification-actions">
-                        <button class="btn-success" onclick="adminDashboard.approveVerification('${doc.id}')">
-                            <i class="fas fa-check"></i> Approve
-                        </button>
-                        <button class="btn-danger" onclick="adminDashboard.rejectVerification('${doc.id}')">
-                            <i class="fas fa-times"></i> Reject
-                        </button>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        } catch (error) {
-            console.error('Error loading verifications:', error);
-        }
-    }
-
-    async approveVerification(verificationId) {
-        try {
-            if (confirm('Approve this payment verification?')) {
-                await updateDoc(doc(db, "ManualVerifications", verificationId), {
-                    status: 'approved',
-                    approvedAt: Timestamp.now(),
-                    approvedBy: this.currentUser.uid
-                });
-                showNotification('Verification approved');
-                await this.loadVerifications();
-            }
-        } catch (error) {
-            console.error('Error approving verification:', error);
-            showNotification('Error approving verification');
-        }
-    }
-
-    async rejectVerification(verificationId) {
-        try {
-            if (confirm('Reject this payment verification?')) {
-                await updateDoc(doc(db, "ManualVerifications", verificationId), {
-                    status: 'rejected',
-                    rejectedAt: Timestamp.now(),
-                    rejectedBy: this.currentUser.uid
-                });
-                showNotification('Verification rejected');
-                await this.loadVerifications();
-            }
-        } catch (error) {
-            console.error('Error rejecting verification:', error);
-            showNotification('Error rejecting verification');
-        }
-    }
-
-    initializeCharts() {
-        // Order Status Chart
-        this.createOrderStatusChart();
-    }
-
-    createOrderStatusChart() {
-        const ctx = document.getElementById('orderStatusChart');
-        if (!ctx) return;
-
+// ============= Charts =============
+function initCharts() {
+    if (typeof Chart === 'undefined') return;
+    
+    // Destroy existing charts
+    Object.values(state.charts).forEach(c => c?.destroy());
+    
+    // Status Chart (Doughnut)
+    const statusCtx = $('statusChart')?.getContext('2d');
+    if (statusCtx) {
         const statusCounts = {
-            pending: 0,
-            confirmed: 0,
-            out_for_delivery: 0,
-            delivered: 0,
-            cancelled: 0
+            pending: state.orders.filter(o => o.orderStatus === 'pending').length,
+            confirmed: state.orders.filter(o => o.orderStatus === 'confirmed').length,
+            out_for_delivery: state.orders.filter(o => o.orderStatus === 'out_for_delivery').length,
+            delivered: state.orders.filter(o => o.orderStatus === 'delivered').length,
+            cancelled: state.orders.filter(o => o.orderStatus === 'cancelled').length
         };
-
-        this.orders.forEach(order => {
-            if (statusCounts.hasOwnProperty(order.orderStatus)) {
-                statusCounts[order.orderStatus]++;
-            }
-        });
-
-        new Chart(ctx, {
+        
+        state.charts.status = new Chart(statusCtx, {
             type: 'doughnut',
             data: {
-                labels: ['Pending', 'Confirmed', 'Out for Delivery', 'Delivered', 'Cancelled'],
+                labels: ['Pending', 'Confirmed', 'Delivering', 'Delivered', 'Cancelled'],
                 datasets: [{
                     data: Object.values(statusCounts),
-                    backgroundColor: ['#ff5722', '#2196F3', '#FFC107', '#4CAF50', '#9E9E9E']
+                    backgroundColor: ['#f59e0b', '#3b82f6', '#8b5cf6', '#10b981', '#ef4444'],
+                    borderWidth: 0
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: true
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font: { size: 11 } } } },
+                cutout: '65%'
             }
         });
     }
-
-    async loadAnalytics() {
-        // Placeholder for analytics charts
-        showNotification('Analytics section - Charts will be implemented here');
+    
+    // Sales Chart (Line)
+    const salesCtx = $('salesChart')?.getContext('2d');
+    if (salesCtx) {
+        const last7Days = getLast7Days();
+        const salesByDay = {};
+        last7Days.forEach(d => salesByDay[d] = 0);
+        
+        state.orders.forEach(o => {
+            if (o.orderStatus === 'delivered' || o.paymentStatus === 'completed') {
+                const date = getDate(o.orderDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                if (salesByDay[date] !== undefined) {
+                    salesByDay[date] += o.totalAmount || 0;
+                }
+            }
+        });
+        
+        state.charts.sales = new Chart(salesCtx, {
+            type: 'line',
+            data: {
+                labels: last7Days,
+                datasets: [{
+                    label: 'Sales',
+                    data: Object.values(salesByDay),
+                    borderColor: '#ff5722',
+                    backgroundColor: 'rgba(255, 87, 34, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    }
+    
+    // Category Chart (Bar)
+    const categoryCtx = $('categoryChart')?.getContext('2d');
+    if (categoryCtx) {
+        const categories = {};
+        state.products.forEach(p => {
+            const cat = p.category || 'Other';
+            categories[cat] = (categories[cat] || 0) + 1;
+        });
+        
+        const sortedCats = Object.entries(categories).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        
+        state.charts.category = new Chart(categoryCtx, {
+            type: 'bar',
+            data: {
+                labels: sortedCats.map(c => c[0]),
+                datasets: [{
+                    data: sortedCats.map(c => c[1]),
+                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6'],
+                    borderRadius: 4,
+                    barThickness: 20
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, grid: { display: false } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
     }
 }
 
-// Initialize admin dashboard
-const adminDashboard = new AdminDashboard();
-window.adminDashboard = adminDashboard; // Make it globally accessible for onclick handlers
+function getLast7Days() {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+    }
+    return days;
+}
+
+// ============= Orders Page =============
+function renderOrders(orders = state.orders) {
+    const tbody = $('ordersTable');
+    if (!orders.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;">No orders found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = orders.sort((a, b) => getDate(b.orderDate) - getDate(a.orderDate)).map(o => `
+        <tr>
+            <td><strong>${o.orderId || o.id.slice(0, 8)}</strong></td>
+            <td>${o.buyerDetails?.name || 'N/A'}</td>
+            <td class="hide-sm">${o.items?.length || 0}</td>
+            <td>KES ${(o.totalAmount || 0).toLocaleString()}</td>
+            <td><span class="status ${o.orderStatus}">${o.orderStatus}</span></td>
+            <td class="hide-sm">${formatDate(o.orderDate)}</td>
+            <td>
+                <div class="action-btns">
+                    <button class="action-btn view" onclick="viewOrder('${o.id}')" title="View"><i class="fas fa-eye"></i></button>
+                    <button class="action-btn edit" onclick="changeStatus('${o.id}', '${o.orderStatus}')" title="Status"><i class="fas fa-edit"></i></button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filterOrders() {
+    const status = $('orderFilter').value;
+    const filtered = status === 'all' ? state.orders : state.orders.filter(o => o.orderStatus === status);
+    renderOrders(filtered);
+}
+
+function searchOrders(q) {
+    q = q.toLowerCase();
+    const filtered = state.orders.filter(o => 
+        o.orderId?.toLowerCase().includes(q) ||
+        o.buyerDetails?.name?.toLowerCase().includes(q) ||
+        o.buyerDetails?.email?.toLowerCase().includes(q)
+    );
+    renderOrders(filtered);
+}
+
+// View Order
+window.viewOrder = function(id) {
+    const order = state.orders.find(o => o.id === id);
+    if (!order) return;
+    
+    const content = $('orderModalContent');
+    content.innerHTML = `
+        <div class="order-detail-header">
+            <h3>Order ${order.orderId || order.id.slice(0, 8)}</h3>
+            <span class="status ${order.orderStatus}">${order.orderStatus}</span>
+        </div>
+        <div class="order-info-grid">
+            <div class="order-info-box">
+                <h4>Customer</h4>
+                <p><strong>${order.buyerDetails?.name || 'N/A'}</strong></p>
+                <p>${order.buyerDetails?.email || ''}</p>
+                <p>${order.buyerDetails?.phone || ''}</p>
+            </div>
+            <div class="order-info-box">
+                <h4>Delivery</h4>
+                <p>${order.deliveryDetails?.address || 'N/A'}</p>
+                <p>${order.deliveryDetails?.city || ''}</p>
+            </div>
+            <div class="order-info-box">
+                <h4>Payment</h4>
+                <p><strong>${order.paymentMethod || 'N/A'}</strong></p>
+                <p>Status: ${order.paymentStatus || 'pending'}</p>
+            </div>
+            <div class="order-info-box">
+                <h4>Date</h4>
+                <p>${formatDate(order.orderDate)}</p>
+            </div>
+        </div>
+        <div class="order-items">
+            <h4>Items</h4>
+            ${order.items?.map(i => `
+                <div class="order-item">
+                    <span>${i.productName} × ${i.quantity}</span>
+                    <span>KES ${(i.totalPrice || 0).toLocaleString()}</span>
+                </div>
+            `).join('') || '<p>No items</p>'}
+        </div>
+        <div class="order-total">
+            <span>Total</span>
+            <span>KES ${(order.totalAmount || 0).toLocaleString()}</span>
+        </div>
+    `;
+    $('orderModal').classList.add('active');
+};
+
+// Change Status
+window.changeStatus = async function(id, current) {
+    const statuses = ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled'];
+    const newStatus = prompt(`Enter new status:\n${statuses.join(', ')}`, current);
+    
+    if (newStatus && statuses.includes(newStatus) && newStatus !== current) {
+        try {
+            await updateDoc(doc(db, "Orders", id), { orderStatus: newStatus, updatedAt: Timestamp.now() });
+            showNotification('Status updated');
+            loadOrders().then(() => {
+                updateMetrics();
+                renderRecentOrders();
+            });
+        } catch (err) {
+            showNotification('Error updating status', 'error');
+        }
+    }
+};
+
+// ============= Products Page =============
+function renderProducts(products = state.products) {
+    const tbody = $('productsTableBody');
+    const btn = $('loadMoreProducts');
+    
+    if (!products.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;">No products found</td></tr>';
+        btn.style.display = 'none';
+        return;
+    }
+    
+    // Show first batch
+    const toShow = products.slice(0, state.PRODUCTS_PER_PAGE);
+    state.productsLoaded = toShow.length;
+    
+    tbody.innerHTML = toShow.map(renderProductRow).join('');
+    btn.style.display = state.productsLoaded < products.length ? '' : 'none';
+}
+
+function loadMoreProducts() {
+    const searchVal = $('productSearch').value.toLowerCase();
+    let products = state.products;
+    
+    if (searchVal) {
+        products = products.filter(p => 
+            p.name?.toLowerCase().includes(searchVal) ||
+            p.category?.toLowerCase().includes(searchVal)
+        );
+    }
+    
+    const nextBatch = products.slice(state.productsLoaded, state.productsLoaded + state.PRODUCTS_PER_PAGE);
+    const tbody = $('productsTableBody');
+    
+    nextBatch.forEach(p => tbody.insertAdjacentHTML('beforeend', renderProductRow(p)));
+    state.productsLoaded += nextBatch.length;
+    
+    $('loadMoreProducts').style.display = state.productsLoaded < products.length ? '' : 'none';
+}
+
+function renderProductRow(p) {
+    const img = p.imageUrls?.[0] || p.imageUrl || 'https://placehold.co/44x44/e2e8f0/64748b?text=N/A';
+    const status = p.status || (p.totalStock > 0 ? 'active' : 'out_of_stock');
+    
+    // Prime tags
+    const isGeneral = p.primeCategories?.generalShop || false;
+    const isFeatured = p.primeCategories?.featured || false;
+    const isBestseller = p.primeCategories?.bestseller || false;
+    const isOffers = p.primeCategories?.offers || false;
+    
+    return `
+        <tr data-id="${p.id}">
+            <td>
+                <img src="${img}" class="product-thumb" alt="${p.name || ''}" 
+                     onerror="this.src='https://placehold.co/44x44/e2e8f0/64748b?text=N/A'"
+                     onclick="window.open('product.html?id=${p.id}', '_blank')">
+            </td>
+            <td class="editable-cell">
+                <input type="text" value="${escapeHtml(p.name || '')}" data-field="name" onchange="updateProductField('${p.id}', 'name', this.value, this)">
+                <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
+            </td>
+            <td class="editable-cell">
+                <input type="text" value="${escapeHtml(p.category || '')}" data-field="category" onchange="updateProductField('${p.id}', 'category', this.value, this)">
+                <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
+            </td>
+            <td class="editable-cell">
+                <input type="number" value="${p.price || 0}" data-field="price" min="0" onchange="updateProductField('${p.id}', 'price', Number(this.value), this)">
+                <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
+            </td>
+            <td class="editable-cell">
+                <input type="number" value="${p.totalStock || 0}" data-field="totalStock" min="0" onchange="updateProductField('${p.id}', 'totalStock', Number(this.value), this)">
+                <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
+            </td>
+            <td class="editable-cell">
+                <input type="text" value="${escapeHtml(p.brand || '')}" data-field="brand" onchange="updateProductField('${p.id}', 'brand', this.value, this)">
+                <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
+            </td>
+            <td>
+                <div class="prime-tags">
+                    <span class="prime-tag ${isGeneral ? 'general' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'generalShop', ${!isGeneral})" title="General Shop">
+                        <i class="fas fa-store"></i> Shop
+                    </span>
+                    <span class="prime-tag ${isFeatured ? 'featured' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'featured', ${!isFeatured})" title="Featured">
+                        <i class="fas fa-star"></i> Featured
+                    </span>
+                    <span class="prime-tag ${isBestseller ? 'bestseller' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'bestseller', ${!isBestseller})" title="Best Seller">
+                        <i class="fas fa-fire"></i> Best
+                    </span>
+                    <span class="prime-tag ${isOffers ? 'offers' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'offers', ${!isOffers})" title="Offers/Deals">
+                        <i class="fas fa-percent"></i> Offer
+                    </span>
+                </div>
+            </td>
+            <td>
+                <select class="status-select ${status}" onchange="updateProductField('${p.id}', 'status', this.value, this); this.className='status-select '+this.value">
+                    <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                    <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
+                    <option value="out_of_stock" ${status === 'out_of_stock' ? 'selected' : ''}>Out of Stock</option>
+                </select>
+            </td>
+            <td>
+                <div class="action-btns">
+                    <button class="action-btn edit" onclick="openEditModal('${p.id}')" title="Full Edit"><i class="fas fa-expand"></i></button>
+                    <button class="action-btn delete" onclick="deleteProduct('${p.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+// Toggle prime category tags
+window.togglePrimeTag = async function(productId, tag, value) {
+    try {
+        const product = state.products.find(p => p.id === productId);
+        if (!product) return;
+        
+        // Initialize primeCategories if not exists
+        if (!product.primeCategories) {
+            product.primeCategories = {};
+        }
+        
+        product.primeCategories[tag] = value;
+        
+        await updateDoc(doc(db, "Listings", productId), {
+            primeCategories: product.primeCategories,
+            updatedAt: Timestamp.now()
+        });
+        
+        // Re-render the row
+        const row = document.querySelector(`tr[data-id="${productId}"]`);
+        if (row) {
+            row.outerHTML = renderProductRow(product);
+        }
+        
+        showNotification(`${value ? 'Added to' : 'Removed from'} ${formatTagName(tag)}`, 'success');
+    } catch (err) {
+        console.error('Toggle prime tag error:', err);
+        showNotification('Failed to update tag', 'error');
+    }
+};
+
+function formatTagName(tag) {
+    const names = {
+        generalShop: 'General Shop',
+        featured: 'Featured',
+        bestseller: 'Best Sellers',
+        offers: 'Offers'
+    };
+    return names[tag] || tag;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Update single field
+window.updateProductField = async function(id, field, value, inputEl) {
+    const cell = inputEl.closest('.editable-cell') || inputEl.parentElement;
+    cell.classList.add('changed');
+    
+    try {
+        await updateDoc(doc(db, "Listings", id), { 
+            [field]: value,
+            updatedAt: Timestamp.now()
+        });
+        
+        // Update local state
+        const product = state.products.find(p => p.id === id);
+        if (product) product[field] = value;
+        
+        cell.classList.remove('changed');
+        cell.classList.add('saved');
+        setTimeout(() => cell.classList.remove('saved'), 1500);
+    } catch (err) {
+        console.error('Update error:', err);
+        showNotification('Failed to update', 'error');
+        cell.classList.remove('changed');
+    }
+};
+
+// Open full edit modal
+window.openEditModal = function(id) {
+    const product = state.products.find(p => p.id === id);
+    if (!product) return;
+    
+    $('productModalTitle').textContent = 'Edit Product';
+    $('editProductId').value = id;
+    $('editName').value = product.name || '';
+    $('editCategory').value = product.category || '';
+    $('editBrand').value = product.brand || '';
+    $('editPrice').value = product.price || 0;
+    $('editStock').value = product.totalStock || 0;
+    $('editDescription').value = product.description || '';
+    $('editStatus').value = product.status || 'active';
+    $('saveProductBtn').textContent = 'Save Changes';
+    
+    // Load existing images
+    state.editImages = (product.imageUrls || []).map(url => ({ url, isExisting: true }));
+    state.imagesToDelete = [];
+    renderImageList();
+    
+    $('productModal').classList.add('active');
+};
+
+// Open add new product modal
+window.openAddModal = function() {
+    $('productModalTitle').textContent = 'Add New Product';
+    $('editProductId').value = '';
+    $('productForm').reset();
+    $('editStatus').value = 'active';
+    $('saveProductBtn').textContent = 'Add Product';
+    
+    // Clear images
+    state.editImages = [];
+    state.imagesToDelete = [];
+    renderImageList();
+    
+    $('productModal').classList.add('active');
+};
+
+window.closeProductModal = function() {
+    $('productModal').classList.remove('active');
+    state.editImages = [];
+    state.imagesToDelete = [];
+};
+
+// Image management functions
+function renderImageList() {
+    const container = $('imageList');
+    container.innerHTML = state.editImages.map((img, i) => `
+        <div class="image-item ${img.uploading ? 'uploading' : ''}" onclick="removeImage(${i})">
+            <img src="${img.url || img.preview}" alt="Product image">
+            <div class="image-remove"><i class="fas fa-trash"></i></div>
+        </div>
+    `).join('');
+    
+    // Show/hide add button based on max images
+    $('imageAddBtn').style.display = state.editImages.length >= 5 ? 'none' : '';
+}
+
+window.removeImage = function(index) {
+    const img = state.editImages[index];
+    if (img.isExisting && img.url) {
+        state.imagesToDelete.push(img.url);
+    }
+    state.editImages.splice(index, 1);
+    renderImageList();
+};
+
+async function handleImageUpload(files) {
+    const maxImages = 5;
+    const remaining = maxImages - state.editImages.length;
+    const toUpload = Array.from(files).slice(0, remaining);
+    
+    for (const file of toUpload) {
+        if (!file.type.startsWith('image/')) continue;
+        
+        // Create preview
+        const preview = URL.createObjectURL(file);
+        const imgObj = { preview, file, uploading: false, isExisting: false };
+        state.editImages.push(imgObj);
+    }
+    
+    renderImageList();
+}
+
+function searchProducts(q) {
+    q = q.toLowerCase();
+    const filtered = state.products.filter(p => 
+        p.name?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q) ||
+        p.uploaderId?.toLowerCase().includes(q)
+    );
+    state.productsLoaded = 0;
+    renderProducts(filtered);
+}
+
+window.viewProduct = function(id) {
+    window.open(`product.html?id=${id}`, '_blank');
+};
+
+window.editProduct = function(id) {
+    openEditModal(id);
+};
+
+window.deleteProduct = async function(id) {
+    if (confirm('Delete this product?')) {
+        try {
+            await deleteDoc(doc(db, "Listings", id));
+            showNotification('Product deleted');
+            loadProducts();
+        } catch (err) {
+            showNotification('Error deleting', 'error');
+        }
+    }
+};
+
+function exportProducts() {
+    const csv = ['Name,Price,Category,Stock,Brand,Status,UploaderId'];
+    state.products.forEach(p => {
+        csv.push(`"${p.name || ''}",${p.price || 0},"${p.category || ''}",${p.totalStock || 0},"${p.brand || ''}","${p.status || 'active'}","${p.uploaderId || ''}"`);
+    });
+    downloadCSV(csv.join('\n'), 'products.csv');
+}
+
+// ============= Users Page =============
+function renderUsers(users = state.users) {
+    const tbody = $('usersTable');
+    if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = users.map(u => {
+        const listings = state.products.filter(p => p.uploaderId === u.id).length;
+        return `
+            <tr>
+                <td>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <img src="${u.profilePicUrl || 'https://placehold.co/32x32/e2e8f0/64748b?text=U'}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://placehold.co/32x32/e2e8f0/64748b?text=U'">
+                        <span>${u.name || 'N/A'}</span>
+                    </div>
+                </td>
+                <td class="hide-sm">${u.email || 'N/A'}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline" onclick="viewUserListings('${u.id}')">${listings} listings</button>
+                </td>
+                <td class="hide-sm"><span class="status ${u.verified ? 'verified' : 'unverified'}">${u.verified ? 'Verified' : 'Unverified'}</span></td>
+                <td>
+                    <div class="action-btns">
+                        <button class="action-btn view" onclick="viewUserListings('${u.id}')" title="View Listings"><i class="fas fa-box"></i></button>
+                        <button class="action-btn msg" onclick="messageUser('${u.id}')" title="Message"><i class="fas fa-envelope"></i></button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function searchUsers(q) {
+    q = q.toLowerCase();
+    const filtered = state.users.filter(u => 
+        u.name?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q)
+    );
+    renderUsers(filtered);
+}
+
+// User Listings View
+window.viewUserListings = function(userId) {
+    state.viewingUserId = userId;
+    const user = state.users.find(u => u.id === userId);
+    if (!user) return;
+    
+    const userProducts = state.products.filter(p => p.uploaderId === userId);
+    const sales = state.orders.filter(o => 
+        o.items?.some(i => userProducts.some(p => p.id === i.productId))
+    );
+    let revenue = 0;
+    sales.forEach(o => {
+        o.items?.forEach(i => {
+            if (userProducts.some(p => p.id === i.productId)) {
+                revenue += i.totalPrice || 0;
+            }
+        });
+    });
+    
+    // Update banner
+    $('userBannerAvatar').src = user.profilePicUrl || 'https://placehold.co/64x64/e2e8f0/64748b?text=User';
+    $('userBannerName').textContent = user.name || 'Unknown';
+    $('userBannerEmail').textContent = user.email || '';
+    $('userListingCount').textContent = userProducts.length;
+    $('userSalesCount').textContent = sales.length;
+    $('userRevenue').textContent = revenue.toLocaleString();
+    
+    // Show user products as table rows
+    const tbody = $('userProductsGrid');
+    tbody.innerHTML = userProducts.length 
+        ? userProducts.map(renderUserProductRow).join('')
+        : '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-500);">No listings</td></tr>';
+    
+    // Toggle views
+    $('usersTableView').style.display = 'none';
+    $('userListingsView').style.display = 'block';
+    $('backToUsersBtn').style.display = '';
+    $('usersPageTitle').textContent = `${user.name || 'User'}'s Listings`;
+    $('userSearch').style.display = 'none';
+};
+
+// Simplified row for user listings view
+function renderUserProductRow(p) {
+    const img = p.imageUrls?.[0] || p.imageUrl || 'https://placehold.co/44x44/e2e8f0/64748b?text=N/A';
+    return `
+        <tr>
+            <td>
+                <img src="${img}" class="product-thumb" alt="${p.name || ''}" 
+                     onerror="this.src='https://placehold.co/44x44/e2e8f0/64748b?text=N/A'"
+                     onclick="window.open('product.html?id=${p.id}', '_blank')">
+            </td>
+            <td><strong>${escapeHtml(p.name || 'Unnamed')}</strong></td>
+            <td>${escapeHtml(p.category || 'N/A')}</td>
+            <td>KES ${(p.price || 0).toLocaleString()}</td>
+            <td>${p.totalStock || 0}</td>
+            <td>
+                <div class="action-btns">
+                    <button class="action-btn view" onclick="window.open('product.html?id=${p.id}', '_blank')" title="View"><i class="fas fa-eye"></i></button>
+                    <button class="action-btn edit" onclick="openEditModal('${p.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function hideUserListings() {
+    state.viewingUserId = null;
+    $('usersTableView').style.display = '';
+    $('userListingsView').style.display = 'none';
+    $('backToUsersBtn').style.display = 'none';
+    $('usersPageTitle').textContent = 'Users';
+    $('userSearch').style.display = '';
+}
+
+window.messageUser = function(id) {
+    const user = state.users.find(u => u.id === id);
+    if (user) {
+        window.open(`chat.html?userId=${id}`, '_blank');
+    }
+};
+
+// ============= Analytics =============
+async function loadAnalytics() {
+    const days = parseInt($('analyticsPeriod')?.value || 30);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    
+    const periodOrders = state.orders.filter(o => getDate(o.orderDate) >= cutoff);
+    const prevCutoff = new Date(cutoff);
+    prevCutoff.setDate(prevCutoff.getDate() - days);
+    const prevOrders = state.orders.filter(o => {
+        const d = getDate(o.orderDate);
+        return d >= prevCutoff && d < cutoff;
+    });
+    
+    // Calculate metrics
+    let sales = 0, prevSales = 0;
+    periodOrders.forEach(o => {
+        if (o.orderStatus === 'delivered' || o.paymentStatus === 'completed') {
+            sales += o.totalAmount || 0;
+        }
+    });
+    prevOrders.forEach(o => {
+        if (o.orderStatus === 'delivered' || o.paymentStatus === 'completed') {
+            prevSales += o.totalAmount || 0;
+        }
+    });
+    
+    const avgOrder = periodOrders.length ? sales / periodOrders.length : 0;
+    const newUsers = state.users.filter(u => {
+        const joined = u.createdAt?.toDate ? u.createdAt.toDate() : new Date(u.createdAt || 0);
+        return joined >= cutoff;
+    }).length;
+    
+    // Update UI
+    $('aSales').textContent = `KES ${sales.toLocaleString()}`;
+    $('aOrders').textContent = periodOrders.length;
+    $('aAvgOrder').textContent = `KES ${Math.round(avgOrder).toLocaleString()}`;
+    $('aNewUsers').textContent = newUsers;
+    
+    // Changes
+    updateChange('aSalesChange', sales, prevSales);
+    updateChange('aOrdersChange', periodOrders.length, prevOrders.length);
+    
+    // Revenue Chart
+    renderRevenueChart(days);
+    
+    // Top Sellers & Products
+    renderTopSellers();
+    renderBestProducts();
+}
+
+function updateChange(id, current, prev) {
+    const el = $(id);
+    if (!el) return;
+    const change = prev > 0 ? ((current - prev) / prev * 100).toFixed(1) : 0;
+    el.textContent = `${change >= 0 ? '+' : ''}${change}%`;
+    el.className = `analytics-change ${change >= 0 ? 'positive' : 'negative'}`;
+}
+
+function renderRevenueChart(days) {
+    if (state.charts.revenue) state.charts.revenue.destroy();
+    
+    const ctx = $('revenueChart')?.getContext('2d');
+    if (!ctx) return;
+    
+    // Generate labels
+    const labels = [];
+    const data = [];
+    for (let i = days - 1; i >= 0; i -= Math.ceil(days / 10)) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+        
+        const dayRevenue = state.orders
+            .filter(o => {
+                const od = getDate(o.orderDate);
+                return od.toDateString() === d.toDateString() && 
+                    (o.orderStatus === 'delivered' || o.paymentStatus === 'completed');
+            })
+            .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        data.push(dayRevenue);
+    }
+    
+    state.charts.revenue = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Revenue',
+                data,
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function renderTopSellers() {
+    const container = $('topSellers');
+    
+    // Count sales by seller (uploaderId)
+    const sellerSales = {};
+    state.orders.forEach(o => {
+        if (o.orderStatus === 'delivered') {
+            o.items?.forEach(i => {
+                const product = state.products.find(p => p.id === i.productId);
+                if (product?.uploaderId) {
+                    if (!sellerSales[product.uploaderId]) {
+                        sellerSales[product.uploaderId] = { sales: 0, revenue: 0 };
+                    }
+                    sellerSales[product.uploaderId].sales++;
+                    sellerSales[product.uploaderId].revenue += i.totalPrice || 0;
+                }
+            });
+        }
+    });
+    
+    const sorted = Object.entries(sellerSales)
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .slice(0, 5);
+    
+    if (!sorted.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);">No data</p>';
+        return;
+    }
+    
+    container.innerHTML = sorted.map(([sellerId, data], i) => {
+        const user = state.users.find(u => u.id === sellerId);
+        const badge = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default';
+        return `
+            <div class="rank-item">
+                <span class="rank-badge ${badge}">${i + 1}</span>
+                <img src="${user?.profilePicUrl || 'https://placehold.co/36x36/e2e8f0/64748b?text=U'}" alt="" onerror="this.src='https://placehold.co/36x36/e2e8f0/64748b?text=U'">
+                <div class="info">
+                    <span class="name">${user?.name || 'Unknown'}</span>
+                    <span class="stats">${data.sales} sales • KES ${data.revenue.toLocaleString()}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderBestProducts() {
+    const container = $('bestProducts');
+    
+    // Count product sales
+    const productSales = {};
+    state.orders.forEach(o => {
+        if (o.orderStatus === 'delivered') {
+            o.items?.forEach(i => {
+                if (!productSales[i.productId]) {
+                    productSales[i.productId] = { qty: 0, revenue: 0, name: i.productName };
+                }
+                productSales[i.productId].qty += i.quantity || 1;
+                productSales[i.productId].revenue += i.totalPrice || 0;
+            });
+        }
+    });
+    
+    const sorted = Object.entries(productSales)
+        .sort((a, b) => b[1].qty - a[1].qty)
+        .slice(0, 5);
+    
+    if (!sorted.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);">No data</p>';
+        return;
+    }
+    
+    container.innerHTML = sorted.map(([productId, data], i) => {
+        const product = state.products.find(p => p.id === productId);
+        const badge = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'default';
+        return `
+            <div class="rank-item">
+                <span class="rank-badge ${badge}">${i + 1}</span>
+                <img src="${product?.imageUrls?.[0] || 'https://placehold.co/36x36/e2e8f0/64748b?text=P'}" alt="" onerror="this.src='https://placehold.co/36x36/e2e8f0/64748b?text=P'">
+                <div class="info">
+                    <span class="name">${data.name || 'Unknown'}</span>
+                    <span class="stats">${data.qty} sold • KES ${data.revenue.toLocaleString()}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function exportReport() {
+    const csv = ['Date,Orders,Revenue,Avg Order'];
+    const days = parseInt($('analyticsPeriod')?.value || 30);
+    
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayOrders = state.orders.filter(o => getDate(o.orderDate).toDateString() === d.toDateString());
+        const revenue = dayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        const avg = dayOrders.length ? revenue / dayOrders.length : 0;
+        csv.push(`${d.toLocaleDateString()},${dayOrders.length},${revenue},${avg.toFixed(0)}`);
+    }
+    
+    downloadCSV(csv.join('\n'), 'analytics-report.csv');
+}
+
+// ============= Transactions =============
+async function loadTransactions() {
+    const tbody = $('transactionsTable');
+    try {
+        const snap = await getDocs(collection(db, "Transactions"));
+        const transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderTransactions(transactions);
+    } catch (err) {
+        console.error('Transactions error:', err);
+        // Show transactions from orders as fallback
+        const orderTransactions = state.orders.map(o => ({
+            id: o.id,
+            userEmail: o.buyerDetails?.email || 'N/A',
+            amount: o.totalAmount || 0,
+            status: o.paymentStatus || (o.orderStatus === 'delivered' ? 'completed' : 'pending'),
+            createdAt: o.orderDate
+        }));
+        renderTransactions(orderTransactions);
+    }
+}
+
+function renderTransactions(txns) {
+    const tbody = $('transactionsTable');
+    if (!txns.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;">No transactions</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = txns.sort((a, b) => getDate(b.createdAt) - getDate(a.createdAt)).map(t => `
+        <tr>
+            <td>${t.id.slice(0, 12)}...</td>
+            <td class="hide-sm">${t.userEmail || 'N/A'}</td>
+            <td>KES ${(t.amount || 0).toLocaleString()}</td>
+            <td><span class="status ${t.status || 'pending'}">${t.status || 'pending'}</span></td>
+            <td>${formatDate(t.createdAt)}</td>
+        </tr>
+    `).join('');
+}
+
+function filterTransactions() {
+    const status = $('transactionFilter').value;
+    loadTransactions().then(() => {
+        if (status !== 'all') {
+            const rows = $$('#transactionsTable tr');
+            rows.forEach(r => {
+                const s = r.querySelector('.status')?.textContent;
+                r.style.display = s === status ? '' : 'none';
+            });
+        }
+    });
+}
+
+// ============= Verifications =============
+async function loadVerifications() {
+    const container = $('verificationsList');
+    try {
+        const snap = await getDocs(query(collection(db, "PaymentVerifications"), where("status", "==", "pending")));
+        const verifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderVerifications(verifications);
+        $('verifyBadge').textContent = verifications.length;
+        $('verifyBadge').style.display = verifications.length > 0 ? '' : 'none';
+    } catch (err) {
+        console.error('Verifications error:', err);
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:40px;">Unable to load verifications. Check Firestore permissions.</p>';
+        $('verifyBadge').style.display = 'none';
+    }
+}
+
+function renderVerifications(items) {
+    const container = $('verificationsList');
+    if (!items.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:40px;">No pending verifications</p>';
+        return;
+    }
+    
+    container.innerHTML = items.map(v => `
+        <div class="verify-card">
+            <h4>Payment Verification</h4>
+            <p><strong>User:</strong> ${v.userEmail || 'N/A'}</p>
+            <p><strong>Amount:</strong> KES ${(v.amount || 0).toLocaleString()}</p>
+            <p><strong>Reference:</strong> ${v.reference || 'N/A'}</p>
+            <p><strong>Date:</strong> ${formatDate(v.createdAt)}</p>
+            <div class="verify-actions">
+                <button class="btn btn-success" onclick="approveVerification('${v.id}')"><i class="fas fa-check"></i> Approve</button>
+                <button class="btn btn-danger" onclick="rejectVerification('${v.id}')"><i class="fas fa-times"></i> Reject</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.approveVerification = async function(id) {
+    if (confirm('Approve this payment?')) {
+        try {
+            await updateDoc(doc(db, "PaymentVerifications", id), { status: 'approved', approvedAt: Timestamp.now() });
+            showNotification('Payment approved');
+            loadVerifications();
+        } catch (err) {
+            showNotification('Error approving', 'error');
+        }
+    }
+};
+
+window.rejectVerification = async function(id) {
+    if (confirm('Reject this payment?')) {
+        try {
+            await updateDoc(doc(db, "PaymentVerifications", id), { status: 'rejected', rejectedAt: Timestamp.now() });
+            showNotification('Payment rejected');
+            loadVerifications();
+        } catch (err) {
+            showNotification('Error rejecting', 'error');
+        }
+    }
+};
+
+// ============= Settings =============
+async function loadSettings() {
+    loadAdminList();
+    loadHeroSlides();
+    loadSurveySettings();
+}
+
+// ============= Survey Settings =============
+async function loadSurveySettings() {
+    try {
+        // Load survey toggle state
+        const settingsDoc = await getDoc(doc(db, "Settings", "appSettings"));
+        if (settingsDoc.exists()) {
+            $('surveyEnabled').checked = settingsDoc.data().surveyEnabled === true;
+        }
+        
+        // Setup toggle handler
+        $('surveyEnabled')?.removeEventListener('change', handleSurveyToggle);
+        $('surveyEnabled')?.addEventListener('change', handleSurveyToggle);
+        
+        // Load survey statistics
+        await loadSurveyStats();
+    } catch (err) {
+        console.error('Survey settings error:', err);
+    }
+}
+
+async function handleSurveyToggle(e) {
+    const enabled = e.target.checked;
+    try {
+        await setDoc(doc(db, "Settings", "appSettings"), {
+            surveyEnabled: enabled,
+            updatedAt: Timestamp.now(),
+            updatedBy: state.user?.email
+        }, { merge: true });
+        
+        showNotification(enabled ? 'Signup survey enabled' : 'Signup survey disabled');
+    } catch (err) {
+        console.error('Toggle survey error:', err);
+        showNotification('Failed to update setting', 'error');
+        e.target.checked = !enabled; // Revert
+    }
+}
+
+async function loadSurveyStats() {
+    const container = $('surveyStats');
+    if (!container) return;
+    
+    try {
+        // Count users with survey data
+        const usersSnap = await getDocs(collection(db, "Users"));
+        let totalUsers = 0;
+        let surveyed = 0;
+        const ageGroups = {};
+        const genders = {};
+        const preferences = {};
+        
+        usersSnap.docs.forEach(d => {
+            totalUsers++;
+            const data = d.data();
+            if (data.surveyCompleted && data.surveyData) {
+                surveyed++;
+                const survey = data.surveyData;
+                
+                // Age distribution
+                if (survey.ageRange) {
+                    ageGroups[survey.ageRange] = (ageGroups[survey.ageRange] || 0) + 1;
+                }
+                
+                // Gender distribution  
+                if (survey.gender) {
+                    genders[survey.gender] = (genders[survey.gender] || 0) + 1;
+                }
+                
+                // Shopping preferences
+                if (survey.shoppingPreferences && Array.isArray(survey.shoppingPreferences)) {
+                    survey.shoppingPreferences.forEach(pref => {
+                        preferences[pref] = (preferences[pref] || 0) + 1;
+                    });
+                }
+            }
+        });
+        
+        // Render stats
+        const completionRate = totalUsers > 0 ? Math.round((surveyed / totalUsers) * 100) : 0;
+        
+        // Get top preferences
+        const topPrefs = Object.entries(preferences)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 4)
+            .map(([name, count]) => `<span class="stat-tag">${formatPrefName(name)} (${count})</span>`)
+            .join('');
+        
+        container.innerHTML = `
+            <div class="survey-stat-grid">
+                <div class="survey-stat-item">
+                    <span class="survey-stat-value">${surveyed}</span>
+                    <span class="survey-stat-label">Responses</span>
+                </div>
+                <div class="survey-stat-item">
+                    <span class="survey-stat-value">${completionRate}%</span>
+                    <span class="survey-stat-label">Completion</span>
+                </div>
+            </div>
+            ${topPrefs ? `
+                <div style="margin-top:12px;">
+                    <small style="color:#666;">Top Interests:</small>
+                    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">
+                        ${topPrefs}
+                    </div>
+                </div>
+            ` : '<p style="color:#999;font-size:13px;margin:10px 0 0;">No survey data yet</p>'}
+        `;
+    } catch (err) {
+        console.error('Survey stats error:', err);
+        container.innerHTML = '<p style="color:#999;">Unable to load stats</p>';
+    }
+}
+
+function formatPrefName(pref) {
+    const names = {
+        'electronics': 'Electronics',
+        'fashion': 'Fashion',
+        'home': 'Home',
+        'beauty': 'Beauty',
+        'sports': 'Sports',
+        'books': 'Books',
+        'groceries': 'Groceries',
+        'other': 'Other'
+    };
+    return names[pref] || pref;
+}
+
+// ============= Hero Banner Management =============
+let heroSlides = [];
+
+async function loadHeroSlides() {
+    const container = $('heroSlidesList');
+    try {
+        const snap = await getDocs(query(collection(db, "HeroSlides"), orderBy("order", "asc")));
+        heroSlides = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderHeroSlides();
+    } catch (err) {
+        console.error('Load hero slides error:', err);
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:20px;">No slides yet. Click "Add Slide" to create one.</p>';
+    }
+}
+
+function renderHeroSlides() {
+    const container = $('heroSlidesList');
+    
+    if (!heroSlides.length) {
+        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:20px;">No slides yet. Click "Add Slide" to create one.</p>';
+        return;
+    }
+    
+    container.innerHTML = heroSlides.map((slide, idx) => `
+        <div class="hero-slide-item" draggable="true" data-id="${slide.id}" data-idx="${idx}">
+            <div class="hero-slide-preview ${slide.gradient || 'gradient-1'}" ${slide.bgImage ? `style="background-image:url(${slide.bgImage})"` : ''}>
+                <i class="fas ${slide.icon || 'fa-star'}"></i>
+            </div>
+            <div class="hero-slide-info">
+                <h4>${slide.title || 'Untitled'}</h4>
+                <p>${slide.subtitle || 'No description'}</p>
+            </div>
+            <span class="hero-slide-status ${slide.active !== false ? 'active' : 'inactive'}">
+                ${slide.active !== false ? 'Active' : 'Inactive'}
+            </span>
+            <div class="hero-slide-actions">
+                <button class="edit-btn" onclick="editSlide('${slide.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+                <button class="delete-btn" onclick="deleteSlide('${slide.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+            </div>
+        </div>
+    `).join('');
+    
+    // Add drag-and-drop reordering
+    setupSlideDragDrop();
+}
+
+function setupSlideDragDrop() {
+    const items = $$('.hero-slide-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+    });
+}
+
+let draggedSlide = null;
+
+function handleDragStart(e) {
+    draggedSlide = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    if (draggedSlide !== this) {
+        const allItems = [...$$('.hero-slide-item')];
+        const fromIdx = parseInt(draggedSlide.dataset.idx);
+        const toIdx = parseInt(this.dataset.idx);
+        
+        // Reorder array
+        const [removed] = heroSlides.splice(fromIdx, 1);
+        heroSlides.splice(toIdx, 0, removed);
+        
+        // Update order in Firestore
+        try {
+            await Promise.all(heroSlides.map((slide, idx) => 
+                updateDoc(doc(db, "HeroSlides", slide.id), { order: idx })
+            ));
+            renderHeroSlides();
+            showNotification('Slides reordered');
+        } catch (err) {
+            showNotification('Error reordering', 'error');
+        }
+    }
+}
+
+function handleDragEnd() {
+    this.classList.remove('dragging');
+    draggedSlide = null;
+}
+
+// Open modal to add new slide
+function openSlideModal() {
+    $('slideModalTitle').textContent = 'Add Hero Slide';
+    $('editSlideId').value = '';
+    $('slideTitle').value = '';
+    $('slideSubtitle').value = '';
+    $('slideBtnText').value = '';
+    $('slideBtnLink').value = '';
+    $('slideGradient').value = 'gradient-1';
+    $('slideIcon').value = 'fa-store';
+    $('slideActive').checked = true;
+    $('slideImagePreview').innerHTML = '';
+    $('slideModal').classList.add('active');
+}
+
+window.closeSlideModal = function() {
+    $('slideModal').classList.remove('active');
+};
+
+window.editSlide = function(id) {
+    const slide = heroSlides.find(s => s.id === id);
+    if (!slide) return;
+    
+    $('slideModalTitle').textContent = 'Edit Hero Slide';
+    $('editSlideId').value = id;
+    $('slideTitle').value = slide.title || '';
+    $('slideSubtitle').value = slide.subtitle || '';
+    $('slideBtnText').value = slide.btnText || '';
+    $('slideBtnLink').value = slide.btnLink || '';
+    $('slideGradient').value = slide.gradient || 'gradient-1';
+    $('slideIcon').value = slide.icon || 'fa-store';
+    $('slideActive').checked = slide.active !== false;
+    $('slideImagePreview').innerHTML = slide.bgImage ? `<img src="${slide.bgImage}">` : '';
+    $('slideModal').classList.add('active');
+};
+
+window.deleteSlide = async function(id) {
+    if (!confirm('Delete this slide?')) return;
+    
+    try {
+        await deleteDoc(doc(db, "HeroSlides", id));
+        showNotification('Slide deleted');
+        loadHeroSlides();
+    } catch (err) {
+        showNotification('Error deleting slide', 'error');
+    }
+};
+
+// Handle slide form submit
+$('slideForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const id = $('editSlideId').value;
+    const slideData = {
+        title: $('slideTitle').value.trim(),
+        subtitle: $('slideSubtitle').value.trim(),
+        btnText: $('slideBtnText').value.trim(),
+        btnLink: $('slideBtnLink').value.trim(),
+        gradient: $('slideGradient').value,
+        icon: $('slideIcon').value,
+        active: $('slideActive').checked,
+        updatedAt: Timestamp.now()
+    };
+    
+    // Handle image upload if selected
+    const imageFile = $('slideBgImage').files[0];
+    if (imageFile) {
+        try {
+            const imgRef = storageRef(storage, `hero-slides/${Date.now()}_${imageFile.name}`);
+            await uploadBytes(imgRef, imageFile);
+            slideData.bgImage = await getDownloadURL(imgRef);
+        } catch (err) {
+            console.error('Image upload error:', err);
+        }
+    }
+    
+    try {
+        if (id) {
+            // Update existing slide
+            await updateDoc(doc(db, "HeroSlides", id), slideData);
+            showNotification('Slide updated');
+        } else {
+            // Create new slide
+            slideData.order = heroSlides.length;
+            slideData.createdAt = Timestamp.now();
+            await addDoc(collection(db, "HeroSlides"), slideData);
+            showNotification('Slide created');
+        }
+        
+        closeSlideModal();
+        loadHeroSlides();
+    } catch (err) {
+        console.error('Save slide error:', err);
+        showNotification('Error saving slide', 'error');
+    }
+});
+
+// Add slide button
+$('addSlideBtn')?.addEventListener('click', openSlideModal);
+$('closeSlideModal')?.addEventListener('click', closeSlideModal);
+
+// Image preview
+$('slideBgImage')?.addEventListener('change', function() {
+    const file = this.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            $('slideImagePreview').innerHTML = `<img src="${e.target.result}">`;
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+async function loadAdminList() {
+    try {
+        const snap = await getDocs(collection(db, "Admins"));
+        const container = $('adminList');
+        
+        container.innerHTML = snap.docs.map(d => {
+            const admin = d.data();
+            const isMaster = admin.email === MASTER_ADMIN_EMAIL;
+            return `
+                <div class="admin-item">
+                    <span>${admin.email} ${isMaster ? '<span class="badge">Master</span>' : ''}</span>
+                    ${!isMaster && state.isMaster ? `<button class="btn btn-sm btn-danger" onclick="removeAdmin('${d.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.error('Admin list error:', err);
+    }
+}
+
+async function addAdmin() {
+    const email = $('newAdminEmail').value.trim();
+    if (!email) return showNotification('Enter an email', 'error');
+    
+    try {
+        // Check if user exists
+        const userQuery = query(collection(db, "Users"), where("email", "==", email));
+        const userSnap = await getDocs(userQuery);
+        
+        if (userSnap.empty) {
+            return showNotification('User not found', 'error');
+        }
+        
+        const userId = userSnap.docs[0].id;
+        await setDoc(doc(db, "Admins", userId), {
+            email,
+            role: 'admin',
+            createdAt: Timestamp.now(),
+            addedBy: state.user.email
+        });
+        
+        showNotification('Admin added');
+        $('newAdminEmail').value = '';
+        loadAdminList();
+    } catch (err) {
+        showNotification('Error adding admin', 'error');
+    }
+}
+
+window.removeAdmin = async function(id) {
+    if (confirm('Remove this admin?')) {
+        try {
+            await deleteDoc(doc(db, "Admins", id));
+            showNotification('Admin removed');
+            loadAdminList();
+        } catch (err) {
+            showNotification('Error removing admin', 'error');
+        }
+    }
+};
+
+// ============= Utilities =============
+function getDate(d) {
+    if (!d) return new Date(0);
+    if (d.toDate) return d.toDate();
+    return new Date(d);
+}
+
+function formatDate(d) {
+    return getDate(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function downloadCSV(content, filename) {
+    const blob = new Blob([content], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}

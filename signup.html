@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
+    <link rel="icon" type="image/jpeg" href="images/logo.png">
+    <link rel="apple-touch-icon" href="images/logo.png">
     <title>Oda-Pap Sign Up</title>
     <style>
         /* Carrot Orange Theme */
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
             font-family: Arial, sans-serif;
             background-color: #fff7e6;
@@ -16,15 +20,16 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
+            padding: 20px;
         }
 
         .signup-container {
-            background-color: #ffa500; /* Carrot Orange */
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            max-width: 400px;
+            background-color: #ffa500;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            max-width: 420px;
             width: 100%;
             text-align: center;
         }
@@ -32,22 +37,24 @@
         h2 {
             color: #ffffff;
             margin-bottom: 20px;
+            font-size: 24px;
         }
 
         .signup-container input[type="email"],
         .signup-container input[type="text"],
+        .signup-container input[type="tel"],
         .signup-container input[type="password"] {
             width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #e6e6e6;
-            border-radius: 5px;
+            padding: 12px 14px;
+            margin: 8px 0;
+            border: 2px solid transparent;
+            border-radius: 8px;
             box-sizing: border-box;
+            font-size: 15px;
+            transition: border-color 0.3s ease;
         }
 
-        .signup-container input[type="email"]:focus,
-        .signup-container input[type="text"]:focus,
-        .signup-container input[type="password"]:focus {
+        .signup-container input:focus {
             outline: none;
             border-color: #ff751a;
         }
@@ -57,49 +64,68 @@
             width: 100%;
         }
 
-        .password-container input[type="password"] {
-            padding-right: 40px;
+        .password-container input {
+            padding-right: 45px !important;
         }
 
-        .password-container .fa-eye {
+        .toggle-password {
             position: absolute;
-            right: 10px;
+            right: 14px;
             top: 50%;
             transform: translateY(-50%);
             cursor: pointer;
+            color: #999;
+            font-size: 16px;
+            transition: color 0.2s;
+            padding: 5px;
+            z-index: 2;
+        }
+
+        .toggle-password:hover {
+            color: #ff751a;
         }
 
         .signup-button {
-            background-color: #ff751a; /* Darker carrot orange */
+            background-color: #ff751a;
             color: #ffffff;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             width: 100%;
             font-size: 16px;
-            transition: background-color 0.3s ease;
+            font-weight: 600;
+            transition: background-color 0.3s ease, transform 0.2s;
+            margin-top: 10px;
         }
 
         .signup-button:hover {
             background-color: #e65c00;
+            transform: translateY(-1px);
+        }
+
+        .signup-button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
         }
 
         p {
             color: #ffffff;
             margin-top: 15px;
+            font-size: 14px;
         }
 
         p a {
-            color: #e6e6e6;
+            color: #fff;
             text-decoration: none;
+            font-weight: 600;
         }
 
         p a:hover {
             text-decoration: underline;
         }
 
-        /* Google Sign-In Button Styles */
         .divider {
             display: flex;
             align-items: center;
@@ -112,20 +138,21 @@
         .divider::after {
             content: '';
             flex: 1;
-            border-bottom: 1px solid #ffffff;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
         }
 
         .divider span {
-            padding: 0 10px;
-            font-size: 14px;
+            padding: 0 15px;
+            font-size: 13px;
+            opacity: 0.9;
         }
 
         .google-btn {
             width: 100%;
-            height: 42px;
+            height: 46px;
             background-color: #ffffff;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             cursor: pointer;
             display: flex;
@@ -134,37 +161,284 @@
             font-family: 'Roboto', Arial, sans-serif;
             font-size: 14px;
             font-weight: 500;
-            color: #757575;
-            transition: box-shadow 0.3s ease;
+            color: #555;
+            transition: box-shadow 0.3s ease, transform 0.2s;
             margin-bottom: 15px;
         }
 
         .google-btn:hover {
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .google-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
         }
 
         .google-btn img {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             margin-right: 10px;
         }
+
+        /* Error display */
+        .error-display {
+            background: rgba(244, 67, 54, 0.1);
+            color: #f44336;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Survey Modal Styles */
+        .survey-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .survey-modal.active {
+            display: flex;
+        }
+
+        .survey-content {
+            background: #fff;
+            border-radius: 16px;
+            max-width: 450px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .survey-header {
+            background: linear-gradient(135deg, #ffa500, #ff751a);
+            color: white;
+            padding: 25px;
+            text-align: center;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .survey-header h3 {
+            margin: 0 0 8px 0;
+            font-size: 20px;
+        }
+
+        .survey-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 14px;
+            color: white;
+        }
+
+        .survey-body {
+            padding: 25px;
+        }
+
+        .survey-question {
+            margin-bottom: 25px;
+            display: none;
+        }
+
+        .survey-question.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .question-label {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .question-subtitle {
+            font-size: 13px;
+            color: #666;
+            margin-top: 5px;
+            font-weight: normal;
+        }
+
+        .option-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .option-btn {
+            flex: 1;
+            min-width: calc(50% - 5px);
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            background: #fff;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .option-btn:hover {
+            border-color: #ffa500;
+            background: #fff7e6;
+        }
+
+        .option-btn.selected {
+            border-color: #ff751a;
+            background: linear-gradient(135deg, #fff7e6, #ffe0b3);
+            color: #e65c00;
+        }
+
+        .option-btn i {
+            font-size: 16px;
+        }
+
+        /* Multi-select options */
+        .option-btn.multi {
+            min-width: calc(33.333% - 7px);
+        }
+
+        @media (max-width: 400px) {
+            .option-btn.multi {
+                min-width: calc(50% - 5px);
+            }
+        }
+
+        /* Progress bar */
+        .survey-progress {
+            padding: 0 25px 15px;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #e0e0e0;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffa500, #ff751a);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* Survey navigation */
+        .survey-nav {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 25px;
+            border-top: 1px solid #eee;
+        }
+
+        .survey-btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .survey-btn.skip {
+            background: transparent;
+            border: none;
+            color: #999;
+        }
+
+        .survey-btn.skip:hover {
+            color: #666;
+        }
+
+        .survey-btn.next {
+            background: linear-gradient(135deg, #ffa500, #ff751a);
+            border: none;
+            color: white;
+        }
+
+        .survey-btn.next:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(255, 117, 26, 0.3);
+        }
+
+        .survey-btn.next:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Password requirements hint */
+        .password-hint {
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+            text-align: left;
+            margin-top: 5px;
+        }
     </style>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 </head>
 <body>
     <div class="signup-container">
-        <h2>Sign Up</h2>
+        <h2>Create Account</h2>
+        
+        <div class="error-display" id="error-display"></div>
+        
         <form id="signup-form">
-            <input type="email" id="signup-email-input" class="email-input" placeholder="Email" required>
-            <input type="text" id="signup-phone-input" class="phone-input" placeholder="Phone Number" required>
+            <input type="email" id="signup-email-input" placeholder="Email address" required>
+            <input type="tel" id="signup-phone-input" placeholder="Phone number" required>
             <div class="password-container">
-                <input type="password" id="signup-password-input" class="password-input" placeholder="Password" required>
-                <i class="fas fa-eye" id="toggle-signup-password"></i>
+                <input type="password" id="signup-password-input" placeholder="Password" required minlength="6">
+                <i class="fas fa-eye toggle-password" id="toggle-signup-password"></i>
             </div>
-            <button type="submit" id="signup-button" class="signup-button">Sign Up</button>
+            <p class="password-hint"><i class="fas fa-info-circle"></i> Minimum 6 characters</p>
+            <button type="submit" id="signup-button" class="signup-button">
+                <i class="fas fa-user-plus"></i> Sign Up
+            </button>
         </form>
         
         <div class="divider">
@@ -179,44 +453,353 @@
         <p>Already have an account? <a href="login.html">Login</a></p>
     </div>
 
-    <script type="module">
-        import { signUpUser, signInWithGoogle } from "./js/auth.js";
+    <!-- Survey Modal -->
+    <div class="survey-modal" id="survey-modal">
+        <div class="survey-content">
+            <div class="survey-header">
+                <h3><i class="fas fa-clipboard-list"></i> Quick Setup</h3>
+                <p>Help us personalize your experience</p>
+            </div>
+            
+            <div class="survey-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="progress-text" id="progress-text">Question 1 of 3</div>
+            </div>
+            
+            <div class="survey-body">
+                <!-- Question 1: Age Range -->
+                <div class="survey-question active" data-question="1">
+                    <label class="question-label">
+                        What's your age range?
+                        <span class="question-subtitle">This helps us show relevant products</span>
+                    </label>
+                    <div class="option-buttons">
+                        <button type="button" class="option-btn" data-value="under-18">
+                            <i class="fas fa-child"></i> Under 18
+                        </button>
+                        <button type="button" class="option-btn" data-value="18-24">
+                            <i class="fas fa-user-graduate"></i> 18-24
+                        </button>
+                        <button type="button" class="option-btn" data-value="25-34">
+                            <i class="fas fa-user"></i> 25-34
+                        </button>
+                        <button type="button" class="option-btn" data-value="35-44">
+                            <i class="fas fa-user-tie"></i> 35-44
+                        </button>
+                        <button type="button" class="option-btn" data-value="45-54">
+                            <i class="fas fa-user-check"></i> 45-54
+                        </button>
+                        <button type="button" class="option-btn" data-value="55+">
+                            <i class="fas fa-user-shield"></i> 55+
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Question 2: Gender -->
+                <div class="survey-question" data-question="2">
+                    <label class="question-label">
+                        How do you identify?
+                        <span class="question-subtitle">For personalized recommendations</span>
+                    </label>
+                    <div class="option-buttons">
+                        <button type="button" class="option-btn" data-value="male">
+                            <i class="fas fa-mars"></i> Male
+                        </button>
+                        <button type="button" class="option-btn" data-value="female">
+                            <i class="fas fa-venus"></i> Female
+                        </button>
+                        <button type="button" class="option-btn" data-value="non-binary">
+                            <i class="fas fa-genderless"></i> Non-binary
+                        </button>
+                        <button type="button" class="option-btn" data-value="prefer-not-to-say">
+                            <i class="fas fa-user-secret"></i> Prefer not to say
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Question 3: Shopping Preferences -->
+                <div class="survey-question" data-question="3">
+                    <label class="question-label">
+                        What do you shop for most?
+                        <span class="question-subtitle">Select all that apply</span>
+                    </label>
+                    <div class="option-buttons">
+                        <button type="button" class="option-btn multi" data-value="electronics">
+                            <i class="fas fa-laptop"></i> Electronics
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="fashion">
+                            <i class="fas fa-tshirt"></i> Fashion
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="home">
+                            <i class="fas fa-home"></i> Home
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="beauty">
+                            <i class="fas fa-spa"></i> Beauty
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="sports">
+                            <i class="fas fa-football-ball"></i> Sports
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="books">
+                            <i class="fas fa-book"></i> Books
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="groceries">
+                            <i class="fas fa-shopping-basket"></i> Groceries
+                        </button>
+                        <button type="button" class="option-btn multi" data-value="other">
+                            <i class="fas fa-ellipsis-h"></i> Other
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="survey-nav">
+                <button type="button" class="survey-btn skip" id="skip-survey-btn">Skip for now</button>
+                <button type="button" class="survey-btn next" id="next-survey-btn">Next <i class="fas fa-arrow-right"></i></button>
+            </div>
+        </div>
+    </div>
 
+    <script type="module">
+        import { signUpUser, signInWithGoogle, handleGoogleRedirectResult, checkSurveyEnabled, updateUserSurvey } from "./js/auth.js";
+        import { auth } from "./js/firebase.js";
+
+        // State
+        let surveyEnabled = false;
+        let currentQuestion = 1;
+        const totalQuestions = 3;
+        const surveyData = {
+            ageRange: null,
+            gender: null,
+            shoppingPreferences: []
+        };
+        let pendingSignupData = null;
+
+        // Check if survey is enabled
+        (async () => {
+            surveyEnabled = await checkSurveyEnabled();
+            
+            // Also handle redirect result
+            try {
+                const result = await handleGoogleRedirectResult();
+                if (result) {
+                    if (result.isNewUser && surveyEnabled) {
+                        pendingSignupData = { type: 'google', user: result.user };
+                        showSurvey('google', result.user);
+                    } else if (result.isNewUser) {
+                        window.location.href = 'complete-profile.html';
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                }
+            } catch (error) {
+                console.error('Redirect handling error:', error);
+            }
+        })();
+
+        // DOM Elements
         const signupForm = document.getElementById('signup-form');
         const toggleSignupPassword = document.getElementById('toggle-signup-password');
         const signupPasswordInput = document.getElementById('signup-password-input');
         const googleSignupBtn = document.getElementById('google-signup-btn');
+        const signupButton = document.getElementById('signup-button');
+        const errorDisplay = document.getElementById('error-display');
 
+        // Survey elements
+        const surveyModal = document.getElementById('survey-modal');
+        const skipSurveyBtn = document.getElementById('skip-survey-btn');
+        const nextSurveyBtn = document.getElementById('next-survey-btn');
+        const progressFill = document.getElementById('progress-fill');
+        const progressText = document.getElementById('progress-text');
+
+        // Error display helper
+        function showError(message) {
+            errorDisplay.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+            errorDisplay.style.display = 'flex';
+            setTimeout(() => {
+                errorDisplay.style.display = 'none';
+            }, 5000);
+        }
+
+        // Toggle Password Visibility - Improved
+        function setupPasswordToggle(toggleBtn, passwordInput) {
+            if (!toggleBtn || !passwordInput) return;
+            
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const currentType = passwordInput.getAttribute('type');
+                const newType = currentType === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', newType);
+                
+                toggleBtn.classList.toggle('fa-eye');
+                toggleBtn.classList.toggle('fa-eye-slash');
+            });
+        }
+        
+        setupPasswordToggle(toggleSignupPassword, signupPasswordInput);
+
+        // Form submission
         signupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const email = document.getElementById('signup-email-input').value;
-            const phone = document.getElementById('signup-phone-input').value;
+            
+            const email = document.getElementById('signup-email-input').value.trim();
+            const phone = document.getElementById('signup-phone-input').value.trim();
             const password = signupPasswordInput.value;
 
-            try {
-                await signUpUser(email, phone, password);
-                window.location.href = 'index.html';
-            } catch (error) {
-                alert('Signup failed: ' + error.message);
+            signupButton.disabled = true;
+            signupButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
+
+            if (surveyEnabled) {
+                // Store signup data and show survey
+                pendingSignupData = { email, phone, password, type: 'email' };
+                showSurvey('email');
+                signupButton.disabled = false;
+                signupButton.innerHTML = '<i class="fas fa-user-plus"></i> Sign Up';
+            } else {
+                // Direct signup without survey
+                try {
+                    await signUpUser(email, phone, password);
+                    window.location.href = 'index.html';
+                } catch (error) {
+                    showError(error.message);
+                    signupButton.disabled = false;
+                    signupButton.innerHTML = '<i class="fas fa-user-plus"></i> Sign Up';
+                }
             }
         });
 
-        toggleSignupPassword.addEventListener('click', () => {
-            const type = signupPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            signupPasswordInput.setAttribute('type', type);
-            toggleSignupPassword.classList.toggle('fa-eye-slash');
-        });
-
-        // Google Sign-Up handler
+        // Google Sign-Up
         googleSignupBtn.addEventListener('click', async () => {
+            googleSignupBtn.disabled = true;
+            googleSignupBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo"> Signing up...';
+            
             try {
                 const result = await signInWithGoogle();
-                // Always redirect to complete profile for new signups via Google
-                window.location.href = 'complete-profile.html';
+                if (result) {
+                    if (result.isNewUser && surveyEnabled) {
+                        pendingSignupData = { type: 'google', user: result.user };
+                        showSurvey('google', result.user);
+                    } else if (result.isNewUser) {
+                        window.location.href = 'complete-profile.html';
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                }
+                // If result is null, redirect happened
             } catch (error) {
-                alert('Google Sign-Up failed: ' + error.message);
+                showError(error.message);
+                googleSignupBtn.disabled = false;
+                googleSignupBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo"> Sign up with Google';
             }
         });
+
+        // Survey Functions
+        function showSurvey(type, user = null) {
+            currentQuestion = 1;
+            updateSurveyUI();
+            surveyModal.classList.add('active');
+        }
+
+        function updateSurveyUI() {
+            // Update progress
+            const progress = ((currentQuestion - 1) / totalQuestions) * 100;
+            progressFill.style.width = progress + '%';
+            progressText.textContent = `Question ${currentQuestion} of ${totalQuestions}`;
+
+            // Show current question
+            document.querySelectorAll('.survey-question').forEach(q => {
+                q.classList.remove('active');
+            });
+            document.querySelector(`[data-question="${currentQuestion}"]`).classList.add('active');
+
+            // Update button text
+            if (currentQuestion === totalQuestions) {
+                nextSurveyBtn.innerHTML = 'Finish <i class="fas fa-check"></i>';
+            } else {
+                nextSurveyBtn.innerHTML = 'Next <i class="fas fa-arrow-right"></i>';
+            }
+        }
+
+        // Option button clicks
+        document.querySelectorAll('.option-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const value = btn.dataset.value;
+                const isMulti = btn.classList.contains('multi');
+                const questionEl = btn.closest('.survey-question');
+                const questionNum = parseInt(questionEl.dataset.question);
+
+                if (isMulti) {
+                    // Multi-select (toggle)
+                    btn.classList.toggle('selected');
+                    
+                    if (btn.classList.contains('selected')) {
+                        surveyData.shoppingPreferences.push(value);
+                    } else {
+                        surveyData.shoppingPreferences = surveyData.shoppingPreferences.filter(v => v !== value);
+                    }
+                } else {
+                    // Single select
+                    questionEl.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    
+                    if (questionNum === 1) {
+                        surveyData.ageRange = value;
+                    } else if (questionNum === 2) {
+                        surveyData.gender = value;
+                    }
+                }
+            });
+        });
+
+        // Next button
+        nextSurveyBtn.addEventListener('click', async () => {
+            if (currentQuestion < totalQuestions) {
+                currentQuestion++;
+                updateSurveyUI();
+            } else {
+                // Complete survey
+                await completeSurvey(surveyData);
+            }
+        });
+
+        // Skip button
+        skipSurveyBtn.addEventListener('click', async () => {
+            await completeSurvey(null);
+        });
+
+        async function completeSurvey(data) {
+            nextSurveyBtn.disabled = true;
+            skipSurveyBtn.disabled = true;
+            nextSurveyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            try {
+                if (pendingSignupData.type === 'email') {
+                    // Complete email signup with survey data
+                    await signUpUser(
+                        pendingSignupData.email,
+                        pendingSignupData.phone,
+                        pendingSignupData.password,
+                        data
+                    );
+                    window.location.href = 'index.html';
+                } else if (pendingSignupData.type === 'google') {
+                    // Update Google user with survey data
+                    if (data && pendingSignupData.user) {
+                        await updateUserSurvey(pendingSignupData.user.uid, data);
+                    }
+                    window.location.href = 'complete-profile.html';
+                }
+            } catch (error) {
+                surveyModal.classList.remove('active');
+                showError(error.message);
+                nextSurveyBtn.disabled = false;
+                skipSurveyBtn.disabled = false;
+                nextSurveyBtn.innerHTML = 'Finish <i class="fas fa-check"></i>';
+            }
+        }
     </script>
 </body>
 </html>

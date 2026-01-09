@@ -81,12 +81,14 @@ service cloud.firestore {
     // Orders collection - Users can read their own, admins can read/write all
     match /Orders/{orderId} {
       allow read: if request.auth != null && 
-                    (resource.data.buyerId == request.auth.uid || 
+                    (resource.data.userId == request.auth.uid || 
+                     resource.data.buyerId == request.auth.uid || 
                      resource.data.sellerId == request.auth.uid || 
                      isAdmin());
       allow create: if request.auth != null;
       allow update: if request.auth != null && 
-                      (resource.data.buyerId == request.auth.uid || 
+                      (resource.data.userId == request.auth.uid ||
+                       resource.data.buyerId == request.auth.uid || 
                        resource.data.sellerId == request.auth.uid || 
                        isAdmin());
       allow delete: if isAdmin();
@@ -119,6 +121,28 @@ service cloud.firestore {
     match /Settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+    
+    // HeroSlides collection - Public read for homepage carousel, admin write
+    match /HeroSlides/{slideId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+    
+    // Transactions collection - Admins can read all, users can read their own
+    match /Transactions/{transactionId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // PaymentVerifications collection - Admins can manage
+    match /PaymentVerifications/{verificationId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
     }
   }
 }

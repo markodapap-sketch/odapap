@@ -2,380 +2,621 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
-    <title>Admin Dashboard - Oda Pap </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/jpeg" href="images/logo.png">
+    <link rel="apple-touch-icon" href="images/logo.png">
+    <title>Admin Dashboard - Oda Pap</title>
     <link rel="stylesheet" href="admin.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <img src="images/logo.jpg" alt="Logo" class="sidebar-logo">
-            <h2>Admin Panel</h2>
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+        <button class="menu-btn" id="menuBtn"><i class="fas fa-bars"></i></button>
+        <h1 id="mobileTitle">Dashboard</h1>
+        <div class="header-actions">
+            <span class="admin-badge" id="adminBadge">Admin</span>
         </div>
-        <nav class="sidebar-nav">
-            <a href="#" class="nav-item active" data-section="dashboard">
-                <i class="fas fa-tachometer-alt"></i> Dashboard
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <img src="images/logo.png" alt="Logo">
+            <span>Oda Pap</span>
+        </div>
+        <nav class="nav-menu">
+            <a href="#" class="nav-link active" data-section="dashboard">
+                <i class="fas fa-home"></i><span>Dashboard</span>
             </a>
-            <a href="#" class="nav-item" data-section="orders">
-                <i class="fas fa-shopping-bag"></i> Orders
-                <span class="badge" id="pendingOrdersBadge">0</span>
+            <a href="#" class="nav-link" data-section="orders">
+                <i class="fas fa-shopping-bag"></i><span>Orders</span>
+                <span class="nav-badge" id="ordersBadge">0</span>
             </a>
-            <a href="#" class="nav-item" data-section="products">
-                <i class="fas fa-boxes"></i> Products
+            <a href="#" class="nav-link" data-section="products">
+                <i class="fas fa-box"></i><span>Products</span>
             </a>
-            <a href="#" class="nav-item" data-section="users">
-                <i class="fas fa-users"></i> Users
+            <a href="#" class="nav-link" data-section="users">
+                <i class="fas fa-users"></i><span>Users</span>
             </a>
-            <a href="#" class="nav-item" data-section="transactions">
-                <i class="fas fa-money-bill-wave"></i> Transactions
+            <a href="#" class="nav-link" data-section="analytics">
+                <i class="fas fa-chart-line"></i><span>Analytics</span>
             </a>
-            <a href="#" class="nav-item" data-section="verifications">
-                <i class="fas fa-clipboard-check"></i> Verifications
-                <span class="badge" id="verificationsBadge">0</span>
+            <a href="#" class="nav-link" data-section="transactions">
+                <i class="fas fa-credit-card"></i><span>Transactions</span>
             </a>
-            <a href="#" class="nav-item" data-section="analytics">
-                <i class="fas fa-chart-line"></i> Analytics
+            <a href="#" class="nav-link" data-section="verifications">
+                <i class="fas fa-shield-alt"></i><span>Verifications</span>
+                <span class="nav-badge" id="verifyBadge">0</span>
             </a>
-            <a href="#" class="nav-item" data-section="settings">
-                <i class="fas fa-cog"></i> Settings
+            <a href="#" class="nav-link" data-section="settings">
+                <i class="fas fa-cog"></i><span>Settings</span>
             </a>
         </nav>
         <div class="sidebar-footer">
-            <button id="logoutBtn" class="logout-btn">
-                <i class="fas fa-sign-out-alt"></i> Logout
+            <button class="logout-btn" id="logoutBtn">
+                <i class="fas fa-sign-out-alt"></i><span>Logout</span>
             </button>
         </div>
     </aside>
+    <div class="sidebar-overlay" id="overlay"></div>
 
     <!-- Main Content -->
-    <main class="main-content">
-        <!-- Header -->
-        <header class="topbar">
-            <div class="topbar-left">
-                <button class="menu-toggle" id="menuToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <h1 id="pageTitle">Dashboard</h1>
+    <main class="main">
+        <!-- Dashboard -->
+        <section class="page active" id="dashboard-page">
+            <div class="page-header">
+                <h2>Dashboard Overview</h2>
+                <span class="date-display" id="dateDisplay"></span>
             </div>
-            <div class="topbar-right">
-                <div class="admin-info">
-                    <img src="images/admin-avatar.png" alt="Admin" class="admin-avatar">
-                    <span id="adminName">Admin</span>
+            
+            <div class="metrics">
+                <div class="metric-card">
+                    <div class="metric-icon blue"><i class="fas fa-shopping-cart"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricOrders">0</span>
+                        <span class="metric-label">Total Orders</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon orange"><i class="fas fa-clock"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricPending">0</span>
+                        <span class="metric-label">Pending</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon green"><i class="fas fa-money-bill-wave"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricRevenue">KES 0</span>
+                        <span class="metric-label">Revenue</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon purple"><i class="fas fa-users"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricUsers">0</span>
+                        <span class="metric-label">Users</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon teal"><i class="fas fa-boxes"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricProducts">0</span>
+                        <span class="metric-label">Products</span>
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-icon pink"><i class="fas fa-store"></i></div>
+                    <div class="metric-info">
+                        <span class="metric-value" id="metricStoreValue">KES 0</span>
+                        <span class="metric-label">Store Value</span>
+                    </div>
                 </div>
             </div>
-        </header>
 
-        <!-- Content Sections -->
-        <div class="content-wrapper">
-            <!-- Dashboard Section -->
-            <section id="dashboard-section" class="content-section active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #4CAF50;">
-                            <i class="fas fa-shopping-bag"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="totalOrders">0</h3>
-                            <p>Total Orders</p>
-                        </div>
+            <div class="dashboard-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Recent Orders</h3>
+                        <a href="#" class="view-all" data-section="orders">View All</a>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #ff5722;">
-                            <i class="fas fa-clock"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="pendingOrders">0</h3>
-                            <p>Pending Orders</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #2196F3;">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="totalUsers">0</h3>
-                            <p>Total Users</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #FFC107;">
-                            <i class="fas fa-boxes"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="totalListings">0</h3>
-                            <p>Total Listings</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #9C27B0;">
-                            <i class="fas fa-money-bill-wave"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="totalRevenue">KES 0</h3>
-                            <p>Total Revenue</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon" style="background: #00BCD4;">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <div class="stat-details">
-                            <h3 id="todayOrders">0</h3>
-                            <p>Today's Orders</p>
-                        </div>
+                    <div class="card-body" id="recentOrders">
+                        <div class="loading-spinner"></div>
                     </div>
                 </div>
-
-                <div class="dashboard-grid">
-                    <div class="card">
-                        <h3><i class="fas fa-list"></i> Recent Orders</h3>
-                        <div id="recentOrdersList" class="recent-list"></div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Order Status</h3>
                     </div>
-                    <div class="card">
-                        <h3><i class="fas fa-chart-pie"></i> Order Status Distribution</h3>
-                        <canvas id="orderStatusChart"></canvas>
+                    <div class="card-body chart-container">
+                        <canvas id="statusChart"></canvas>
                     </div>
                 </div>
-            </section>
-
-            <!-- Orders Section -->
-            <section id="orders-section" class="content-section">
-                <div class="section-header">
-                    <div class="filter-group">
-                        <label>Status:</label>
-                        <select id="orderStatusFilter">
-                            <option value="all">All Orders</option>
-                            <option value="pending">Pending</option>
-                            <option value="confirmed">Confirmed</option>
-                            <option value="out_for_delivery">Out for Delivery</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
-                        </select>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Weekly Sales</h3>
                     </div>
-                    <div class="search-box">
+                    <div class="card-body chart-container">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Top Categories</h3>
+                    </div>
+                    <div class="card-body chart-container">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Orders -->
+        <section class="page" id="orders-page">
+            <div class="page-header">
+                <h2>Orders</h2>
+                <div class="header-controls">
+                    <select id="orderFilter" class="filter-select">
+                        <option value="all">All Orders</option>
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="out_for_delivery">Delivering</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                    <div class="search-input">
                         <i class="fas fa-search"></i>
                         <input type="text" id="orderSearch" placeholder="Search orders...">
                     </div>
                 </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th class="hide-sm">Items</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th class="hide-sm">Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTable"></tbody>
+                </table>
+            </div>
+            <div class="pagination" id="ordersPagination"></div>
+        </section>
 
-                <div class="orders-table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Items</th>
-                                <th>Total</th>
-                                <th>Payment</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordersTableBody">
-                            <!-- Orders will be populated here -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination -->
-                <div class="pagination" id="ordersPagination"></div>
-            </section>
-
-            <!-- Products Section -->
-            <section id="products-section" class="content-section">
-                <div class="section-header">
-                    <h2>Product Listings Management</h2>
-                    <div class="header-actions">
-                        <button class="btn-export" id="exportListingsBtn" onclick="adminDashboard.exportListingsToExcel()">
-                            <i class="fas fa-file-excel"></i> Export to Excel
-                        </button>
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="productSearch" placeholder="Search products...">
-                        </div>
+        <!-- Products -->
+        <section class="page" id="products-page">
+            <div class="page-header">
+                <h2>Products</h2>
+                <div class="header-controls">
+                    <button class="btn btn-primary" id="addProductBtn">
+                        <i class="fas fa-plus"></i> Add Product
+                    </button>
+                    <button class="btn btn-outline" id="exportBtn">
+                        <i class="fas fa-download"></i> Export
+                    </button>
+                    <div class="search-input">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="productSearch" placeholder="Search products...">
                     </div>
                 </div>
+            </div>
+            <div class="table-wrapper excel-table">
+                <table class="data-table" id="productsTable">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">Image</th>
+                            <th style="min-width:150px;">Name</th>
+                            <th style="min-width:100px;">Category</th>
+                            <th style="width:100px;">Price (KES)</th>
+                            <th style="width:80px;">Stock</th>
+                            <th style="min-width:120px;">Brand</th>
+                            <th style="width:140px;">Prime Tags</th>
+                            <th style="width:100px;">Status</th>
+                            <th style="width:100px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTableBody">
+                        <tr><td colspan="9" class="loading-spinner"></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="load-more-container">
+                <button class="btn btn-primary" id="loadMoreProducts" style="display:none;">
+                    Load More Products
+                </button>
+            </div>
+        </section>
 
-                <div class="listings-table-container">
-                    <table class="data-table" id="listingsTable">
-                        <thead>
-                            <tr>
-                                <th>Image</th>
-                                <th>Product Name</th>
-                                <th>Seller</th>
-                                <th>Category</th>
-                                <th>Price</th>
-                                <th>Stock</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="listingsTableBody">
-                            <!-- Listings will be populated here -->
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="pagination" id="productsPagination"></div>
-            </section>
-
-            <!-- Users Section -->
-            <section id="users-section" class="content-section">
-                <div class="section-header">
-                    <h2>Registered Users</h2>
-                    <div class="search-box">
+        <!-- Users -->
+        <section class="page" id="users-page">
+            <div class="page-header">
+                <h2 id="usersPageTitle">Users</h2>
+                <div class="header-controls">
+                    <button class="btn btn-outline" id="backToUsersBtn" style="display:none;">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </button>
+                    <div class="search-input">
                         <i class="fas fa-search"></i>
                         <input type="text" id="userSearch" placeholder="Search users...">
                     </div>
                 </div>
-
-                <div class="users-table-container">
+            </div>
+            <!-- User Listings View -->
+            <div id="userListingsView" style="display:none;">
+                <div class="user-banner">
+                    <img id="userBannerAvatar" src="images/profile-placeholder.png" class="user-banner-avatar">
+                    <div class="user-banner-info">
+                        <h3 id="userBannerName">User Name</h3>
+                        <p id="userBannerEmail">email@example.com</p>
+                        <div class="user-banner-stats">
+                            <span><i class="fas fa-box"></i> <b id="userListingCount">0</b> Listings</span>
+                            <span><i class="fas fa-shopping-cart"></i> <b id="userSalesCount">0</b> Sales</span>
+                            <span><i class="fas fa-coins"></i> KES <b id="userRevenue">0</b></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-wrapper excel-table">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>User</th>
-                                <th>Email</th>
-                                <th>Phone</th>
-                                <th>Location</th>
-                                <th>Listings</th>
-                                <th>Verified</th>
-                                <th>Joined</th>
+                                <th style="width:60px;">Image</th>
+                                <th>Name</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="usersTableBody">
-                            <!-- Users will be populated here -->
-                        </tbody>
+                        <tbody id="userProductsGrid"></tbody>
                     </table>
                 </div>
-
-                <div class="pagination" id="usersPagination"></div>
-            </section>
-
-            <!-- Transactions Section -->
-            <section id="transactions-section" class="content-section">
-                <div class="section-header">
-                    <h2>Payment Transactions</h2>
-                    <div class="filter-group">
-                        <label>Type:</label>
-                        <select id="transactionFilter">
-                            <option value="all">All Transactions</option>
-                            <option value="completed">Completed</option>
-                            <option value="pending">Pending</option>
-                            <option value="failed">Failed</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="transactions-table-container">
+            </div>
+            <!-- Users Table -->
+            <div id="usersTableView">
+                <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Transaction ID</th>
                                 <th>User</th>
-                                <th>Phone</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                                <th>Date</th>
+                                <th class="hide-sm">Email</th>
+                                <th>Listings</th>
+                                <th class="hide-sm">Verified</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="transactionsTableBody">
-                            <!-- Transactions will be populated here -->
-                        </tbody>
+                        <tbody id="usersTable"></tbody>
                     </table>
                 </div>
+            </div>
+        </section>
 
-                <div class="pagination" id="transactionsPagination"></div>
-            </section>
-
-            <!-- Verifications Section -->
-            <section id="verifications-section" class="content-section">
-                <div class="section-header">
-                    <h2>Manual Payment Verifications</h2>
+        <!-- Analytics -->
+        <section class="page" id="analytics-page">
+            <div class="page-header">
+                <h2>Analytics</h2>
+                <div class="header-controls">
+                    <select id="analyticsPeriod" class="filter-select">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                    </select>
+                    <button class="btn btn-outline" id="exportReportBtn">
+                        <i class="fas fa-file-export"></i> Export
+                    </button>
                 </div>
-
-                <div class="verifications-container" id="verificationsContainer">
-                    <!-- Verification requests will be populated here -->
+            </div>
+            <div class="analytics-metrics">
+                <div class="analytics-card">
+                    <span class="analytics-icon green"><i class="fas fa-chart-line"></i></span>
+                    <div>
+                        <span class="analytics-value" id="aSales">KES 0</span>
+                        <span class="analytics-label">Total Sales</span>
+                    </div>
+                    <span class="analytics-change positive" id="aSalesChange">+0%</span>
                 </div>
-            </section>
-
-            <!-- Analytics Section -->
-            <section id="analytics-section" class="content-section">
-                <h2>Analytics & Reports</h2>
-                <div class="analytics-grid">
-                    <div class="card">
-                        <h3>Sales Trends</h3>
-                        <canvas id="salesChart"></canvas>
+                <div class="analytics-card">
+                    <span class="analytics-icon blue"><i class="fas fa-receipt"></i></span>
+                    <div>
+                        <span class="analytics-value" id="aOrders">0</span>
+                        <span class="analytics-label">Orders</span>
                     </div>
-                    <div class="card">
-                        <h3>Top Categories</h3>
-                        <canvas id="categoriesChart"></canvas>
+                    <span class="analytics-change positive" id="aOrdersChange">+0%</span>
+                </div>
+                <div class="analytics-card">
+                    <span class="analytics-icon orange"><i class="fas fa-tags"></i></span>
+                    <div>
+                        <span class="analytics-value" id="aAvgOrder">KES 0</span>
+                        <span class="analytics-label">Avg. Order</span>
                     </div>
-                    <div class="card">
-                        <h3>Revenue Over Time</h3>
+                    <span class="analytics-change" id="aAvgChange">0%</span>
+                </div>
+                <div class="analytics-card">
+                    <span class="analytics-icon purple"><i class="fas fa-user-plus"></i></span>
+                    <div>
+                        <span class="analytics-value" id="aNewUsers">0</span>
+                        <span class="analytics-label">New Users</span>
+                    </div>
+                    <span class="analytics-change positive" id="aUsersChange">+0%</span>
+                </div>
+            </div>
+            <div class="analytics-grid">
+                <div class="card wide">
+                    <div class="card-header"><h3>Revenue Trend</h3></div>
+                    <div class="card-body chart-container-lg">
                         <canvas id="revenueChart"></canvas>
                     </div>
-                    <div class="card">
-                        <h3>User Growth</h3>
-                        <canvas id="userGrowthChart"></canvas>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>Top Sellers</h3></div>
+                    <div class="card-body" id="topSellers">
+                        <div class="loading-spinner"></div>
                     </div>
                 </div>
-            </section>
+                <div class="card">
+                    <div class="card-header"><h3>Best Products</h3></div>
+                    <div class="card-body" id="bestProducts">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-            <!-- Settings Section -->
-            <section id="settings-section" class="content-section">
+        <!-- Transactions -->
+        <section class="page" id="transactions-page">
+            <div class="page-header">
+                <h2>Transactions</h2>
+                <select id="transactionFilter" class="filter-select">
+                    <option value="all">All</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Transaction ID</th>
+                            <th class="hide-sm">User</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTable"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Verifications -->
+        <section class="page" id="verifications-page">
+            <div class="page-header">
+                <h2>Payment Verifications</h2>
+            </div>
+            <div class="verifications-list" id="verificationsList">
+                <div class="loading-spinner"></div>
+            </div>
+        </section>
+
+        <!-- Settings -->
+        <section class="page" id="settings-page">
+            <div class="page-header">
                 <h2>Settings</h2>
-                
-                <!-- Admin Management (Master Admin Only) -->
-                <div class="settings-card" id="adminManagement">
-                    <h3><i class="fas fa-user-shield"></i> Admin Account Management</h3>
-                    <p>Add or remove admin accounts (Master admin only)</p>
-                    
-                    <div class="admin-add-form">
-                        <input type="email" id="newAdminEmail" placeholder="Enter email to add as admin">
-                        <button class="btn-primary" onclick="adminDashboard.addAdminAccount()">
-                            <i class="fas fa-plus"></i> Add Admin
-                        </button>
+            </div>
+            <div class="settings-grid">
+                <!-- Hero Banner Management -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-images"></i> Hero Banner Slides</h3>
+                        <button class="btn btn-primary btn-sm" id="addSlideBtn"><i class="fas fa-plus"></i> Add Slide</button>
                     </div>
-                    
-                    <div id="adminList" class="admin-list">
-                        <!-- Admin list will be populated here -->
+                    <div class="card-body">
+                        <p class="settings-hint">Manage the carousel slides shown on the homepage. Drag to reorder.</p>
+                        <div class="hero-slides-list" id="heroSlidesList">
+                            <div class="loading-spinner"></div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="settings-card">
-                    <h3><i class="fas fa-cog"></i> System Configuration</h3>
-                    <p>Admin settings and configuration options</p>
-                    <div class="settings-options">
-                        <label class="setting-item">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-user-shield"></i> Admin Management</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group">
+                            <input type="email" id="newAdminEmail" placeholder="Enter admin email">
+                            <button class="btn btn-primary" id="addAdminBtn">Add Admin</button>
+                        </div>
+                        <div class="admin-list" id="adminList"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-sliders-h"></i> System Settings</h3>
+                    </div>
+                    <div class="card-body">
+                        <label class="toggle-item">
                             <span>Maintenance Mode</span>
                             <input type="checkbox" id="maintenanceMode">
                         </label>
-                        <label class="setting-item">
-                            <span>Enable New Registrations</span>
-                            <input type="checkbox" id="enableRegistrations" checked>
+                        <label class="toggle-item">
+                            <span>Allow Registrations</span>
+                            <input type="checkbox" id="allowRegistrations" checked>
                         </label>
                     </div>
                 </div>
-            </section>
-        </div>
+                
+                <!-- User Survey Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-poll"></i> User Survey Settings</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Enable quick surveys during signup to collect user preferences (age, gender, shopping interests).</p>
+                        <label class="toggle-item">
+                            <span>Enable Signup Survey</span>
+                            <input type="checkbox" id="surveyEnabled">
+                        </label>
+                        <div class="survey-stats" id="surveyStats" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
     </main>
 
     <!-- Order Detail Modal -->
-    <div id="orderDetailModal" class="modal">
-        <div class="modal-content large">
-            <button class="close-modal">&times;</button>
-            <div id="orderDetailContent"></div>
+    <div class="modal" id="orderModal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">&times;</button>
+            <div id="orderModalContent"></div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- Product Edit Modal -->
+    <div class="modal" id="productModal">
+        <div class="modal-content" style="max-width:600px;">
+            <button class="modal-close" id="closeProductModal">&times;</button>
+            <h3 id="productModalTitle" style="margin-bottom:20px;">Edit Product</h3>
+            <form id="productForm">
+                <input type="hidden" id="editProductId">
+                
+                <!-- Image Management -->
+                <div class="form-group">
+                    <label>Product Images</label>
+                    <div class="image-manager" id="imageManager">
+                        <div class="image-list" id="imageList"></div>
+                        <label class="image-add-btn" id="imageAddBtn">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Image</span>
+                            <input type="file" id="imageInput" accept="image/*" multiple hidden>
+                        </label>
+                    </div>
+                    <p class="form-hint">Click image to remove. Max 5 images.</p>
+                </div>
+                
+                <div class="form-group">
+                    <label>Product Name</label>
+                    <input type="text" id="editName" required placeholder="Product name">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <input type="text" id="editCategory" placeholder="Category">
+                    </div>
+                    <div class="form-group">
+                        <label>Brand</label>
+                        <input type="text" id="editBrand" placeholder="Brand">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Price (KES)</label>
+                        <input type="number" id="editPrice" required min="0" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="number" id="editStock" required min="0" placeholder="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="editDescription" rows="3" placeholder="Product description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="editStatus">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="out_of_stock">Out of Stock</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeProductModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveProductBtn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hero Slide Modal -->
+    <div class="modal" id="slideModal">
+        <div class="modal-content" style="max-width:500px;">
+            <button class="modal-close" id="closeSlideModal">&times;</button>
+            <h3 id="slideModalTitle">Add Hero Slide</h3>
+            <form id="slideForm">
+                <input type="hidden" id="editSlideId">
+                <div class="form-group">
+                    <label>Slide Title</label>
+                    <input type="text" id="slideTitle" required placeholder="e.g. Big Sale Today!">
+                </div>
+                <div class="form-group">
+                    <label>Subtitle/Description</label>
+                    <input type="text" id="slideSubtitle" placeholder="e.g. Up to 50% off">
+                </div>
+                <div class="form-group">
+                    <label>Button Text (optional)</label>
+                    <input type="text" id="slideBtnText" placeholder="e.g. Shop Now">
+                </div>
+                <div class="form-group">
+                    <label>Button Link (optional)</label>
+                    <input type="text" id="slideBtnLink" placeholder="e.g. category.html?category=fashion">
+                </div>
+                <div class="form-group">
+                    <label>Background Image (optional)</label>
+                    <div class="slide-image-upload">
+                        <input type="file" id="slideBgImage" accept="image/*">
+                        <div class="slide-image-preview" id="slideImagePreview"></div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Gradient Style</label>
+                        <select id="slideGradient">
+                            <option value="gradient-1">Orange (Primary)</option>
+                            <option value="gradient-2">Gold (Featured)</option>
+                            <option value="gradient-3">Blue (Cool)</option>
+                            <option value="gradient-4">Green (Fresh)</option>
+                            <option value="gradient-5">Purple (Premium)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Icon</label>
+                        <select id="slideIcon">
+                            <option value="fa-store">Store</option>
+                            <option value="fa-star">Star</option>
+                            <option value="fa-rocket">Rocket</option>
+                            <option value="fa-fire">Fire</option>
+                            <option value="fa-percent">Percent</option>
+                            <option value="fa-gift">Gift</option>
+                            <option value="fa-bolt">Bolt</option>
+                            <option value="fa-crown">Crown</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="toggle-item">
+                        <span>Active</span>
+                        <input type="checkbox" id="slideActive" checked>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeSlideModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Slide</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script type="module" src="admin.js"></script>
 </body>
 </html>

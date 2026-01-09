@@ -453,6 +453,18 @@ main {
   text-align: center;
 }
 
+/* Category Icon - Orange */
+.category-icon {
+  color: #ff5722 !important;
+}
+
+/* Verified Badge */
+.verified-badge {
+  color: #1976d2;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
 @media (max-width: 600px) {
   .filter-cards-grid {
     grid-template-columns: repeat(3, 1fr);
@@ -473,20 +485,27 @@ main {
   }
 }
 
-/* Brand Cards - Tiny Compact Style */
+/* Brand Cards - Tiny Compact Style with limit */
 #brand-cards {
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 6px;
+  max-height: 150px;
+  overflow: hidden;
+  position: relative;
+}
+
+#brand-cards.expanded {
+  max-height: none;
 }
 
 #brand-cards .filter-section-title {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 #brand-cards .filter-card {
   flex-direction: row;
-  padding: 8px 12px;
-  gap: 6px;
+  padding: 6px 10px;
+  gap: 4px;
   min-height: auto;
 }
 
@@ -495,7 +514,7 @@ main {
 }
 
 #brand-cards .filter-card p {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -506,9 +525,9 @@ main {
   position: static;
   background: #f0f0f0;
   color: #666;
-  font-size: 9px;
-  padding: 2px 5px;
-  border-radius: 8px;
+  font-size: 8px;
+  padding: 2px 4px;
+  border-radius: 6px;
 }
 
 #brand-cards .filter-card:hover .filter-count {
@@ -516,18 +535,42 @@ main {
   color: white;
 }
 
+/* Brand expand button */
+.brand-expand-btn {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  background: #f5f5f5;
+  border: 1px dashed #ccc;
+  border-radius: 8px;
+  color: #666;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.brand-expand-btn:hover {
+  background: #fff5f2;
+  border-color: #ff5722;
+  color: #ff5722;
+}
+
 @media (max-width: 600px) {
   #brand-cards {
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 6px;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 4px;
+    max-height: 120px;
   }
   
   #brand-cards .filter-card {
-    padding: 6px 8px;
+    padding: 5px 6px;
   }
   
   #brand-cards .filter-card p {
-    font-size: 10px;
+    font-size: 9px;
   }
 }
 

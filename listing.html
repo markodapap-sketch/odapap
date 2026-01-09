@@ -3,21 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
+    <link rel="icon" type="image/jpeg" href="images/logo.png">
     <title>Sell on Oda Pap</title>
     <link rel="stylesheet" href="listing.css">
+    <link rel="stylesheet" href="css/header.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
 </head>
 <body>
-    <header class="header">
-        <a href="index.html" class="logo"><img src="images/logo.jpg" alt=""><span>Oda Pap</span></a>
-        <nav>
-            <a href="index.html"><i class="fas fa-home"></i></a>
-            <a href="notification.html"><i class="fas fa-bell"></i></a>
-            <a href="profile.html"><i class="fas fa-user"></i></a>
+    <header class="oda-header">
+        <div class="header-top-bar">
+            <div class="header-logo" onclick="location.href='index.html'">
+                <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+                <span class="header-logo-text">Oda Pap</span>
+            </div>
+        </div>
+        <div class="header-divider"></div>
+        <nav class="header-nav">
+            <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+            <button class="header-nav-btn" onclick="location.href='notification.html'"><i class="fas fa-bell"></i></button>
+            <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
         </nav>
     </header>
 
@@ -69,23 +76,27 @@
                             
                             <div class="field">
                                 <label>Product Name <span class="req">*</span></label>
-                                <input type="text" id="product-name" placeholder="e.g., Cotton T-Shirts Bulk" maxlength="150">
+                                <p class="field-desc">What is the name of your product? Be specific and clear.</p>
+                                <input type="text" id="product-name" placeholder="e.g., Cotton T-Shirts Bulk Pack" maxlength="150">
                                 <small><span id="name-count">0</span>/150</small>
                             </div>
 
                             <div class="field">
-                                <label>Photos <span class="req">*</span> <small>(max 5, 2MB each)</small></label>
+                                <label>Photos <span class="req">*</span> <small>(max 5)</small></label>
+                                <p class="field-desc">Add clear photos of your product. First photo will be the main image. Minimum 1 required.</p>
                                 <div class="upload-area" id="upload-area">
                                     <input type="file" id="img-input" accept="image/jpeg,image/jpg,image/png,image/webp,image/heic" multiple hidden>
                                     <i class="fas fa-camera"></i>
                                     <span>Tap to add photos</span>
+                                    <small>JPG, PNG, WebP or HEIC (max 2MB each)</small>
                                 </div>
                                 <div class="img-grid" id="img-grid"></div>
                             </div>
 
                             <div class="field">
                                 <label>Description <span class="req">*</span></label>
-                                <textarea id="description" rows="4" placeholder="Describe materials, sizes, features..." maxlength="2000"></textarea>
+                                <p class="field-desc">Describe your product - materials, sizes available, colors, features, etc.</p>
+                                <textarea id="description" rows="4" placeholder="Example: High quality cotton t-shirts, available in sizes S-XXL. Material: 100% cotton. Colors: black, white, navy blue." maxlength="2000"></textarea>
                                 <small><span id="desc-count">0</span>/2000</small>
                             </div>
                         </div>
@@ -98,32 +109,38 @@
 
                             <div class="field">
                                 <label>Category <span class="req">*</span></label>
+                                <p class="field-desc">Which category does your product belong to?</p>
                                 <select id="category"><option value="">Select category</option></select>
                             </div>
 
                             <div class="field" id="sub-field" style="display:none;">
                                 <label>Subcategory <span class="req">*</span></label>
+                                <p class="field-desc">Choose the specific type within the category.</p>
                                 <select id="subcategory"><option value="">Select subcategory</option></select>
                             </div>
 
                             <div class="field" id="type-field" style="display:none;">
                                 <label>Product Type</label>
+                                <p class="field-desc">Optional: Be more specific about what you're selling.</p>
                                 <select id="product-type"><option value="">Select type (optional)</option></select>
                             </div>
 
                             <div class="field" id="custom-type-field" style="display:none;">
                                 <label>Custom Type <span class="req">*</span></label>
-                                <input type="text" id="custom-type" placeholder="Enter type">
+                                <p class="field-desc">Enter a custom product type name.</p>
+                                <input type="text" id="custom-type" placeholder="Enter your custom type">
                             </div>
 
                             <div class="field">
                                 <label>Brand <span class="req">*</span></label>
+                                <p class="field-desc">Select the brand of your product, or add a new one.</p>
                                 <select id="brand"><option value="">Select brand</option></select>
                             </div>
 
                             <div class="field" id="custom-brand-field" style="display:none;">
                                 <label>Brand Name <span class="req">*</span></label>
-                                <input type="text" id="custom-brand" placeholder="Enter brand">
+                                <p class="field-desc">Enter the brand name for your product.</p>
+                                <input type="text" id="custom-brand" placeholder="Enter brand name">
                             </div>
                         </div>
                     </div>
@@ -132,14 +149,17 @@
                     <div class="form-step" data-step="3">
                         <div class="form-card">
                             <h2><i class="fas fa-money-bill"></i> Pricing & Stock</h2>
-                            <p class="hint">Add options like sizes/colors with prices</p>
+                            <div class="pricing-help">
+                                <p class="field-desc"><i class="fas fa-info-circle"></i> Add your product variants (like sizes or colors). Enter your <strong>wholesale price</strong> (what you sell for) and the <strong>retail price</strong> (shop price) to see the difference.</p>
+                            </div>
                             <div id="variants-box"></div>
                             <button type="button" class="btn-outline" id="add-variant-btn"><i class="fas fa-plus"></i> Add Variant Type</button>
 
                             <details class="bulk-box">
-                                <summary><i class="fas fa-percent"></i> Bulk Discounts</summary>
+                                <summary><i class="fas fa-percent"></i> Bulk Discounts (Optional)</summary>
+                                <p class="field-desc" style="padding:10px 14px 0;">Offer discounts for bulk purchases to attract more buyers.</p>
                                 <div id="bulk-tiers"></div>
-                                <button type="button" class="btn-text" id="add-tier-btn"><i class="fas fa-plus"></i> Add Tier</button>
+                                <button type="button" class="btn-text" id="add-tier-btn"><i class="fas fa-plus"></i> Add Discount Tier</button>
                             </details>
                         </div>
                     </div>
@@ -184,9 +204,10 @@
                     <table id="excel-table">
                         <thead>
                             <tr>
-                                <th class="col-img">Image</th>
+                                <th class="col-img">Images</th>
                                 <th class="col-name">Name</th>
                                 <th class="col-desc">Description</th>
+                                <th class="col-var">Variations</th>
                                 <th class="col-price">Price</th>
                                 <th class="col-stock">Stock</th>
                                 <th class="col-actions">Actions</th>
@@ -236,6 +257,47 @@
             <div class="confirm-btns">
                 <button class="btn-cancel" onclick="hideConfirm()">Cancel</button>
                 <button class="btn-danger" id="confirm-yes">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Variation Editor Modal -->
+    <div id="var-editor-modal" class="modal">
+        <div class="modal-content var-editor-content-wrap">
+            <div class="modal-header">
+                <h3><i class="fas fa-layer-group"></i> Edit Variations</h3>
+                <button class="modal-close-btn" onclick="closeVariationEditor()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="var-editor-body" id="var-editor-content">
+                <!-- Dynamically populated -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeVariationEditor()">Cancel</button>
+                <button class="btn-primary" onclick="saveVariationEditor()"><i class="fas fa-save"></i> Save Variations</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Manager Modal (for My Listings) -->
+    <div id="image-manager-modal" class="modal">
+        <div class="modal-content image-manager-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-images"></i> Manage Images</h3>
+                <button class="modal-close-btn" onclick="closeImageManager()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="image-manager-body">
+                <p class="field-desc">Add, remove, or reorder images. Minimum 1 image required.</p>
+                <div class="image-manager-grid" id="manage-images-grid"></div>
+                <div class="image-manager-add" id="add-more-images">
+                    <input type="file" id="manage-img-input" accept="image/*" multiple hidden>
+                    <button type="button" class="btn-add-img" onclick="document.getElementById('manage-img-input').click()">
+                        <i class="fas fa-plus"></i> Add Images
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeImageManager()">Cancel</button>
+                <button class="btn-primary" id="save-images-btn" onclick="saveListingImages()"><i class="fas fa-save"></i> Save Images</button>
             </div>
         </div>
     </div>

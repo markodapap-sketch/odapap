@@ -3,45 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
+    <link rel="icon" type="image/jpeg" href="images/logo.png">
+    <link rel="apple-touch-icon" href="images/logo.png">
     <title>Wishlist - Oda Pap</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="wishlist.css">
+    <link rel="stylesheet" href="css/header.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 </head>
 <body>
-    <header>
-        <div class="top-bar">
-            <div class="logo-container">
-                <a href="index.html">
-                    <img src="images/logo.jpg" alt="Oda Pap Logo" class="logo">
-                    <span class="logo-text">Oda Pap</span>
-                </a>
+    <header class="oda-header">
+        <div class="header-top-bar">
+            <div class="header-logo" onclick="location.href='index.html'">
+                <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+                <span class="header-logo-text">Oda Pap</span>
             </div>
-            <div class="search-container">
-                <i class="fas fa-search search-icon"></i>
-                <input type="text" id="searchInput" placeholder="Search products...">
+            <div class="header-search">
+                <form id="searchForm" action="search-results.html" method="GET">
+                    <input type="text" name="q" id="searchInput" placeholder="Search products..." autocomplete="off">
+                    <button type="submit"><i class="fas fa-search"></i></button>
+                </form>
             </div>
-            <nav class="nav-icons">
-                <button class="nav-btn" onclick="window.location.href='wishlist.html'" title="Wishlist">
-                    <i class="fas fa-heart"></i>
-                    <span class="nav-counter" id="wishlistCounter">0</span>
-                </button>
-                <button class="nav-btn" onclick="window.location.href='cart.html'" title="Cart">
-                    <i class="fas fa-shopping-cart"></i>
-                    <span class="nav-counter" id="cartCounter">0</span>
-                </button>
-                <button class="nav-btn" onclick="window.location.href='notification.html'" title="Notifications">
-                    <i class="fas fa-bell"></i>
-                    <span class="nav-counter" id="notificationCounter">0</span>
-                </button>
-                <button class="nav-btn" onclick="window.location.href='user.html'" title="Profile">
-                    <i class="fas fa-user"></i>
-                </button>
-            </nav>
+            <div class="header-menu-toggle" onclick="toggleOdaMenu()">
+                <i class="fas fa-th-large"></i>
+                <span>Menu</span>
+            </div>
         </div>
+        <div class="header-divider"></div>
+        <nav class="header-nav">
+            <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+            <button class="header-nav-btn" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span class="header-nav-counter" id="notification-count"></span></button>
+            <button class="header-nav-btn" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span class="header-nav-counter" id="cart-count"></span></button>
+            <button class="header-nav-btn active" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i><span class="header-nav-counter" id="wishlist-count"></span></button>
+            <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+        </nav>
     </header>
+
+    <!-- Mega Menu -->
+    <div class="oda-menu-overlay" id="odaMenuOverlay" onclick="closeOdaMenu()"></div>
+    <div class="oda-mega-menu" id="odaMegaMenu">
+        <div class="mega-menu-header">
+            <h3><i class="fas fa-th-large"></i> Quick Menu</h3>
+            <button class="mega-menu-close" onclick="closeOdaMenu()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="mega-menu-section">
+            <h4>Categories</h4>
+            <div class="mega-menu-grid">
+                <a href="category.html?category=electronics"><i class="fas fa-tv"></i> Electronics</a>
+                <a href="category.html?category=fashion"><i class="fas fa-tshirt"></i> Fashion</a>
+                <a href="category.html?category=beauty"><i class="fas fa-heart"></i> Beauty</a>
+                <a href="category.html?category=phones"><i class="fas fa-mobile-alt"></i> Phones</a>
+                <a href="category.html?category=kitchenware"><i class="fas fa-blender"></i> Kitchenware</a>
+                <a href="category.html?category=foodstuffs"><i class="fas fa-carrot"></i> Foodstuffs</a>
+            </div>
+        </div>
+        <div class="mega-menu-section">
+            <h4>Quick Links</h4>
+            <div class="mega-menu-links">
+                <a href="listing.html"><i class="fas fa-plus-circle"></i> Sell Product</a>
+                <a href="orderTracking.html"><i class="fas fa-truck"></i> Track Orders</a>
+                <a href="profile.html"><i class="fas fa-user-cog"></i> My Account</a>
+            </div>
+        </div>
+    </div>
 
     <main>
         <div class="page-header">
@@ -64,6 +87,20 @@
     <footer>
         <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
     </footer>
+    
+    <script>
+        window.toggleOdaMenu = function() {
+            document.getElementById('odaMenuOverlay').classList.add('open');
+            document.getElementById('odaMegaMenu').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        };
+        window.closeOdaMenu = function() {
+            document.getElementById('odaMenuOverlay').classList.remove('open');
+            document.getElementById('odaMegaMenu').classList.remove('open');
+            document.body.style.overflow = '';
+        };
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOdaMenu(); });
+    </script>
     <script type="module" src="wishlist.js"></script>
 </body>
 </html>

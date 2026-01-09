@@ -551,9 +551,12 @@ async function renderBrandCards() {
   brandContainer.style.display = 'grid';
   brandContainer.innerHTML = '<h4 class="filter-section-title"><i class="fas fa-tags"></i> Brands</h4>';
 
-  Array.from(brandsMap.entries())
-    .sort((a, b) => b[1] - a[1]) // Sort by product count descending
-    .forEach(([brand, count]) => {
+  const allBrands = Array.from(brandsMap.entries()).sort((a, b) => b[1] - a[1]);
+  const MAX_VISIBLE_BRANDS = 12;
+  const visibleBrands = allBrands.slice(0, MAX_VISIBLE_BRANDS);
+  const hasMore = allBrands.length > MAX_VISIBLE_BRANDS;
+  
+  visibleBrands.forEach(([brand, count]) => {
       const card = document.createElement('div');
       card.className = 'filter-card';
       card.innerHTML = `
@@ -564,6 +567,31 @@ async function renderBrandCards() {
       card.onclick = () => selectBrand(brand);
       brandContainer.appendChild(card);
     });
+    
+  // Add expand button if there are more brands
+  if (hasMore) {
+    const expandBtn = document.createElement('div');
+    expandBtn.className = 'brand-expand-btn';
+    expandBtn.innerHTML = `<i class="fas fa-chevron-down"></i> Show ${allBrands.length - MAX_VISIBLE_BRANDS} more`;
+    expandBtn.onclick = () => {
+      brandContainer.classList.toggle('expanded');
+      if (brandContainer.classList.contains('expanded')) {
+        expandBtn.innerHTML = '<i class="fas fa-chevron-up"></i> Show less';
+        // Add remaining brands
+        allBrands.slice(MAX_VISIBLE_BRANDS).forEach(([brand, count]) => {
+          const card = document.createElement('div');
+          card.className = 'filter-card extra-brand';
+          card.innerHTML = `<i class="fas fa-tag"></i><p>${brand}</p><span class="filter-count">${count}</span>`;
+          card.onclick = () => selectBrand(brand);
+          brandContainer.insertBefore(card, expandBtn);
+        });
+      } else {
+        expandBtn.innerHTML = `<i class="fas fa-chevron-down"></i> Show ${allBrands.length - MAX_VISIBLE_BRANDS} more`;
+        brandContainer.querySelectorAll('.extra-brand').forEach(el => el.remove());
+      }
+    };
+    brandContainer.appendChild(expandBtn);
+  }
 }
 
 // Helper function to save filters to localStorage
@@ -625,27 +653,59 @@ function selectBrand(brand, saveToStorage = true) {
 const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) => {
   showLoader();
   try {
-    const listingsContainer = document.querySelector(".listings-container");
+    const listingsContainer = document.querySelector(".listings-container") || document.getElementById("listings-container");
     const urlParams = new URLSearchParams(window.location.search);
     const category = urlParams.get('category');
+    const primeCategory = urlParams.get('prime'); // Check for prime category filter
     
-    if (!category) {
+    if (!category && !primeCategory) {
       throw new Error("Category is not defined");
     }
     
-    currentCategory = category;
-    listingsContainer.dataset.category = category;
+    if (!listingsContainer) {
+      console.warn('Listings container not found');
+      hideLoader();
+      return;
+    }
+    
+    currentCategory = category || primeCategory;
+    listingsContainer.dataset.category = currentCategory;
     listingsContainer.innerHTML = "";
 
     // Update category title and description
     const categoryTitle = document.getElementById('category-title');
     const categoryDescription = document.getElementById('category-description');
-    categoryTitle.textContent = (categoryHierarchy[category]?.label || category.replace(/-/g, ' ')).toUpperCase();
-    categoryDescription.textContent = `Browse the best deals and offers in the ${categoryHierarchy[category]?.label || category.replace(/-/g, ' ')} category.`;
-
-    // Load all category listings if this is initial load or not already loaded
-    if (isInitialLoad || allCategoryListings.length === 0) {
-      await loadCategoryListings();
+    
+    // Handle prime categories
+    if (primeCategory) {
+      const primeTitles = {
+        generalShop: 'General Shop',
+        featured: 'Featured Items',
+        bestseller: 'Best Sellers',
+        offers: 'Special Offers'
+      };
+      const primeDescs = {
+        generalShop: 'Hand-picked quality items curated by our team',
+        featured: 'Hot and trending products you\'ll love',
+        bestseller: 'Top rated products by our customers',
+        offers: 'Big deals and special discounts'
+      };
+      categoryTitle.textContent = primeTitles[primeCategory] || primeCategory;
+      categoryDescription.textContent = primeDescs[primeCategory] || '';
+      
+      // Load all listings for prime filter
+      const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
+      allCategoryListings = listingsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(listing => listing.primeCategories?.[primeCategory] === true);
+    } else {
+      categoryTitle.textContent = (categoryHierarchy[category]?.label || category.replace(/-/g, ' ')).toUpperCase();
+      categoryDescription.textContent = `Browse the best deals and offers in the ${categoryHierarchy[category]?.label || category.replace(/-/g, ' ')} category.`;
+      
+      // Load all category listings if this is initial load or not already loaded
+      if (isInitialLoad || allCategoryListings.length === 0) {
+        await loadCategoryListings();
+      }
     }
 
     // Filter listings based on subcategory and brand from allCategoryListings
@@ -693,6 +753,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
       const userData = userDataMap[uploaderId] || {};
 
       const displayName = userData.name || userData.username || "Unknown User";
+      const isVerified = userData.isVerified === true;
       const imageUrls = listing.imageUrls || [];
       const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : "images/product-placeholder.png";
       const sellerId = listing.uploaderId || listing.userId;
@@ -704,7 +765,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
           <div class="profile">
             <img src="${userData.profilePicUrl || "images/profile-placeholder.png"}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')" loading="lazy">
             <div class="uploader-info">
-              <p class="uploader-name"><strong>${displayName}</strong></p>
+              <p class="uploader-name"><strong>${displayName}</strong>${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
               <p class="product-name">${listing.name}</p>
               ${listing.packInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${listing.packInfo}</p>` : ''}
             </div>
@@ -726,7 +787,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
               `).join('')}
               <div class="product-tags">
                 ${listing.subcategory ? `<span class="product-condition">${listing.subcategory}</span>` : ''}
-                ${listing.brand ? `<span class="product-age">${listing.brand}</span>` : ''}
+                ${listing.brand ? `<span class="product-brand">${listing.brand}</span>` : ''}
               </div>
             </div>
           </div>

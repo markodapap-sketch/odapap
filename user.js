@@ -42,6 +42,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // Load user profile
 async function loadUserProfile() {
+    // Skip if required elements don't exist (not on user.html page)
+    if (!document.getElementById('userName')) {
+        return;
+    }
+    
     try {
         if (!profileUserId) {
             showNotification('User not found', 'error');
@@ -56,23 +61,37 @@ async function loadUserProfile() {
 
         const userData = userDoc.data();
         
-        // Update profile header
-        document.getElementById('userProfilePic').src = userData.profilePicUrl || 'images/profile-placeholder.png';
-        document.getElementById('userName').textContent = userData.name || 'Unknown User';
-        document.getElementById('userLocation').textContent = `${userData.county || ''}, ${userData.region || ''}`;
-        document.getElementById('userJoinDate').textContent = `Joined ${new Date(userData.createdAt || Date.now()).toLocaleDateString()}`;
-        document.getElementById('userBio').textContent = userData.bio || 'No bio provided';
-        document.getElementById('userEmail').textContent = userData.email || 'Not available';
-        document.getElementById('userPhone').textContent = userData.phone || 'Not available';
-        document.getElementById('aboutText').textContent = userData.about || 'No additional information provided';
+        // Update profile header (with null checks)
+        const profilePicEl = document.getElementById('userProfilePic');
+        const userNameEl = document.getElementById('userName');
+        const userLocationEl = document.getElementById('userLocation');
+        const userJoinDateEl = document.getElementById('userJoinDate');
+        const userBioEl = document.getElementById('userBio');
+        const userEmailEl = document.getElementById('userEmail');
+        const userPhoneEl = document.getElementById('userPhone');
+        const aboutTextEl = document.getElementById('aboutText');
+        
+        if (profilePicEl) profilePicEl.src = userData.profilePicUrl || 'images/profile-placeholder.png';
+        if (userNameEl) userNameEl.textContent = userData.name || 'Unknown User';
+        if (userLocationEl) userLocationEl.textContent = `${userData.county || ''}, ${userData.region || ''}`;
+        if (userJoinDateEl) userJoinDateEl.textContent = `Joined ${new Date(userData.createdAt || Date.now()).toLocaleDateString()}`;
+        if (userBioEl) userBioEl.textContent = userData.bio || 'No bio provided';
+        if (userEmailEl) userEmailEl.textContent = userData.email || 'Not available';
+        if (userPhoneEl) userPhoneEl.textContent = userData.phone || 'Not available';
+        if (aboutTextEl) aboutTextEl.textContent = userData.about || 'No additional information provided';
 
         // Check if this is own profile
         if (currentUser && currentUser.uid === profileUserId) {
             isOwnProfile = true;
-            document.getElementById('editProfileBtn').style.display = 'block';
-            document.getElementById('manageBtn').style.display = 'block';
-            document.getElementById('messageBtn').style.display = 'none';
-            document.getElementById('followBtn').style.display = 'none';
+            const editBtn = document.getElementById('editProfileBtn');
+            const manageBtn = document.getElementById('manageBtn');
+            const messageBtn = document.getElementById('messageBtn');
+            const followBtn = document.getElementById('followBtn');
+            
+            if (editBtn) editBtn.style.display = 'block';
+            if (manageBtn) manageBtn.style.display = 'block';
+            if (messageBtn) messageBtn.style.display = 'none';
+            if (followBtn) followBtn.style.display = 'none';
         }
 
         // Load user items

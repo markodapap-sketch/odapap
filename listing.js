@@ -5,7 +5,7 @@
 
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from "./js/firebase.js";
 import { categoryHierarchy, brandsByCategory } from './js/categoryData.js';
 
@@ -728,7 +728,19 @@ function renderVariants() {
                 ${v.type === 'Custom' ? `<input type="text" placeholder="Type name" value="${v.customType}" onchange="updateVarCustom(${v.id}, this.value)">` : ''}
                 ${state.variants.length > 1 ? `<button type="button" class="del-var" onclick="removeVar(${v.id})"><i class="fas fa-trash"></i></button>` : ''}
             </div>
-            ${v.options.map((o, oi) => `
+            ${v.options.map((o, oi) => {
+                // Calculate price difference
+                const price = Number(o.price) || 0;
+                const retail = Number(o.retail) || 0;
+                let diffText = '-';
+                let diffClass = '';
+                if (price > 0 && retail > 0) {
+                    const diff = retail - price;
+                    const percent = Math.round((diff / retail) * 100);
+                    diffText = diff >= 0 ? `+KES ${diff.toLocaleString()} (${percent}%)` : `KES ${diff.toLocaleString()}`;
+                    diffClass = diff >= 0 ? 'difference-positive' : 'difference-negative';
+                }
+                return `
                 <div class="opt-card" data-oid="${o.id}">
                     <div class="opt-row1">
                         <div class="opt-img-wrap">
@@ -738,7 +750,7 @@ function renderVariants() {
                             <input type="file" class="opt-img-input" id="opt-img-${v.id}-${o.id}" accept="image/*" onchange="handleOptImgUpload(event, ${v.id}, ${o.id})">
                         </div>
                         <div class="opt-name-field">
-                            <input type="text" value="${o.name}" onchange="updateOpt(${v.id}, ${o.id}, 'name', this.value)" placeholder="Option name">
+                            <input type="text" value="${o.name}" onchange="updateOpt(${v.id}, ${o.id}, 'name', this.value)" placeholder="Option name (e.g. Small, Red)">
                         </div>
                         <div class="opt-pack-field">
                             <input type="text" value="${o.packSize || ''}" onchange="updateOpt(${v.id}, ${o.id}, 'packSize', this.value)" placeholder="pcs/doz" title="Pack size (e.g. pieces, dozen, carton)">
@@ -746,17 +758,48 @@ function renderVariants() {
                         ${v.options.length > 1 ? `<button type="button" class="opt-del" onclick="removeOpt(${v.id}, ${o.id})"><i class="fas fa-times"></i></button>` : ''}
                     </div>
                     <div class="opt-row2">
-                        <div class="opt-field"><label>Stock</label><input type="number" min="1" value="${o.stock}" onchange="updateOpt(${v.id}, ${o.id}, 'stock', this.value)"></div>
-                        <div class="opt-field"><label>Price</label><input type="number" min="1" value="${o.price}" onchange="updateOpt(${v.id}, ${o.id}, 'price', this.value)"></div>
-                        <div class="opt-field"><label>RRP</label><input type="number" min="0" value="${o.retail || ''}" onchange="updateOpt(${v.id}, ${o.id}, 'retail', this.value)"></div>
-                        <div class="opt-field"><label>Profit</label><input type="text" value="${o.retail && o.price ? Math.round(((o.retail - o.price) / o.retail) * 100) + '%' : '-'}" readonly style="background:var(--bg);color:var(--success);"></div>
+                        <div class="opt-field"><label>Stock</label><input type="number" min="1" value="${o.stock}" onchange="updateOpt(${v.id}, ${o.id}, 'stock', this.value)" placeholder="Qty"></div>
+                        <div class="opt-field"><label>Wholesale</label><input type="number" min="1" value="${o.price}" oninput="calcDifference(${v.id}, ${o.id})" onchange="updateOpt(${v.id}, ${o.id}, 'price', this.value)" placeholder="Your price"></div>
+                        <div class="opt-field"><label>Retail</label><input type="number" min="0" value="${o.retail || ''}" oninput="calcDifference(${v.id}, ${o.id})" onchange="updateOpt(${v.id}, ${o.id}, 'retail', this.value)" placeholder="Shop price"></div>
+                        <div class="opt-field"><label>Difference</label><input type="text" class="difference-display ${diffClass}" value="${diffText}" readonly></div>
                     </div>
                 </div>
-            `).join('')}
+            `}).join('')}
             <button type="button" class="add-opt" onclick="addOpt(${v.id})"><i class="fas fa-plus"></i> Add Option</button>
         </div>
     `).join('');
 }
+
+// Calculate and display price difference in real-time
+window.calcDifference = function(vid, oid) {
+    const v = state.variants.find(x => x.id === vid);
+    if (!v) return;
+    const opt = v.options.find(x => x.id === oid);
+    if (!opt) return;
+    
+    const card = document.querySelector(`.opt-card[data-oid="${oid}"]`);
+    if (!card) return;
+    
+    const priceInput = card.querySelector('input[oninput*="calcDifference"][onchange*="price"]');
+    const retailInput = card.querySelector('input[oninput*="calcDifference"][onchange*="retail"]');
+    const diffInput = card.querySelector('.difference-display');
+    
+    if (!priceInput || !retailInput || !diffInput) return;
+    
+    const price = Number(priceInput.value) || 0;
+    const retail = Number(retailInput.value) || 0;
+    
+    if (price > 0 && retail > 0) {
+        const diff = retail - price;
+        const percent = Math.round((diff / retail) * 100);
+        diffInput.value = diff >= 0 ? `+KES ${diff.toLocaleString()} (${percent}%)` : `KES ${diff.toLocaleString()}`;
+        diffInput.classList.remove('difference-positive', 'difference-negative');
+        diffInput.classList.add(diff >= 0 ? 'difference-positive' : 'difference-negative');
+    } else {
+        diffInput.value = '-';
+        diffInput.classList.remove('difference-positive', 'difference-negative');
+    }
+};
 
 window.updateVarType = function(vid, type) {
     const v = state.variants.find(x => x.id === vid);
@@ -950,7 +993,7 @@ function generateReview() {
                         <div class="review-opt">
                             ${o.image ? `<img src="${o.image}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;margin-right:8px;">` : ''}
                             <span>${o.name}</span>
-                            <span>Stock: ${o.stock} · ${formatPrice(o.price)}${o.retail ? ` <small>(RRP: ${formatPrice(o.retail)})</small>` : ''}</span>
+                            <span>Stock: ${o.stock} · ${formatPrice(o.price)}${o.retail ? ` <small>(Retail: ${formatPrice(o.retail)})</small>` : ''}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1310,15 +1353,17 @@ function renderListings() {
     grid.innerHTML = filtered.map(l => {
         const stockClass = l.totalStock === 0 ? 'out' : l.totalStock < 10 ? 'low' : '';
         const stockText = l.totalStock === 0 ? 'Out' : `${l.totalStock}`;
+        const imgCount = l.imageUrls?.length || 0;
         
         return `
             <div class="listing-card">
-                <div class="img"><img src="${l.imageUrls?.[0] || 'images/placeholder.jpg'}" alt=""><span class="stock-badge ${stockClass}">${stockText}</span></div>
+                <div class="img"><img src="${l.imageUrls?.[0] || 'https://placehold.co/200x150/e2e8f0/64748b?text=No+Image'}" alt=""><span class="stock-badge ${stockClass}">${stockText}</span></div>
                 <div class="body">
                     <h3>${l.name}</h3>
                     <div class="meta"><span>${l.brand || '-'}</span><span class="price">${formatPrice(l.originalPrice || l.price)}</span></div>
                     <div class="actions">
                         <button class="edit-btn" onclick="editListing('${l.id}')"><i class="fas fa-edit"></i> Edit</button>
+                        <button class="img-btn" onclick="openImageManager('${l.id}')" title="Manage images"><i class="fas fa-images"></i> ${imgCount}</button>
                         <button class="del-btn" onclick="deleteListing('${l.id}')"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
@@ -1479,31 +1524,70 @@ function renderTableView() {
         const modified = pendingChanges.has(l.id) ? 'modified' : '';
         const lowestPrice = getLowestPrice(l);
         const totalStock = getTotalStock(l);
+        const imgCount = l.imageUrls?.length || 0;
+        const extraImgs = imgCount > 1 ? imgCount - 1 : 0;
         
         return `
             <tr data-id="${l.id}" class="${modified}">
-                <td><img src="${l.imageUrls?.[0] || 'images/placeholder.jpg'}" class="table-img" alt=""></td>
+                <td>
+                    <div class="table-img-group">
+                        <img src="${l.imageUrls?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=N/A'}" class="table-img" alt="" onclick="openImageManager('${l.id}')">
+                        ${extraImgs > 0 ? `<span class="table-img-more">+${extraImgs}</span>` : ''}
+                        <button class="table-img-btn" onclick="openImageManager('${l.id}')" title="Manage images"><i class="fas fa-edit"></i></button>
+                    </div>
+                </td>
                 <td class="table-cell">
                     <div class="table-cell-content" data-field="name" data-id="${l.id}" onclick="startCellEdit(this)">${escapeHtml(l.name)}</div>
                 </td>
                 <td class="table-cell">
                     <div class="table-cell-content" data-field="description" data-id="${l.id}" onclick="startCellEdit(this)">${escapeHtml(truncate(l.description, 60))}</div>
                 </td>
+                <td class="table-cell var-cell">
+                    ${renderVariationsCell(l)}
+                </td>
                 <td class="table-cell">
                     <div class="table-cell-content" data-field="price" data-id="${l.id}" onclick="startCellEdit(this)">${formatPrice(lowestPrice)}</div>
-                    ${l.variations?.length > 0 ? renderVariantsMini(l) : ''}
                 </td>
                 <td class="table-cell">
                     <div class="table-cell-content" data-field="stock" data-id="${l.id}" onclick="startCellEdit(this)">${totalStock}</div>
-                    ${l.variations?.length > 0 ? renderStockMini(l) : ''}
                 </td>
                 <td class="table-actions">
                     <button class="btn-full-edit" onclick="editListing('${l.id}')" title="Full Edit"><i class="fas fa-expand"></i></button>
+                    <button class="btn-var-edit" onclick="openVariationEditor('${l.id}')" title="Edit Variations"><i class="fas fa-layer-group"></i></button>
                     <button class="btn-del" onclick="deleteListing('${l.id}')" title="Delete"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+// Render variations cell with editable inline options
+function renderVariationsCell(l) {
+    if (!l.variations || l.variations.length === 0) {
+        return `<div class="var-empty" onclick="openVariationEditor('${l.id}')"><i class="fas fa-plus"></i> Add Variants</div>`;
+    }
+    
+    const items = [];
+    l.variations.forEach(v => {
+        items.push(`<div class="var-type-label">${escapeHtml(v.title)}</div>`);
+        v.attributes?.forEach(a => {
+            items.push(`
+                <div class="var-row" data-id="${l.id}" data-var="${escapeHtml(v.title)}" data-attr="${escapeHtml(a.attr_name)}">
+                    <span class="var-name">${escapeHtml(a.attr_name)}</span>
+                    <input type="number" class="var-price-input" value="${a.originalPrice || a.price || 0}" data-field="varPrice" onchange="updateVariantField(this)" placeholder="Price" title="Price">
+                    <input type="number" class="var-stock-input" value="${a.stock || 0}" data-field="varStock" onchange="updateVariantField(this)" placeholder="Qty" title="Stock">
+                    <button class="var-del-btn" onclick="deleteVariantOption('${l.id}', '${escapeHtml(v.title)}', '${escapeHtml(a.attr_name)}')" title="Remove"><i class="fas fa-times"></i></button>
+                </div>
+            `);
+        });
+    });
+    
+    return `
+        <div class="var-cell-content">
+            ${items.join('')}
+            <button class="var-add-btn" onclick="openVariationEditor('${l.id}')" title="Add/Edit Variations"><i class="fas fa-plus"></i> Add</button>
+        </div>
+    `;
 }
 
 function renderVariantsMini(l) {
@@ -1656,7 +1740,7 @@ window.endCellEdit = async function(input, id) {
 };
 
 window.updateVariantField = async function(input) {
-    const row = input.closest('.variant-mini-row');
+    const row = input.closest('.var-row, .variant-mini-row');
     const id = row.dataset.id;
     const varTitle = row.dataset.var;
     const attrName = row.dataset.attr;
@@ -1700,6 +1784,311 @@ window.updateVariantField = async function(input) {
             price: lowestPrice,
             originalPrice: lowestPrice
         });
+        
+        toast('Variation updated', 'success');
+    }
+};
+
+// Delete a single variant option
+window.deleteVariantOption = async function(listingId, varTitle, attrName) {
+    const listing = state.listings.find(l => l.id === listingId);
+    if (!listing?.variations) return;
+    
+    // Find and remove the attribute
+    listing.variations.forEach(v => {
+        if (v.title === varTitle) {
+            v.attributes = v.attributes?.filter(a => a.attr_name !== attrName) || [];
+        }
+    });
+    
+    // Remove empty variation types
+    listing.variations = listing.variations.filter(v => v.attributes && v.attributes.length > 0);
+    
+    const totalStock = getTotalStock(listing);
+    const lowestPrice = getLowestPrice(listing);
+    
+    await saveQuickEdit(listingId, {
+        variations: listing.variations,
+        totalStock,
+        price: lowestPrice,
+        originalPrice: lowestPrice
+    });
+    
+    renderTableView();
+    toast('Variant removed', 'success');
+};
+
+// ═══════════════════════════════════════════════════════════
+// VARIATION EDITOR MODAL
+// ═══════════════════════════════════════════════════════════
+let varEditorListingId = null;
+let varEditorData = [];
+
+window.openVariationEditor = function(listingId) {
+    const listing = state.listings.find(l => l.id === listingId);
+    if (!listing) return;
+    
+    varEditorListingId = listingId;
+    varEditorData = JSON.parse(JSON.stringify(listing.variations || []));
+    
+    renderVariationEditor();
+    $('var-editor-modal').style.display = 'flex';
+};
+
+window.closeVariationEditor = function() {
+    $('var-editor-modal').style.display = 'none';
+    varEditorListingId = null;
+    varEditorData = [];
+};
+
+function renderVariationEditor() {
+    const container = $('var-editor-content');
+    
+    container.innerHTML = `
+        <div class="var-editor-types">
+            ${varEditorData.map((v, vi) => `
+                <div class="var-editor-type" data-index="${vi}">
+                    <div class="var-type-header">
+                        <input type="text" class="var-type-name" value="${escapeHtml(v.title)}" placeholder="Variation type (e.g., Size, Color)" onchange="updateVarTypeName(${vi}, this.value)">
+                        <button class="btn-del-type" onclick="deleteVarType(${vi})" title="Remove type"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <div class="var-options-list">
+                        ${(v.attributes || []).map((a, ai) => `
+                            <div class="var-option-row">
+                                <input type="text" value="${escapeHtml(a.attr_name)}" placeholder="Option name" onchange="updateVarOption(${vi}, ${ai}, 'name', this.value)">
+                                <input type="number" value="${a.originalPrice || a.price || 0}" placeholder="Price" onchange="updateVarOption(${vi}, ${ai}, 'price', this.value)">
+                                <input type="number" value="${a.stock || 0}" placeholder="Stock" onchange="updateVarOption(${vi}, ${ai}, 'stock', this.value)">
+                                <input type="number" value="${a.retailPrice || ''}" placeholder="Retail (opt)" onchange="updateVarOption(${vi}, ${ai}, 'retail', this.value)">
+                                <button onclick="deleteVarOption(${vi}, ${ai})"><i class="fas fa-times"></i></button>
+                            </div>
+                        `).join('')}
+                        <button class="btn-add-option" onclick="addVarOption(${vi})"><i class="fas fa-plus"></i> Add Option</button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <button class="btn-add-type" onclick="addVarType()"><i class="fas fa-layer-group"></i> Add Variation Type</button>
+    `;
+}
+
+window.addVarType = function() {
+    varEditorData.push({ title: '', attributes: [{ attr_name: '', stock: 0, price: 0, originalPrice: 0 }] });
+    renderVariationEditor();
+};
+
+window.deleteVarType = function(vi) {
+    varEditorData.splice(vi, 1);
+    renderVariationEditor();
+};
+
+window.updateVarTypeName = function(vi, value) {
+    varEditorData[vi].title = value;
+};
+
+window.addVarOption = function(vi) {
+    varEditorData[vi].attributes = varEditorData[vi].attributes || [];
+    varEditorData[vi].attributes.push({ attr_name: '', stock: 0, price: 0, originalPrice: 0 });
+    renderVariationEditor();
+};
+
+window.deleteVarOption = function(vi, ai) {
+    varEditorData[vi].attributes.splice(ai, 1);
+    renderVariationEditor();
+};
+
+window.updateVarOption = function(vi, ai, field, value) {
+    const attr = varEditorData[vi].attributes[ai];
+    if (field === 'name') attr.attr_name = value;
+    else if (field === 'price') {
+        const price = parseFloat(value) || 0;
+        attr.originalPrice = price;
+        const fee = price < 10000 ? price * 0.05 : price * 0.025;
+        attr.price = price + fee;
+    }
+    else if (field === 'stock') attr.stock = parseInt(value) || 0;
+    else if (field === 'retail') attr.retailPrice = parseFloat(value) || null;
+};
+
+window.saveVariationEditor = async function() {
+    if (!varEditorListingId) return;
+    
+    // Filter out empty variations
+    const cleanData = varEditorData
+        .filter(v => v.title && v.attributes?.length > 0)
+        .map(v => ({
+            ...v,
+            attributes: v.attributes.filter(a => a.attr_name)
+        }))
+        .filter(v => v.attributes.length > 0);
+    
+    const listing = state.listings.find(l => l.id === varEditorListingId);
+    if (listing) {
+        listing.variations = cleanData;
+        
+        const totalStock = getTotalStock(listing);
+        const lowestPrice = getLowestPrice(listing);
+        
+        await saveQuickEdit(varEditorListingId, {
+            variations: cleanData,
+            totalStock,
+            price: lowestPrice,
+            originalPrice: lowestPrice
+        });
+    }
+    
+    closeVariationEditor();
+    renderTableView();
+    toast('Variations saved', 'success');
+};
+
+// ═══════════════════════════════════════════════════════════
+// IMAGE MANAGER (for My Listings)
+// ═══════════════════════════════════════════════════════════
+const imageManagerState = {
+    listingId: null,
+    images: [], // { url, isExisting, file, dataUrl }
+    toDelete: []
+};
+
+window.openImageManager = function(listingId) {
+    const listing = state.listings.find(l => l.id === listingId);
+    if (!listing) return;
+    
+    imageManagerState.listingId = listingId;
+    imageManagerState.images = (listing.imageUrls || []).map((url, i) => ({
+        id: Date.now() + i,
+        url,
+        isExisting: true
+    }));
+    imageManagerState.toDelete = [];
+    
+    renderImageManagerGrid();
+    $('image-manager-modal').classList.add('show');
+};
+
+window.closeImageManager = function() {
+    $('image-manager-modal').classList.remove('show');
+    imageManagerState.listingId = null;
+    imageManagerState.images = [];
+    imageManagerState.toDelete = [];
+};
+
+function renderImageManagerGrid() {
+    const grid = $('manage-images-grid');
+    
+    grid.innerHTML = imageManagerState.images.map((img, i) => `
+        <div class="manage-img-item ${i === 0 ? 'main' : ''} ${img.loading ? 'loading' : ''}" data-idx="${i}">
+            ${img.loading ? '' : `
+                <img src="${img.dataUrl || img.url}" alt="Photo ${i + 1}">
+                ${imageManagerState.images.length > 1 ? `<button type="button" class="manage-img-remove" onclick="removeManagerImage(${i})"><i class="fas fa-times"></i></button>` : ''}
+            `}
+        </div>
+    `).join('');
+    
+    // Show/hide add button based on count
+    const addArea = $('add-more-images');
+    addArea.style.display = imageManagerState.images.length >= 5 ? 'none' : '';
+}
+
+window.removeManagerImage = function(idx) {
+    const img = imageManagerState.images[idx];
+    
+    // Enforce minimum 1 image
+    if (imageManagerState.images.length <= 1) {
+        toast('Must have at least 1 image', 'warning');
+        return;
+    }
+    
+    // If existing image, mark for deletion
+    if (img.isExisting && img.url) {
+        imageManagerState.toDelete.push(img.url);
+    }
+    
+    imageManagerState.images.splice(idx, 1);
+    renderImageManagerGrid();
+};
+
+window.saveListingImages = async function() {
+    if (!imageManagerState.listingId) return;
+    
+    // Enforce minimum 1 image
+    if (imageManagerState.images.length === 0) {
+        toast('Must have at least 1 image', 'error');
+        return;
+    }
+    
+    const user = auth.currentUser;
+    if (!user) {
+        toast('Please login', 'error');
+        return;
+    }
+    
+    const saveBtn = $('save-images-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    
+    try {
+        const finalUrls = [];
+        
+        // Process images
+        for (const img of imageManagerState.images) {
+            if (img.isExisting && img.url) {
+                // Keep existing URL
+                finalUrls.push(img.url);
+            } else if (img.file) {
+                // Upload new image
+                const fileRef = storageRef(storage, `listings/${user.uid}/${Date.now()}_${finalUrls.length}.jpg`);
+                await uploadBytes(fileRef, img.file);
+                const url = await getDownloadURL(fileRef);
+                finalUrls.push(url);
+            }
+        }
+        
+        // Delete removed images from storage
+        for (const url of imageManagerState.toDelete) {
+            try {
+                // Extract path from URL and delete
+                const urlObj = new URL(url);
+                const pathMatch = urlObj.pathname.match(/\/o\/(.+?)\?/);
+                if (pathMatch) {
+                    const path = decodeURIComponent(pathMatch[1]);
+                    const delRef = storageRef(storage, path);
+                    await deleteObject(delRef).catch(() => {}); // Ignore errors
+                }
+            } catch (e) {
+                console.warn('Could not delete old image:', e);
+            }
+        }
+        
+        // Update Firestore
+        await updateDoc(doc(db, "Listings", imageManagerState.listingId), {
+            imageUrls: finalUrls,
+            updatedAt: new Date().toISOString()
+        });
+        
+        // Update local state
+        const listing = state.listings.find(l => l.id === imageManagerState.listingId);
+        if (listing) {
+            listing.imageUrls = finalUrls;
+        }
+        
+        toast('Images saved!', 'success');
+        closeImageManager();
+        
+        // Refresh view
+        const view = document.querySelector('.view-btns button.active')?.dataset.view;
+        if (view === 'table') {
+            renderTableView();
+        } else {
+            renderListings();
+        }
+        
+    } catch (err) {
+        console.error('Save images error:', err);
+        toast('Failed to save images', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save"></i> Save Images';
     }
 };
 
@@ -1899,7 +2288,63 @@ document.addEventListener('DOMContentLoaded', () => {
     initVariants();
     initBulk();
     initForm();
+    initImageManager();
     updateStepUI();
 });
+
+// Initialize Image Manager event listeners
+function initImageManager() {
+    const manageImgInput = $('manage-img-input');
+    if (manageImgInput) {
+        manageImgInput.addEventListener('change', async function(e) {
+            const files = Array.from(e.target.files);
+            const maxSize = 2 * 1024 * 1024;
+            
+            for (const file of files) {
+                if (imageManagerState.images.length >= 5) {
+                    toast('Maximum 5 photos allowed', 'warning');
+                    break;
+                }
+                
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    toast(`${file.name}: Invalid format`, 'error');
+                    continue;
+                }
+                
+                try {
+                    const tempId = Date.now() + Math.random();
+                    imageManagerState.images.push({ id: tempId, loading: true });
+                    renderImageManagerGrid();
+                    
+                    let processedFile = file;
+                    if (file.size > maxSize) {
+                        processedFile = await compressImage(file, maxSize);
+                    }
+                    
+                    const dataUrl = await readAsDataURL(processedFile);
+                    
+                    const idx = imageManagerState.images.findIndex(img => img.id === tempId);
+                    if (idx !== -1) {
+                        imageManagerState.images[idx] = {
+                            id: tempId,
+                            file: processedFile,
+                            dataUrl,
+                            isExisting: false,
+                            loading: false
+                        };
+                    }
+                    
+                    renderImageManagerGrid();
+                } catch (err) {
+                    console.error('Error processing image:', err);
+                    toast('Error processing image', 'error');
+                }
+            }
+            
+            e.target.value = '';
+        });
+    }
+}
 
 export { toast as showNotification };

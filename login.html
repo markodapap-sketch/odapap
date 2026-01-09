@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.jpg">
-    <link rel="apple-touch-icon" href="images/logo.jpg">
+    <link rel="icon" type="image/jpeg" href="images/logo.png">
+    <link rel="apple-touch-icon" href="images/logo.png">
     <title>Oda-Pap Login</title>
     <style>
         /* Carrot Orange Theme */
@@ -347,7 +347,23 @@
 
     <script type="module">
         import { auth } from "./js/firebase.js";
-        import { loginUser, signInWithGoogle, sendPasswordReset } from "./js/auth.js";
+        import { loginUser, signInWithGoogle, sendPasswordReset, handleGoogleRedirectResult } from "./js/auth.js";
+
+        // Handle redirect result on page load (for mobile/blocked popups)
+        (async () => {
+            try {
+                const result = await handleGoogleRedirectResult();
+                if (result) {
+                    if (result.isNewUser) {
+                        window.location.href = 'complete-profile.html';
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                }
+            } catch (error) {
+                console.error('Redirect handling error:', error);
+            }
+        })();
 
         // Email Login
         const emailForm = document.getElementById('email-login-form');
@@ -368,33 +384,77 @@
                 await loginUser(email, password);
                 window.location.href = 'index.html';
             } catch (error) {
-                alert('Login failed: ' + error.message);
+                showLoginError(error.message);
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
             }
         });
 
-        // Toggle Password Visibility
-        toggleLoginPassword.addEventListener('click', () => {
-            const type = loginPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            loginPasswordInput.setAttribute('type', type);
-            toggleLoginPassword.classList.toggle('fa-eye');
-            toggleLoginPassword.classList.toggle('fa-eye-slash');
-        });
+        // Toggle Password Visibility - Improved
+        function setupPasswordToggle(toggleBtn, passwordInput) {
+            if (!toggleBtn || !passwordInput) return;
+            
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const currentType = passwordInput.getAttribute('type');
+                const newType = currentType === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', newType);
+                
+                // Toggle icon classes
+                toggleBtn.classList.toggle('fa-eye');
+                toggleBtn.classList.toggle('fa-eye-slash');
+            });
+            
+            // Also handle touch events for mobile
+            toggleBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+            });
+        }
+        
+        setupPasswordToggle(toggleLoginPassword, loginPasswordInput);
 
-        // Google Sign-In
+        // Google Sign-In with better error handling
         googleLoginBtn.addEventListener('click', async () => {
+            googleLoginBtn.disabled = true;
+            googleLoginBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo"> Signing in...';
+            
             try {
                 const result = await signInWithGoogle();
-                if (result.isNewUser) {
-                    window.location.href = 'complete-profile.html';
-                } else {
-                    window.location.href = 'index.html';
+                // If result is null, user was redirected (mobile)
+                if (result) {
+                    if (result.isNewUser) {
+                        window.location.href = 'complete-profile.html';
+                    } else {
+                        window.location.href = 'index.html';
+                    }
                 }
             } catch (error) {
-                alert('Google Sign-In failed: ' + error.message);
+                showLoginError(error.message);
+                googleLoginBtn.disabled = false;
+                googleLoginBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo"> Continue with Google';
             }
         });
+
+        // Error display helper
+        function showLoginError(message) {
+            // Check if error display exists, if not create one
+            let errorDiv = document.getElementById('login-error-display');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.id = 'login-error-display';
+                errorDiv.style.cssText = 'background: rgba(244, 67, 54, 0.1); color: #f44336; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; display: flex; align-items: center; gap: 8px;';
+                emailForm.insertBefore(errorDiv, emailForm.firstChild);
+            }
+            errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+            errorDiv.style.display = 'flex';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
 
         // Forgot Password Modal
         const forgotPasswordLink = document.getElementById('forgot-password-link');

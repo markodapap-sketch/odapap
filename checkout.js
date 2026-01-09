@@ -199,6 +199,17 @@ class CheckoutManager {
                     return;
                 }
 
+                // Fetch seller info from listing
+                let sellerId = buyNowData.uploaderId || buyNowData.sellerId || null;
+                if (!sellerId && buyNowData.listingId) {
+                    try {
+                        const listingDoc = await getDoc(doc(db, 'Listings', buyNowData.listingId));
+                        if (listingDoc.exists()) {
+                            sellerId = listingDoc.data().uploaderId;
+                        }
+                    } catch (e) { console.log('Could not fetch seller:', e); }
+                }
+
                 const itemData = {
                     listingId: buyNowData.listingId,
                     name: buyNowData.name,
@@ -206,7 +217,8 @@ class CheckoutManager {
                     quantity: buyNowData.quantity || 1,
                     selectedVariation: buyNowData.selectedVariation || null,
                     imageUrl: buyNowData.photoTraceUrl || buyNowData.imageUrls?.[0] || 'images/placeholder.png',
-                    totalPrice: buyNowData.price * (buyNowData.quantity || 1)
+                    totalPrice: buyNowData.price * (buyNowData.quantity || 1),
+                    sellerId: sellerId
                 };
                 
                 this.orderItems.push(itemData);
@@ -224,6 +236,18 @@ class CheckoutManager {
 
                 for (const docSnap of cartSnapshot.docs) {
                     const item = docSnap.data();
+                    
+                    // Fetch seller info from listing
+                    let sellerId = item.uploaderId || item.sellerId || null;
+                    if (!sellerId && item.listingId) {
+                        try {
+                            const listingDoc = await getDoc(doc(db, 'Listings', item.listingId));
+                            if (listingDoc.exists()) {
+                                sellerId = listingDoc.data().uploaderId;
+                            }
+                        } catch (e) { console.log('Could not fetch seller:', e); }
+                    }
+                    
                     const itemData = {
                         docId: docSnap.id,
                         listingId: item.listingId,
@@ -232,7 +256,8 @@ class CheckoutManager {
                         quantity: item.quantity || 1,
                         selectedVariation: item.selectedVariation || null,
                         imageUrl: item.photoTraceUrl || item.imageUrls?.[0] || 'images/placeholder.png',
-                        totalPrice: item.price * (item.quantity || 1)
+                        totalPrice: item.price * (item.quantity || 1),
+                        sellerId: sellerId
                     };
                     
                     this.orderItems.push(itemData);
@@ -488,17 +513,22 @@ class CheckoutManager {
             // Generate order ID
             const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
+            // Get primary seller (first item's seller for order filtering)
+            const primarySellerId = this.orderItems[0]?.sellerId || null;
+
             // Prepare order data
             const orderData = {
                 orderId,
                 userId: this.user.uid,
+                sellerId: primarySellerId, // For seller order queries
                 items: this.orderItems.map(item => ({
                     listingId: item.listingId,
                     productName: item.name,
                     selectedVariation: item.selectedVariation,
                     quantity: item.quantity,
                     pricePerUnit: item.price,
-                    totalPrice: item.totalPrice
+                    totalPrice: item.totalPrice,
+                    sellerId: item.sellerId
                 })),
                 buyerDetails: {
                     name: this.buyerNameEl.textContent,
