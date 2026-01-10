@@ -8,7 +8,7 @@
     <title>Deposit - Oda Pap</title>
     <link rel="stylesheet" href="deposit.css">
     <link rel="stylesheet" href="css/header.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header class="oda-header">
@@ -27,16 +27,224 @@
             <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
         </nav>
     </header>
-    <main>
-        <div class="page-header" style="text-align:center; padding:20px;">
-            <h1><i class="fas fa-wallet"></i> Deposit Funds</h1>
-            <p>Add funds to your wallet</p>
+
+    <main class="deposit-page">
+        <!-- Loading State -->
+        <div id="loadingSpinner" class="loading-overlay" style="display: none;">
+            <div class="loader-content">
+                <div class="loader-spinner"></div>
+                <p>Loading...</p>
+            </div>
         </div>
-        <form id="deposit-form" style="max-width:400px; margin:0 auto; padding:20px;">
-            <label for="deposit-amount">Amount:</label>
-            <input type="number" id="deposit-amount" name="deposit-amount" required style="width:100%; padding:10px; margin:10px 0; border:1px solid #ddd; border-radius:5px;">
-            <button type="submit" style="width:100%; padding:12px; background:#ff5722; color:white; border:none; border-radius:5px; cursor:pointer;">Deposit</button>
-        </form>
+
+        <!-- Current Balance Card -->
+        <div class="balance-card">
+            <div class="balance-icon">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <div class="balance-info">
+                <span class="balance-label">Current Balance</span>
+                <span class="balance-amount" id="currentBalance">KES 0</span>
+            </div>
+        </div>
+
+        <!-- Deposit Form Card -->
+        <div class="deposit-card">
+            <div class="card-header">
+                <h2><i class="fas fa-plus-circle"></i> Deposit Funds</h2>
+            </div>
+            <div class="card-body">
+                <!-- Quick Amount Buttons -->
+                <div class="quick-amounts">
+                    <button type="button" class="quick-amount-btn" data-amount="100">KES 100</button>
+                    <button type="button" class="quick-amount-btn" data-amount="500">KES 500</button>
+                    <button type="button" class="quick-amount-btn" data-amount="1000">KES 1,000</button>
+                    <button type="button" class="quick-amount-btn" data-amount="5000">KES 5,000</button>
+                </div>
+
+                <form id="depositForm">
+                    <div class="form-group">
+                        <label for="depositAmount">
+                            <i class="fas fa-money-bill-wave"></i> Amount (KES)
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="number" 
+                            id="depositAmount" 
+                            name="depositAmount" 
+                            min="10" 
+                            max="150000"
+                            placeholder="Enter amount"
+                            required
+                        >
+                        <small class="form-hint">Minimum: KES 10 | Maximum: KES 150,000</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="mpesaPhone">
+                            <i class="fas fa-mobile-alt"></i> M-Pesa Phone Number
+                            <span class="required">*</span>
+                        </label>
+                        <div class="phone-input-wrapper">
+                            <span class="phone-prefix">+254</span>
+                            <input 
+                                type="tel" 
+                                id="mpesaPhone" 
+                                placeholder="712 345 678"
+                                maxlength="12"
+                                autocomplete="tel"
+                            >
+                        </div>
+                        <small class="form-hint">Enter your M-Pesa registered number</small>
+                        <div class="phone-validation" id="phoneValidation"></div>
+                    </div>
+
+                    <button type="submit" class="btn-deposit" id="depositBtn">
+                        <span class="btn-text">
+                            <i class="fas fa-paper-plane"></i> Deposit via M-Pesa
+                        </span>
+                        <span class="btn-loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Processing...
+                        </span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="transactions-card">
+            <div class="card-header">
+                <h3><i class="fas fa-history"></i> Recent Deposits</h3>
+            </div>
+            <div class="card-body">
+                <div id="transactionsList" class="transactions-list">
+                    <!-- Transactions will be loaded here -->
+                </div>
+                <div id="noTransactions" class="empty-state" style="display: none;">
+                    <i class="fas fa-receipt"></i>
+                    <p>No deposit history yet</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- M-Pesa Payment Modal -->
+        <div id="paymentModal" class="modal-overlay">
+            <div class="modal-container payment-modal">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fas fa-mobile-alt"></i>
+                        <h3>M-Pesa Payment</h3>
+                    </div>
+                    <div class="payment-timer">
+                        <i class="fas fa-clock"></i>
+                        <span id="paymentTimer">5:00</span>
+                    </div>
+                </div>
+
+                <div class="modal-body">
+                    <div class="payment-status-display">
+                        <div class="status-icon" id="statusIcon">
+                            <div class="pulse-ring"></div>
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h4 id="statusTitle">Processing Payment</h4>
+                        <p id="statusMessage">A payment request has been sent to your phone</p>
+                    </div>
+
+                    <div class="amount-display">
+                        <span>Amount:</span>
+                        <strong id="modalAmount">KES 0</strong>
+                    </div>
+
+                    <div class="phone-display">
+                        <span>Payment request sent to:</span>
+                        <strong id="modalPhone">+254 712 345 678</strong>
+                    </div>
+
+                    <div class="payment-instructions">
+                        <h5>Follow these steps:</h5>
+                        <ol>
+                            <li>Check your phone for the M-Pesa prompt</li>
+                            <li>Enter your M-Pesa PIN to confirm</li>
+                            <li>Wait for confirmation</li>
+                        </ol>
+                    </div>
+
+                    <div id="paymentStatusArea" class="status-area"></div>
+
+                    <!-- Manual Code Entry -->
+                    <div id="manualCodeSection" class="manual-code-section" style="display: none;">
+                        <div class="manual-code-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Already paid? Enter your M-Pesa code below</span>
+                        </div>
+                        <div class="manual-code-input">
+                            <input 
+                                type="text" 
+                                id="mpesaCode" 
+                                placeholder="e.g., QGH7XYZ123"
+                                maxlength="10"
+                                autocomplete="off"
+                            >
+                            <button type="button" id="verifyCodeBtn" class="btn-verify">
+                                <i class="fas fa-check"></i> Verify
+                            </button>
+                        </div>
+                        <small>Enter the 10-character M-Pesa transaction code from your SMS</small>
+                    </div>
+
+                    <div class="support-contact">
+                        <p><strong>Need help?</strong></p>
+                        <div class="contact-buttons">
+                            <a href="tel:+254759695025" class="contact-btn">
+                                <i class="fas fa-phone"></i> Call Us
+                            </a>
+                            <a href="https://wa.me/254759695025" target="_blank" class="contact-btn whatsapp">
+                                <i class="fab fa-whatsapp"></i> WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" id="cancelPaymentBtn" class="btn-cancel">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Modal -->
+        <div id="successModal" class="modal-overlay">
+            <div class="modal-container success-modal">
+                <div class="success-animation">
+                    <div class="checkmark-circle">
+                        <i class="fas fa-check"></i>
+                    </div>
+                </div>
+                <h2>Deposit Successful!</h2>
+                <p>Your wallet has been credited</p>
+                
+                <div class="deposit-details-box">
+                    <div class="detail-item">
+                        <span>Amount</span>
+                        <strong id="successAmount">KES 0</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>New Balance</span>
+                        <strong id="newBalance">KES 0</strong>
+                    </div>
+                </div>
+
+                <div class="success-actions">
+                    <button onclick="closeSuccessModal()" class="btn-primary">
+                        <i class="fas fa-check"></i> Done
+                    </button>
+                </div>
+            </div>
+        </div>
     </main>
+
+    <script type="module" src="deposit.js"></script>
 </body>
 </html>

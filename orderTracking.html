@@ -87,9 +87,11 @@
             <div class="filter-tabs">
                 <button class="tab-btn active" data-filter="all">All Orders</button>
                 <button class="tab-btn" data-filter="pending">Pending</button>
-                <button class="tab-btn" data-filter="confirmed">Confirmed</button>
+                <button class="tab-btn" data-filter="seller_confirmed">Seller Confirmed</button>
+                <button class="tab-btn" data-filter="confirmed">Admin Confirmed</button>
                 <button class="tab-btn" data-filter="out_for_delivery">In Transit</button>
                 <button class="tab-btn" data-filter="delivered">Delivered</button>
+                <button class="tab-btn" data-filter="disputed">Disputed</button>
             </div>
 
             <div id="ordersList" class="orders-list">
@@ -165,6 +167,49 @@
         </div>
     </div>
 
+    <!-- Dispute/Claims Modal -->
+    <div id="disputeModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle" style="color: #ff9800;"></i> Report an Issue</h2>
+                <button class="close-btn" onclick="closeDisputeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="dispute-order-info">
+                    <p id="disputeOrderId"></p>
+                </div>
+                <div class="form-group">
+                    <label>Issue Type *</label>
+                    <select id="disputeType" class="form-select">
+                        <option value="">Select issue type...</option>
+                        <option value="not_received">Item Not Received</option>
+                        <option value="wrong_item">Wrong Item Delivered</option>
+                        <option value="damaged">Item Damaged</option>
+                        <option value="not_as_described">Item Not as Described</option>
+                        <option value="missing_items">Missing Items</option>
+                        <option value="quality_issue">Quality Issue</option>
+                        <option value="refund_request">Refund Request</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Describe the Issue *</label>
+                    <textarea id="disputeDescription" rows="4" placeholder="Please describe the issue in detail..."></textarea>
+                </div>
+                <div class="dispute-notice">
+                    <i class="fas fa-info-circle"></i>
+                    <span>Our team will review your claim within 24-48 hours. You may be contacted for additional information.</span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button onclick="submitDispute()" class="btn-primary">
+                    <i class="fas fa-paper-plane"></i> Submit Claim
+                </button>
+                <button onclick="closeDisputeModal()" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <footer>
         <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
     </footer>
@@ -186,10 +231,15 @@
         // Status configuration
         const statusConfig = {
             pending: { label: 'Pending', icon: 'hourglass-half', color: '#ff9800', step: 1 },
-            confirmed: { label: 'Confirmed', icon: 'check', color: '#2196F3', step: 2 },
+            pending_payment: { label: 'Pending Payment', icon: 'credit-card', color: '#ff5722', step: 0 },
+            seller_confirmed: { label: 'Seller Confirmed', icon: 'store', color: '#2196F3', step: 2 },
+            confirmed: { label: 'Admin Confirmed', icon: 'check', color: '#2196F3', step: 2 },
             out_for_delivery: { label: 'Out for Delivery', icon: 'truck', color: '#9c27b0', step: 3 },
             delivered: { label: 'Delivered', icon: 'check-circle', color: '#4CAF50', step: 4 },
-            cancelled: { label: 'Cancelled', icon: 'times-circle', color: '#f44336', step: 0 }
+            cancelled: { label: 'Cancelled', icon: 'times-circle', color: '#f44336', step: 0 },
+            refund_requested: { label: 'Refund Requested', icon: 'undo', color: '#ff9800', step: 0 },
+            refunded: { label: 'Refunded', icon: 'check-double', color: '#4CAF50', step: 0 },
+            disputed: { label: 'Under Review', icon: 'exclamation-triangle', color: '#ff5722', step: 0 }
         };
 
         const ratingTexts = {
@@ -318,6 +368,14 @@
                         <button class="btn-view-details" onclick="viewOrderDetails('${order.id}')">
                             <i class="fas fa-eye"></i> View Details
                         </button>
+                        ${status === 'pending' && !order.sellerConfirmed && canCancelOrder(order) ? `
+                            <button class="btn-cancel" onclick="cancelOrder('${order.id}')">
+                                <i class="fas fa-times"></i> Cancel Order
+                            </button>
+                        ` : ''}
+                        ${status === 'pending' && !order.sellerConfirmed && !canCancelOrder(order) ? `
+                            <span class="status-badge warning" title="Orders can only be cancelled after 2 hours"><i class="fas fa-clock"></i> Cancel in ${getTimeUntilCancel(order)}</span>
+                        ` : ''}
                         ${status === 'delivered' && !order.reviewed ? `
                             <button class="btn-review" onclick="openReviewModal('${order.id}')">
                                 <i class="fas fa-star"></i> Leave Review
@@ -325,6 +383,14 @@
                         ` : ''}
                         ${status === 'delivered' && order.reviewed ? `
                             <span class="reviewed-badge"><i class="fas fa-check-circle"></i> Reviewed</span>
+                        ` : ''}
+                        ${(status === 'delivered' || status === 'out_for_delivery') && !order.disputeFiled ? `
+                            <button class="btn-dispute" onclick="openDisputeModal('${order.id}')">
+                                <i class="fas fa-exclamation-circle"></i> Report Issue
+                            </button>
+                        ` : ''}
+                        ${status === 'disputed' || status === 'refund_requested' ? `
+                            <span class="status-badge warning"><i class="fas fa-clock"></i> Under Review</span>
                         ` : ''}
                     </div>
                 `;
@@ -335,14 +401,31 @@
         function generateTimeline(currentStatus) {
             const steps = [
                 { status: 'pending', label: 'Pending', icon: 'hourglass-half' },
-                { status: 'confirmed', label: 'Confirmed', icon: 'check' },
+                { status: 'seller_confirmed', label: 'Seller Confirmed', icon: 'store' },
+                { status: 'confirmed', label: 'Admin Confirmed', icon: 'check' },
                 { status: 'out_for_delivery', label: 'In Transit', icon: 'truck' },
                 { status: 'delivered', label: 'Delivered', icon: 'check-circle' }
             ];
 
-            const currentStep = statusConfig[currentStatus]?.step || 1;
+            // Map status to step number
+            const statusToStep = {
+                'pending': 1,
+                'seller_confirmed': 2,
+                'confirmed': 3,
+                'out_for_delivery': 4,
+                'delivered': 5
+            };
+
+            const currentStep = statusToStep[currentStatus] || 1;
+            
             if (currentStatus === 'cancelled') {
                 return `<div class="timeline-cancelled"><i class="fas fa-times-circle"></i> Order Cancelled</div>`;
+            }
+            if (currentStatus === 'refunded') {
+                return `<div class="timeline-cancelled" style="color: #4CAF50;"><i class="fas fa-check-double"></i> Order Refunded</div>`;
+            }
+            if (currentStatus === 'disputed' || currentStatus === 'refund_requested') {
+                return `<div class="timeline-cancelled" style="color: #ff9800;"><i class="fas fa-exclamation-triangle"></i> Under Review</div>`;
             }
 
             return `<div class="timeline">
@@ -386,6 +469,25 @@
                             <i class="fas fa-${config.icon}"></i> ${config.label}
                         </span>
                     </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Payment:</span>
+                        <span class="status-badge ${order.paymentStatus === 'completed' ? 'success' : 'warning'}">
+                            <i class="fas fa-${order.paymentStatus === 'completed' ? 'check' : 'clock'}"></i>
+                            ${order.paymentStatus === 'completed' ? 'Paid' : order.paymentStatus || 'Pending'}
+                        </span>
+                    </div>
+                    ${order.sellerConfirmed ? `
+                        <div class="detail-row">
+                            <span class="detail-label">Seller Confirmed:</span>
+                            <span class="text-success"><i class="fas fa-check"></i> Yes ${order.sellerConfirmedAt ? '- ' + new Date(order.sellerConfirmedAt.toDate?.() || order.sellerConfirmedAt).toLocaleDateString() : ''}</span>
+                        </div>
+                    ` : ''}
+                    ${order.adminConfirmed ? `
+                        <div class="detail-row">
+                            <span class="detail-label">Admin Confirmed:</span>
+                            <span class="text-success"><i class="fas fa-check"></i> Yes ${order.adminConfirmedAt ? '- ' + new Date(order.adminConfirmedAt.toDate?.() || order.adminConfirmedAt).toLocaleDateString() : ''}</span>
+                        </div>
+                    ` : ''}
                     <div class="detail-row">
                         <span class="detail-label">Order Date:</span>
                         <span>${new Date(order.createdAt).toLocaleString()}</span>
@@ -530,6 +632,138 @@
             }
         };
 
+        // Helper function to check if order can be cancelled (2 hour delay)
+        function canCancelOrder(order) {
+            if (!order.createdAt) return true; // If no timestamp, allow cancel
+            const createdTime = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+            const twoHoursLater = new Date(createdTime.getTime() + (2 * 60 * 60 * 1000)); // 2 hours in ms
+            return new Date() >= twoHoursLater;
+        }
+
+        // Helper function to get remaining time until cancel is allowed
+        function getTimeUntilCancel(order) {
+            if (!order.createdAt) return '0m';
+            const createdTime = order.createdAt.toDate ? order.createdAt.toDate() : new Date(order.createdAt);
+            const twoHoursLater = new Date(createdTime.getTime() + (2 * 60 * 60 * 1000));
+            const remaining = twoHoursLater - new Date();
+            if (remaining <= 0) return '0m';
+            const hours = Math.floor(remaining / (60 * 60 * 1000));
+            const minutes = Math.ceil((remaining % (60 * 60 * 1000)) / (60 * 1000));
+            return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+        }
+
+        // Cancel Order functionality - initiates reversal if paid
+        window.cancelOrder = async function(orderId) {
+            const order = allOrders.find(o => o.id === orderId);
+            if (!order) return;
+
+            // Check 2-hour delay
+            if (!canCancelOrder(order)) {
+                showNotification(`Orders can only be cancelled after 2 hours. Please wait ${getTimeUntilCancel(order)}.`, 'error');
+                return;
+            }
+
+            const confirmed = confirm('Are you sure you want to cancel this order? If you have already paid, a refund will be initiated.');
+            if (!confirmed) return;
+
+            try {
+                const updates = {
+                    status: 'cancelled',
+                    cancelledAt: Timestamp.now(),
+                    cancelledBy: auth.currentUser.uid,
+                    cancellationReason: 'Cancelled by buyer'
+                };
+
+                // If payment was made, initiate refund process
+                if (order.paymentStatus === 'completed' && order.mpesaTransactionId) {
+                    updates.refundRequested = true;
+                    updates.refundRequestedAt = Timestamp.now();
+                    updates.refundStatus = 'pending';
+                    
+                    // Create refund request record
+                    await addDoc(collection(db, 'RefundRequests'), {
+                        orderId: orderId,
+                        userId: auth.currentUser.uid,
+                        amount: order.totalAmount,
+                        originalTransactionId: order.mpesaTransactionId,
+                        mpesaPhone: order.mpesaPhone,
+                        reason: 'Order cancelled by buyer',
+                        status: 'pending',
+                        createdAt: Timestamp.now()
+                    });
+                }
+
+                await updateDoc(doc(db, 'Orders', orderId), updates);
+                showNotification(order.paymentStatus === 'completed' ? 'Order cancelled. Refund request submitted.' : 'Order cancelled successfully');
+                loadOrders();
+            } catch (error) {
+                console.error('Error cancelling order:', error);
+                showNotification('Failed to cancel order', 'error');
+            }
+        };
+
+        // Open Dispute Modal for manual claims
+        window.openDisputeModal = function(orderId) {
+            selectedOrder = allOrders.find(o => o.id === orderId);
+            if (!selectedOrder) return;
+            
+            document.getElementById('disputeOrderId').textContent = `Order #${orderId.slice(-8).toUpperCase()}`;
+            document.getElementById('disputeType').value = '';
+            document.getElementById('disputeDescription').value = '';
+            document.getElementById('disputeModal').style.display = 'flex';
+        };
+
+        window.closeDisputeModal = function() {
+            document.getElementById('disputeModal').style.display = 'none';
+            selectedOrder = null;
+        };
+
+        window.submitDispute = async function() {
+            if (!selectedOrder) return;
+            
+            const disputeType = document.getElementById('disputeType').value;
+            const description = document.getElementById('disputeDescription').value.trim();
+
+            if (!disputeType) {
+                showNotification('Please select a dispute type', 'error');
+                return;
+            }
+            if (!description) {
+                showNotification('Please describe the issue', 'error');
+                return;
+            }
+
+            try {
+                // Create dispute/claim record
+                await addDoc(collection(db, 'Disputes'), {
+                    orderId: selectedOrder.id,
+                    userId: auth.currentUser.uid,
+                    userEmail: auth.currentUser.email,
+                    sellerId: selectedOrder.sellerId,
+                    type: disputeType,
+                    description: description,
+                    orderAmount: selectedOrder.totalAmount,
+                    status: 'pending',
+                    createdAt: Timestamp.now()
+                });
+
+                // Update order status
+                await updateDoc(doc(db, 'Orders', selectedOrder.id), {
+                    status: 'disputed',
+                    disputeFiled: true,
+                    disputeType: disputeType,
+                    disputeFiledAt: Timestamp.now()
+                });
+
+                showNotification('Dispute submitted successfully. Our team will review it shortly.');
+                closeDisputeModal();
+                loadOrders();
+            } catch (error) {
+                console.error('Error submitting dispute:', error);
+                showNotification('Failed to submit dispute', 'error');
+            }
+        };
+
         // Filter tabs functionality
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -564,7 +798,7 @@
             if (user) {
                 loadOrders();
                 if (typeof updateNavCounters === 'function') {
-                    updateNavCounters(user.uid, db);
+                    updateNavCounters(db, user.uid);
                 }
             }
         });
@@ -1221,6 +1455,131 @@
             font-size: 64px;
             color: #ccc;
             margin-bottom: 20px;
+        }
+
+        /* Cancel and Dispute Button Styles */
+        .btn-cancel {
+            flex: 1;
+            padding: 10px 16px;
+            border: 2px solid #f44336;
+            background: transparent;
+            color: #f44336;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-cancel:hover {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-dispute {
+            flex: 1;
+            padding: 10px 16px;
+            border: 2px solid #ff9800;
+            background: transparent;
+            color: #ff9800;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-dispute:hover {
+            background: #ff9800;
+            color: white;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge.warning {
+            background: #fff3e0;
+            color: #ff9800;
+        }
+
+        /* Dispute Modal Styles */
+        .dispute-order-info {
+            background: #f5f5f5;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #424242;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #ff5722;
+        }
+
+        #disputeDescription {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        #disputeDescription:focus {
+            outline: none;
+            border-color: #ff5722;
+        }
+
+        .dispute-notice {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #1976D2;
+        }
+
+        .dispute-notice i {
+            flex-shrink: 0;
+            margin-top: 2px;
         }
 
         @media (max-width: 768px) {

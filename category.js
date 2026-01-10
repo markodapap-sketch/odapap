@@ -357,6 +357,16 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
 
     confirmBtn.addEventListener('click', async () => {
         const quantity = parseInt(quantityInput.value);
+        
+        // Calculate correct price and image based on variation
+        let finalPrice = price;
+        let finalImageUrl = listing.photoTraceUrl || (listing.imageUrls && listing.imageUrls[0]);
+        
+        if (selectedVariation) {
+            finalPrice = selectedVariation.price || selectedVariation.originalPrice || listing.price;
+            finalImageUrl = selectedVariation.photoUrl || selectedVariation.imageUrl || finalImageUrl;
+        }
+        
         if (isAddToCart) {
             const user = auth.currentUser;
             if (user) {
@@ -367,6 +377,8 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
                         quantity: quantity,
                         selectedVariation: selectedVariation,
                         ...listing,
+                        price: finalPrice,
+                        photoTraceUrl: finalImageUrl,
                         addedAt: new Date().toISOString()
                     });
                     showNotification("Item added to cart!");
@@ -396,16 +408,29 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
 // Add this function for Buy Now checkout
 function proceedToBuyNowCheckout(quantity, listing, listingId, selectedVariation = null) {
     try {
+        // Determine the correct price and image based on variation selection
+        let finalPrice = listing.price;
+        let finalImageUrl = listing.photoTraceUrl || (listing.imageUrls && listing.imageUrls[0]);
+        
+        if (selectedVariation) {
+            // Use variation price if available
+            finalPrice = selectedVariation.price || selectedVariation.originalPrice || listing.price;
+            // Use variation image if available
+            finalImageUrl = selectedVariation.photoUrl || selectedVariation.imageUrl || finalImageUrl;
+        }
+
         const buyNowData = {
             listingId: listingId,
             name: listing.name,
-            price: listing.price,
+            price: finalPrice,
             quantity: quantity,
             selectedVariation: selectedVariation,
-            photoTraceUrl: listing.photoTraceUrl,
+            photoTraceUrl: finalImageUrl,
             imageUrls: listing.imageUrls,
             brand: listing.brand,
-            category: listing.category
+            category: listing.category,
+            uploaderId: listing.uploaderId,
+            sellerId: listing.uploaderId
         };
         setCookie('buyNowItem', buyNowData, 1);
         showNotification("Proceeding to checkout!");

@@ -598,12 +598,52 @@ window.viewOrder = function(id) {
 
 // Change Status
 window.changeStatus = async function(id, current) {
-    const statuses = ['pending', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled'];
-    const newStatus = prompt(`Enter new status:\n${statuses.join(', ')}`, current);
+    const statuses = ['pending', 'seller_confirmed', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled', 'refund_requested', 'refunded', 'disputed'];
+    const statusLabels = {
+        'pending': 'Pending',
+        'seller_confirmed': 'Seller Confirmed',
+        'confirmed': 'Admin Confirmed',
+        'out_for_delivery': 'Out for Delivery',
+        'delivered': 'Delivered',
+        'cancelled': 'Cancelled',
+        'refund_requested': 'Refund Requested',
+        'refunded': 'Refunded',
+        'disputed': 'Disputed'
+    };
+    
+    const newStatus = prompt(`Enter new status:\n${Object.entries(statusLabels).map(([k,v]) => `${k} - ${v}`).join('\n')}`, current);
     
     if (newStatus && statuses.includes(newStatus) && newStatus !== current) {
         try {
-            await updateDoc(doc(db, "Orders", id), { orderStatus: newStatus, updatedAt: Timestamp.now() });
+            const updates = { 
+                orderStatus: newStatus, 
+                status: newStatus,
+                updatedAt: Timestamp.now() 
+            };
+            
+            // Add confirmation timestamps
+            if (newStatus === 'seller_confirmed') {
+                updates.sellerConfirmedAt = Timestamp.now();
+                updates.sellerConfirmed = true;
+            }
+            if (newStatus === 'confirmed') {
+                updates.adminConfirmedAt = Timestamp.now();
+                updates.adminConfirmed = true;
+                updates.confirmedBy = state.user.uid;
+            }
+            if (newStatus === 'delivered') {
+                updates.deliveredAt = Timestamp.now();
+            }
+            if (newStatus === 'cancelled') {
+                updates.cancelledAt = Timestamp.now();
+                updates.cancelledBy = state.user.uid;
+            }
+            if (newStatus === 'refunded') {
+                updates.refundedAt = Timestamp.now();
+                updates.refundProcessedBy = state.user.uid;
+            }
+            
+            await updateDoc(doc(db, "Orders", id), updates);
             showNotification('Status updated');
             loadOrders().then(() => {
                 updateMetrics();
@@ -1311,12 +1351,50 @@ function filterTransactions() {
 // ============= Verifications =============
 async function loadVerifications() {
     const container = $('verificationsList');
+    const filter = $('verificationFilter')?.value || 'pending';
+    
     try {
-        const snap = await getDocs(query(collection(db, "PaymentVerifications"), where("status", "==", "pending")));
-        const verifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        let verifications = [];
+        
+        // Query based on filter
+        let queryRef;
+        if (filter === 'all') {
+            queryRef = query(
+                collection(db, "PendingPaymentVerifications"),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+        } else {
+            queryRef = query(
+                collection(db, "PendingPaymentVerifications"),
+                where("status", "==", filter),
+                orderBy('createdAt', 'desc'),
+                limit(50)
+            );
+        }
+        
+        const snap = await getDocs(queryRef);
+        verifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        
         renderVerifications(verifications);
-        $('verifyBadge').textContent = verifications.length;
-        $('verifyBadge').style.display = verifications.length > 0 ? '' : 'none';
+        
+        // Update badge count with pending only
+        const pendingSnap = await getDocs(query(
+            collection(db, "PendingPaymentVerifications"),
+            where("status", "==", "pending")
+        ));
+        const pendingCount = pendingSnap.docs.length;
+        $('verifyBadge').textContent = pendingCount;
+        $('verifyBadge').style.display = pendingCount > 0 ? '' : 'none';
+        
+        // Setup filter change listener
+        $('verificationFilter')?.removeEventListener('change', handleVerificationFilterChange);
+        $('verificationFilter')?.addEventListener('change', handleVerificationFilterChange);
+        
+        // Setup refresh button
+        $('refreshVerificationsBtn')?.removeEventListener('click', loadVerifications);
+        $('refreshVerificationsBtn')?.addEventListener('click', loadVerifications);
+        
     } catch (err) {
         console.error('Verifications error:', err);
         container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:40px;">Unable to load verifications. Check Firestore permissions.</p>';
@@ -1324,49 +1402,153 @@ async function loadVerifications() {
     }
 }
 
+function handleVerificationFilterChange() {
+    loadVerifications();
+}
+
 function renderVerifications(items) {
     const container = $('verificationsList');
+    
     if (!items.length) {
-        container.innerHTML = '<p style="text-align:center;color:var(--gray-500);padding:40px;">No pending verifications</p>';
+        const filter = $('verificationFilter')?.value || 'pending';
+        container.innerHTML = `<p style="text-align:center;color:var(--gray-500);padding:40px;">No ${filter === 'all' ? '' : filter} verifications found</p>`;
         return;
     }
     
-    container.innerHTML = items.map(v => `
-        <div class="verify-card">
-            <h4>Payment Verification</h4>
-            <p><strong>User:</strong> ${v.userEmail || 'N/A'}</p>
-            <p><strong>Amount:</strong> KES ${(v.amount || 0).toLocaleString()}</p>
-            <p><strong>Reference:</strong> ${v.reference || 'N/A'}</p>
-            <p><strong>Date:</strong> ${formatDate(v.createdAt)}</p>
-            <div class="verify-actions">
-                <button class="btn btn-success" onclick="approveVerification('${v.id}')"><i class="fas fa-check"></i> Approve</button>
-                <button class="btn btn-danger" onclick="rejectVerification('${v.id}')"><i class="fas fa-times"></i> Reject</button>
+    container.innerHTML = items.map(v => {
+        const typeLabel = v.type === 'deposit' ? 'Deposit' : v.type === 'order' ? 'Order Payment' : 'Payment';
+        const typeBadgeClass = v.type === 'deposit' ? 'deposit' : 'order';
+        
+        return `
+            <div class="verify-card">
+                <div class="verify-card-header">
+                    <div>
+                        <h4><i class="fas fa-receipt"></i> ${typeLabel} Verification</h4>
+                        <span style="font-size:12px;color:var(--gray-500);">ID: ${v.id.substring(0, 8)}...</span>
+                    </div>
+                    <span class="verify-type-badge ${typeBadgeClass}">${typeLabel}</span>
+                </div>
+                
+                <div class="verify-card-body">
+                    <div class="verify-detail">
+                        <label>User</label>
+                        <span>${v.userName || v.userEmail || 'Unknown'}</span>
+                    </div>
+                    <div class="verify-detail">
+                        <label>Amount</label>
+                        <span>KES ${(v.amount || 0).toLocaleString()}</span>
+                    </div>
+                    <div class="verify-detail">
+                        <label>M-Pesa Code</label>
+                        <span class="mpesa-code">${v.mpesaCode || 'N/A'}</span>
+                    </div>
+                    <div class="verify-detail">
+                        <label>Date</label>
+                        <span>${formatDate(v.createdAt)}</span>
+                    </div>
+                    ${v.orderId ? `
+                        <div class="verify-detail">
+                            <label>Order ID</label>
+                            <span>${v.orderId.substring(0, 12)}...</span>
+                        </div>
+                    ` : ''}
+                    ${v.receiptUrl ? `
+                        <div class="verify-receipt-preview">
+                            <label style="display:block;margin-bottom:6px;">Receipt</label>
+                            <img src="${v.receiptUrl}" alt="Receipt" onclick="window.open('${v.receiptUrl}', '_blank')">
+                        </div>
+                    ` : ''}
+                </div>
+                
+                ${v.status === 'pending' ? `
+                    <div class="verify-actions">
+                        <button class="btn btn-success" onclick="approveVerification('${v.id}', '${v.type}', ${v.amount}, '${v.userId}', '${v.orderId || ''}')">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-danger" onclick="rejectVerification('${v.id}')">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </div>
+                ` : `
+                    <div style="text-align:center;padding:12px;background:${v.status === 'approved' ? '#dcfce7' : '#fee2e2'};border-radius:var(--radius);margin-top:12px;">
+                        <span style="color:${v.status === 'approved' ? '#16a34a' : '#dc2626'};font-weight:600;">
+                            <i class="fas fa-${v.status === 'approved' ? 'check-circle' : 'times-circle'}"></i>
+                            ${v.status.charAt(0).toUpperCase() + v.status.slice(1)}
+                        </span>
+                    </div>
+                `}
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-window.approveVerification = async function(id) {
-    if (confirm('Approve this payment?')) {
-        try {
-            await updateDoc(doc(db, "PaymentVerifications", id), { status: 'approved', approvedAt: Timestamp.now() });
-            showNotification('Payment approved');
-            loadVerifications();
-        } catch (err) {
-            showNotification('Error approving', 'error');
+window.approveVerification = async function(id, type, amount, userId, orderId) {
+    if (!confirm('Approve this payment verification?')) return;
+    
+    try {
+        // Update verification status
+        await updateDoc(doc(db, "PendingPaymentVerifications", id), { 
+            status: 'approved', 
+            approvedAt: Timestamp.now(),
+            approvedBy: state.user?.email
+        });
+        
+        // If deposit, credit user wallet
+        if (type === 'deposit' && userId && amount) {
+            const userRef = doc(db, "users", userId);
+            const userDoc = await getDoc(userRef);
+            
+            if (userDoc.exists()) {
+                const currentBalance = userDoc.data().walletBalance || 0;
+                await updateDoc(userRef, {
+                    walletBalance: currentBalance + amount,
+                    lastDepositAt: Timestamp.now()
+                });
+                
+                // Add wallet transaction record
+                await addDoc(collection(db, "users", userId, "walletTransactions"), {
+                    type: 'deposit',
+                    amount: amount,
+                    status: 'completed',
+                    verifiedBy: state.user?.email,
+                    createdAt: Timestamp.now()
+                });
+            }
         }
+        
+        // If order payment, update order status
+        if (type === 'order' && orderId) {
+            await updateDoc(doc(db, "Orders", orderId), {
+                paymentStatus: 'verified',
+                paymentVerifiedAt: Timestamp.now(),
+                paymentVerifiedBy: state.user?.email
+            });
+        }
+        
+        showNotification('Payment approved successfully');
+        loadVerifications();
+    } catch (err) {
+        console.error('Error approving verification:', err);
+        showNotification('Error approving payment', 'error');
     }
 };
 
 window.rejectVerification = async function(id) {
-    if (confirm('Reject this payment?')) {
-        try {
-            await updateDoc(doc(db, "PaymentVerifications", id), { status: 'rejected', rejectedAt: Timestamp.now() });
-            showNotification('Payment rejected');
-            loadVerifications();
-        } catch (err) {
-            showNotification('Error rejecting', 'error');
-        }
+    const reason = prompt('Enter rejection reason (optional):');
+    
+    if (reason === null) return; // User cancelled
+    
+    try {
+        await updateDoc(doc(db, "PendingPaymentVerifications", id), { 
+            status: 'rejected', 
+            rejectedAt: Timestamp.now(),
+            rejectedBy: state.user?.email,
+            rejectionReason: reason || 'No reason provided'
+        });
+        showNotification('Payment rejected');
+        loadVerifications();
+    } catch (err) {
+        showNotification('Error rejecting payment', 'error');
     }
 };
 
@@ -1375,6 +1557,7 @@ async function loadSettings() {
     loadAdminList();
     loadHeroSlides();
     loadSurveySettings();
+    loadShippingSettings();
 }
 
 // ============= Survey Settings =============
@@ -1774,6 +1957,237 @@ window.removeAdmin = async function(id) {
         }
     }
 };
+
+// ============= Shipping Settings =============
+let shippingZones = [];
+let mombasaSubcounties = [];
+
+async function loadShippingSettings() {
+    try {
+        // Load Mombasa subcounties from locationData
+        const locationModule = await import('./js/locationData.js');
+        const counties = locationModule.counties;
+        if (counties?.coast?.Mombasa) {
+            mombasaSubcounties = Object.keys(counties.coast.Mombasa);
+        }
+        
+        // Load shipping settings from Firestore
+        const settingsDoc = await getDoc(doc(db, "Settings", "shipping"));
+        if (settingsDoc.exists()) {
+            const data = settingsDoc.data();
+            $('defaultShippingFee').value = data.defaultFee || 150;
+            $('freeShippingThreshold').value = data.freeThreshold || 0;
+            shippingZones = data.zones || [];
+        } else {
+            // Initialize with defaults
+            shippingZones = [];
+            $('defaultShippingFee').value = 150;
+            $('freeShippingThreshold').value = 0;
+        }
+        
+        renderShippingZones();
+        setupShippingEventListeners();
+    } catch (err) {
+        console.error('Error loading shipping settings:', err);
+        $('shippingZonesList').innerHTML = '<p style="color:var(--red);">Failed to load shipping settings</p>';
+    }
+}
+
+function setupShippingEventListeners() {
+    // Save shipping settings
+    $('saveShippingBtn')?.removeEventListener('click', saveShippingSettings);
+    $('saveShippingBtn')?.addEventListener('click', saveShippingSettings);
+    
+    // Add zone button
+    $('addShippingZoneBtn')?.removeEventListener('click', showAddZoneDialog);
+    $('addShippingZoneBtn')?.addEventListener('click', showAddZoneDialog);
+}
+
+function renderShippingZones() {
+    const container = $('shippingZonesList');
+    
+    if (!shippingZones.length) {
+        container.innerHTML = `
+            <p style="text-align:center;color:var(--gray-500);padding:20px;">
+                No shipping zones configured. Using default fee for all locations.
+            </p>
+        `;
+        return;
+    }
+    
+    container.innerHTML = shippingZones.map((zone, index) => `
+        <div class="shipping-zone-item" data-index="${index}">
+            <div class="zone-location">
+                <strong>${zone.subcounty || zone.name || 'Unknown'}</strong>
+                <span>${zone.wards?.length ? zone.wards.join(', ') : 'All wards'}</span>
+            </div>
+            <div class="zone-fee">
+                <span>KES</span>
+                <input type="number" 
+                       value="${zone.fee || 150}" 
+                       min="0" 
+                       onchange="updateZoneFee(${index}, this.value)">
+            </div>
+            <div class="zone-actions">
+                <button class="delete-zone-btn" onclick="deleteShippingZone(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function showAddZoneDialog() {
+    // Create modal for adding zone
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'zoneModal';
+    modal.style.display = 'flex';
+    
+    // Get wards for a selected subcounty
+    const getWardsOptions = async (subcounty) => {
+        try {
+            const locationModule = await import('./js/locationData.js');
+            const counties = locationModule.counties;
+            const wards = counties?.coast?.Mombasa?.[subcounty] || [];
+            return Array.isArray(wards) ? wards : Object.keys(wards);
+        } catch {
+            return [];
+        }
+    };
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:450px;">
+            <button class="modal-close" onclick="closeZoneModal()">&times;</button>
+            <h3 style="margin-bottom:20px;"><i class="fas fa-map-marker-alt"></i> Add Shipping Zone</h3>
+            <form id="zoneForm">
+                <div class="form-group">
+                    <label>Subcounty</label>
+                    <select id="zoneSubcounty" required>
+                        <option value="">Select Subcounty</option>
+                        ${mombasaSubcounties.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Wards <small>(optional - leave empty for all wards)</small></label>
+                    <div id="wardCheckboxes" style="max-height:150px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:var(--radius);padding:10px;"></div>
+                </div>
+                <div class="form-group">
+                    <label>Shipping Fee (KES)</label>
+                    <input type="number" id="zoneFee" min="0" value="150" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeZoneModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Zone</button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Load wards when subcounty changes
+    $('zoneSubcounty').addEventListener('change', async (e) => {
+        const subcounty = e.target.value;
+        const container = $('wardCheckboxes');
+        
+        if (!subcounty) {
+            container.innerHTML = '<p style="color:var(--gray-400);font-size:13px;">Select a subcounty first</p>';
+            return;
+        }
+        
+        const wards = await getWardsOptions(subcounty);
+        if (wards.length) {
+            container.innerHTML = wards.map(ward => `
+                <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;">
+                    <input type="checkbox" name="wards" value="${ward}">
+                    <span>${ward}</span>
+                </label>
+            `).join('');
+        } else {
+            container.innerHTML = '<p style="color:var(--gray-400);font-size:13px;">No wards found</p>';
+        }
+    });
+    
+    // Form submission
+    $('zoneForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const subcounty = $('zoneSubcounty').value;
+        const fee = parseInt($('zoneFee').value) || 150;
+        const wardCheckboxes = document.querySelectorAll('#wardCheckboxes input[name="wards"]:checked');
+        const selectedWards = Array.from(wardCheckboxes).map(cb => cb.value);
+        
+        // Check if zone already exists
+        const exists = shippingZones.some(z => 
+            z.subcounty === subcounty && 
+            JSON.stringify(z.wards?.sort()) === JSON.stringify(selectedWards.sort())
+        );
+        
+        if (exists) {
+            showNotification('This zone already exists', 'error');
+            return;
+        }
+        
+        shippingZones.push({
+            subcounty,
+            wards: selectedWards,
+            fee
+        });
+        
+        renderShippingZones();
+        closeZoneModal();
+        showNotification('Zone added. Remember to save changes!');
+    });
+}
+
+window.closeZoneModal = function() {
+    const modal = $('zoneModal');
+    if (modal) modal.remove();
+};
+
+window.updateZoneFee = function(index, value) {
+    if (shippingZones[index]) {
+        shippingZones[index].fee = parseInt(value) || 0;
+    }
+};
+
+window.deleteShippingZone = function(index) {
+    if (confirm('Delete this shipping zone?')) {
+        shippingZones.splice(index, 1);
+        renderShippingZones();
+        showNotification('Zone deleted. Remember to save changes!');
+    }
+};
+
+async function saveShippingSettings() {
+    const btn = $('saveShippingBtn');
+    const originalText = btn.innerHTML;
+    
+    try {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        
+        const defaultFee = parseInt($('defaultShippingFee').value) || 150;
+        const freeThreshold = parseInt($('freeShippingThreshold').value) || 0;
+        
+        await setDoc(doc(db, "Settings", "shipping"), {
+            defaultFee,
+            freeThreshold,
+            zones: shippingZones,
+            updatedAt: Timestamp.now(),
+            updatedBy: state.user?.email
+        });
+        
+        showNotification('Shipping settings saved successfully');
+    } catch (err) {
+        console.error('Error saving shipping settings:', err);
+        showNotification('Failed to save settings', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
 
 // ============= Utilities =============
 function getDate(d) {

@@ -399,6 +399,17 @@
         <section class="page" id="verifications-page">
             <div class="page-header">
                 <h2>Payment Verifications</h2>
+                <div class="header-controls">
+                    <select id="verificationFilter" class="filter-select">
+                        <option value="pending">Pending</option>
+                        <option value="all">All</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <button class="btn btn-outline" id="refreshVerificationsBtn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
             </div>
             <div class="verifications-list" id="verificationsList">
                 <div class="loading-spinner"></div>
@@ -411,6 +422,41 @@
                 <h2>Settings</h2>
             </div>
             <div class="settings-grid">
+                <!-- Shipping Fee Settings -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-shipping-fast"></i> Shipping Fee Settings</h3>
+                        <button class="btn btn-primary btn-sm" id="saveShippingBtn"><i class="fas fa-save"></i> Save Changes</button>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Configure shipping fees for different Mombasa locations. Default fee applies when no location matches.</p>
+                        
+                        <div class="shipping-config">
+                            <div class="form-group">
+                                <label>Default Shipping Fee (KES)</label>
+                                <input type="number" id="defaultShippingFee" min="0" placeholder="150" value="150">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Free Shipping Threshold (KES) <small>(0 = disabled)</small></label>
+                                <input type="number" id="freeShippingThreshold" min="0" placeholder="5000" value="0">
+                            </div>
+                        </div>
+                        
+                        <h4 style="margin: 20px 0 15px; font-size: 14px; color: #666;">
+                            <i class="fas fa-map-marker-alt"></i> Location-Based Shipping Fees
+                        </h4>
+                        
+                        <div class="shipping-zones" id="shippingZonesList">
+                            <div class="loading-spinner"></div>
+                        </div>
+                        
+                        <button class="btn btn-outline btn-sm" id="addShippingZoneBtn" style="margin-top: 15px;">
+                            <i class="fas fa-plus"></i> Add Shipping Zone
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Hero Banner Management -->
                 <div class="card full-width">
                     <div class="card-header">

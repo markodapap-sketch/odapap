@@ -1,0 +1,44 @@
+# Environment files (SECRETS - NEVER UPLOAD!)
+.env
+.env.local
+.env.production
+.env*.local
+
+# Dependency folders
+node_modules/
+package-lock.json
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.lnk
+
+# IDE/Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# PM2 files
+ecosystem.config.js
+
+# Server config (contains server IP)
+nginx*.conf
+
+# Keys and certificates
+*.pem
+*.key
+*.crt
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.temp

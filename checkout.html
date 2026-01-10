@@ -8,7 +8,7 @@
     <title>Checkout - Oda Pap B2B</title>
     <link rel="stylesheet" href="checkout.css">
     <link rel="stylesheet" href="css/header.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <header class="oda-header">
@@ -30,214 +30,377 @@
     </header>
 
     <main class="checkout-page">
-        <!-- Loading Spinner -->
-        <div id="loadingSpinner" class="loading-spinner" style="display: none;">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Loading your order...</p>
+        <!-- Loading State -->
+        <div id="loadingSpinner" class="loading-overlay">
+            <div class="loader-content">
+                <div class="loader-spinner"></div>
+                <p>Loading checkout...</p>
+            </div>
         </div>
 
-        <!-- Checkout Container -->
-        <div class="checkout-container" id="checkoutContainer">
+        <!-- Checkout Steps Progress -->
+        <div class="checkout-progress" id="checkoutProgress">
+            <div class="progress-step active" data-step="1">
+                <div class="step-number">1</div>
+                <span>Review</span>
+            </div>
+            <div class="progress-line"></div>
+            <div class="progress-step" data-step="2">
+                <div class="step-number">2</div>
+                <span>Delivery</span>
+            </div>
+            <div class="progress-line"></div>
+            <div class="progress-step" data-step="3">
+                <div class="step-number">3</div>
+                <span>Payment</span>
+            </div>
+        </div>
+
+        <!-- Shipping Notice Banner -->
+        <div id="shippingNotice" class="notice-banner" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <div class="notice-content">
+                <strong>Shipping Notice</strong>
+                <p>We currently ship only to Mombasa County. Support for other areas coming soon!</p>
+            </div>
+            <button class="notice-close" onclick="this.parentElement.style.display='none'">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- Main Checkout Container -->
+        <div class="checkout-container" id="checkoutContainer" style="display: none;">
             <!-- Left Column: Order Summary -->
-            <div class="order-summary-section">
-                <h2><i class="fas fa-shopping-bag"></i> Order Summary</h2>
-                <div id="orderItems" class="order-items"></div>
-                
-                <div class="price-breakdown">
+            <section class="checkout-section order-summary">
+                <div class="section-header">
+                    <h2><i class="fas fa-shopping-bag"></i> Order Summary</h2>
+                    <span class="item-count" id="itemCount">0 items</span>
+                </div>
+
+                <div class="order-items-list" id="orderItems">
+                    <!-- Order items will be dynamically inserted -->
+                </div>
+
+                <!-- Price Breakdown Card -->
+                <div class="price-card">
                     <div class="price-row">
-                        <span>Subtotal:</span>
-                        <span id="subtotalAmount">KES 0.00</span>
+                        <span>Subtotal</span>
+                        <span id="subtotalAmount">KES 0</span>
                     </div>
-                    <div class="price-row">
-                        <span>Shipping Fee:</span>
-                        <span id="shippingAmount">KES 0.00</span>
+                    <div class="price-row shipping-row">
+                        <span>Shipping <small id="shippingLocation"></small></span>
+                        <span id="shippingAmount">KES 0</span>
                     </div>
-                    <!-- COMMENTED OUT: Online Payment Discount -->
-                    <!-- <div class="price-row discount-row" id="discountRow" style="display: none;">
-                        <span>Online Payment Discount (5%):</span>
-                        <span id="discountAmount">- KES 0.00</span>
-                    </div> -->
+                    <div class="price-row discount-row" id="discountRow" style="display: none;">
+                        <span><i class="fas fa-tag"></i> Discount</span>
+                        <span class="discount-value" id="discountAmount">- KES 0</span>
+                    </div>
+                    <div class="price-divider"></div>
                     <div class="price-row total-row">
-                        <span><strong>Total Amount:</strong></span>
-                        <span id="totalAmount"><strong>KES 0.00</strong></span>
+                        <span>Total</span>
+                        <span id="totalAmount">KES 0</span>
                     </div>
                 </div>
-            </div>
+            </section>
 
             <!-- Right Column: Checkout Form -->
-            <div class="checkout-form-section">
-                <!-- Buyer Information -->
-                <div class="form-card">
-                    <h3><i class="fas fa-user"></i> Delivery Information</h3>
-                    <div class="info-display">
-                        <div class="info-item">
-                            <label>Name:</label>
-                            <span id="buyerName">Loading...</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Phone Number:</label>
-                            <span id="buyerPhone">Loading...</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Location:</label>
-                            <span id="buyerLocation">Loading...</span>
-                        </div>
-                        <a href="profile.html" class="edit-link">
-                            <i class="fas fa-edit"></i> Edit in Profile
+            <section class="checkout-section checkout-form">
+                <!-- Delivery Information Card -->
+                <div class="form-card" id="deliveryCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-truck"></i> Delivery Information</h3>
+                        <a href="profile.html" class="edit-btn">
+                            <i class="fas fa-edit"></i> Edit Profile
                         </a>
                     </div>
-
-                    <div class="form-group">
-                        <label for="deliveryAddress">Specific Delivery Address *</label>
-                        <textarea id="deliveryAddress" rows="3" placeholder="Enter detailed delivery address (building, floor, landmarks)" required></textarea>
-                    </div>
-                </div>
-
-                <!-- Shipping Fee - Fixed for Mombasa -->
-                <div class="form-card">
-                    <h3><i class="fas fa-truck"></i> Shipping</h3>
-                    <div class="info-display">
-                        <div class="info-item">
-                            <label>Shipping Fee:</label>
-                            <span>KES 150 (Fixed for Mombasa)</span>
+                    <div class="card-body">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label><i class="fas fa-user"></i> Name</label>
+                                <span id="buyerName">Loading...</span>
+                            </div>
+                            <div class="info-item">
+                                <label><i class="fas fa-phone"></i> Phone</label>
+                                <span id="buyerPhone">Loading...</span>
+                            </div>
+                            <div class="info-item full-width">
+                                <label><i class="fas fa-map-marker-alt"></i> Location</label>
+                                <span id="buyerLocation">Loading...</span>
+                            </div>
                         </div>
-                        <input type="hidden" id="shippingFee" value="150">
+
+                        <div class="form-group">
+                            <label for="deliveryAddress">
+                                <i class="fas fa-home"></i> Detailed Delivery Address
+                                <span class="required">*</span>
+                            </label>
+                            <textarea 
+                                id="deliveryAddress" 
+                                rows="3" 
+                                placeholder="Enter specific address: Building name, floor, apartment number, nearest landmark..."
+                                required
+                            ></textarea>
+                            <small class="form-hint">Provide clear directions to help our rider find you</small>
+                        </div>
+
+                        <!-- Shipping Fee Display -->
+                        <div class="shipping-info-box">
+                            <div class="shipping-icon">
+                                <i class="fas fa-shipping-fast"></i>
+                            </div>
+                            <div class="shipping-details">
+                                <strong>Shipping Fee: <span id="displayShippingFee">KES 150</span></strong>
+                                <small id="shippingNote">Standard delivery within Mombasa</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Payment Method Selection -->
-                <div class="form-card">
-                    <h3><i class="fas fa-credit-card"></i> Payment Method</h3>
-                    <div class="payment-options">
-                        <label class="payment-option">
-                            <input type="radio" name="paymentMethod" value="mpesa" checked>
-                            <div class="option-content">
-                                <i class="fas fa-mobile-alt"></i>
-                                <div>
+                <!-- Payment Method Card -->
+                <div class="form-card" id="paymentCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-credit-card"></i> Payment Method</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="payment-options">
+                            <label class="payment-option selected" data-method="mpesa">
+                                <input type="radio" name="paymentMethod" value="mpesa" checked>
+                                <div class="option-icon mpesa-icon">
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" alt="M-Pesa" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <i class="fas fa-mobile-alt" style="display:none;"></i>
+                                </div>
+                                <div class="option-details">
                                     <strong>M-Pesa</strong>
-                                    <p>Pay now with M-Pesa STK Push</p>
+                                    <span>Pay instantly via STK Push</span>
                                 </div>
-                            </div>
-                        </label>
-                        <label class="payment-option">
-                            <input type="radio" name="paymentMethod" value="pay_on_delivery">
-                            <div class="option-content">
-                                <i class="fas fa-hand-holding-usd"></i>
-                                <div>
+                                <i class="fas fa-check-circle option-check"></i>
+                            </label>
+
+                            <label class="payment-option" data-method="pay_on_delivery">
+                                <input type="radio" name="paymentMethod" value="pay_on_delivery">
+                                <div class="option-icon cod-icon">
+                                    <i class="fas fa-hand-holding-usd"></i>
+                                </div>
+                                <div class="option-details">
                                     <strong>Pay on Delivery</strong>
-                                    <p>Pay when you receive your order</p>
+                                    <span>Pay cash when you receive order</span>
                                 </div>
+                                <i class="fas fa-check-circle option-check"></i>
+                            </label>
+                        </div>
+
+                        <!-- M-Pesa Phone Input -->
+                        <div class="mpesa-input-section" id="mpesaSection">
+                            <div class="form-group">
+                                <label for="mpesaPhone">
+                                    <i class="fas fa-mobile-alt"></i> M-Pesa Phone Number
+                                    <span class="required">*</span>
+                                </label>
+                                <div class="phone-input-wrapper">
+                                    <span class="phone-prefix">+254</span>
+                                    <input 
+                                        type="tel" 
+                                        id="mpesaPhone" 
+                                        placeholder="712 345 678"
+                                        maxlength="12"
+                                        autocomplete="tel"
+                                    >
+                                </div>
+                                <small class="form-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    Enter the M-Pesa registered number (e.g., 0712345678 or 712345678)
+                                </small>
+                                <div class="phone-validation" id="phoneValidation"></div>
                             </div>
-                        </label>
+                        </div>
                     </div>
                 </div>
 
-                <!-- M-Pesa Payment Details (Shown when M-Pesa selected) -->
-                <div class="form-card" id="mpesaDetails">
-                    <h3><i class="fas fa-mobile-alt"></i> M-Pesa Details</h3>
-                    <div class="form-group">
-                        <label for="mpesaPhone">M-Pesa Phone Number *</label>
-                        <input type="tel" id="mpesaPhone" placeholder="254712345678" pattern="254[0-9]{9}" required>
-                        <small>Enter phone number in format: 254XXXXXXXXX</small>
+                <!-- Order Notes (Optional) -->
+                <div class="form-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-sticky-note"></i> Order Notes <span class="optional">(Optional)</span></h3>
+                    </div>
+                    <div class="card-body">
+                        <textarea 
+                            id="orderNotes" 
+                            rows="2" 
+                            placeholder="Any special instructions for your order..."
+                        ></textarea>
                     </div>
                 </div>
 
-                <!-- Action Buttons -->
+                <!-- Place Order Button -->
                 <div class="checkout-actions">
-                    <button type="button" id="placeOrderBtn" class="place-order-btn">
-                        <i class="fas fa-check-circle"></i> Place Order
+                    <button type="button" id="placeOrderBtn" class="btn-place-order">
+                        <span class="btn-text">
+                            <i class="fas fa-lock"></i> Place Order • <span id="btnTotalAmount">KES 0</span>
+                        </span>
+                        <span class="btn-loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Processing...
+                        </span>
                     </button>
+                    <p class="secure-notice">
+                        <i class="fas fa-shield-alt"></i>
+                        Your payment information is secure and encrypted
+                    </p>
                 </div>
-
-                <!-- Important Notice -->
-                <div class="notice-box">
-                    <i class="fas fa-info-circle"></i>
-                    <div>
-                        <strong>Important:</strong> Do not close this page until payment is complete. 
-                        The payment window will remain active for 5 minutes.
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
 
-        <!-- Payment Processing Modal -->
-        <div id="paymentModal" class="payment-modal">
-            <div class="payment-modal-content">
-                <div class="payment-header">
-                    <h3>Processing Payment</h3>
-                    <div class="timer-display">
+        <!-- Empty Cart State -->
+        <div id="emptyCartState" class="empty-state" style="display: none;">
+            <div class="empty-icon">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <h2>Your cart is empty</h2>
+            <p>Looks like you haven't added anything to your cart yet</p>
+            <a href="index.html" class="btn-primary">
+                <i class="fas fa-shopping-bag"></i> Start Shopping
+            </a>
+        </div>
+
+        <!-- M-Pesa Payment Modal -->
+        <div id="paymentModal" class="modal-overlay">
+            <div class="modal-container payment-modal">
+                <div class="modal-header">
+                    <div class="modal-title">
+                        <i class="fas fa-mobile-alt"></i>
+                        <h3>M-Pesa Payment</h3>
+                    </div>
+                    <div class="payment-timer">
                         <i class="fas fa-clock"></i>
                         <span id="paymentTimer">5:00</span>
                     </div>
                 </div>
 
-                <div class="payment-body">
-                    <div class="payment-spinner">
-                        <i class="fas fa-mobile-alt fa-3x"></i>
-                        <div class="pulse-ring"></div>
-                    </div>
-                    <h4>Complete M-Pesa Payment</h4>
-                    <p>A payment request has been sent to <strong id="modalPhone"></strong></p>
-                    <ol class="payment-steps">
-                        <li>Check your phone for M-Pesa prompt</li>
-                        <li>Enter your M-Pesa PIN</li>
-                        <li>Confirm the payment</li>
-                    </ol>
-
-                    <div id="paymentStatus" class="payment-status"></div>
-
-                    <!-- Manual Code Entry (Shown if STK fails) -->
-                    <div id="manualCodeEntry" style="display: none;">
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <p>Payment confirmation taking longer than expected</p>
+                <div class="modal-body">
+                    <!-- Payment Status Animation -->
+                    <div class="payment-status-display">
+                        <div class="status-icon" id="statusIcon">
+                            <div class="pulse-ring"></div>
+                            <i class="fas fa-mobile-alt"></i>
                         </div>
-                        <div class="form-group">
-                            <label for="mpesaCode">Already paid? Enter M-Pesa Transaction Code</label>
-                            <input type="text" id="mpesaCode" placeholder="e.g., QGH7XYZ123" maxlength="10">
-                            <button type="button" id="verifyCodeBtn" class="verify-btn">
-                                <i class="fas fa-check"></i> Verify Payment
+                        <h4 id="statusTitle">Processing Payment</h4>
+                        <p id="statusMessage">A payment request has been sent to your phone</p>
+                    </div>
+
+                    <!-- Phone Number Display -->
+                    <div class="phone-display">
+                        <span>Payment request sent to:</span>
+                        <strong id="modalPhone">+254 712 345 678</strong>
+                    </div>
+
+                    <!-- Payment Instructions -->
+                    <div class="payment-instructions">
+                        <h5>Follow these steps:</h5>
+                        <ol>
+                            <li>Check your phone for the M-Pesa prompt</li>
+                            <li>Enter your M-Pesa PIN to confirm</li>
+                            <li>Wait for confirmation</li>
+                        </ol>
+                    </div>
+
+                    <!-- Status Messages -->
+                    <div id="paymentStatusArea" class="status-area"></div>
+
+                    <!-- Manual Code Entry Section -->
+                    <div id="manualCodeSection" class="manual-code-section" style="display: none;">
+                        <div class="manual-code-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Already paid? Enter your M-Pesa code below</span>
+                        </div>
+                        <div class="manual-code-input">
+                            <input 
+                                type="text" 
+                                id="mpesaCode" 
+                                placeholder="e.g., QGH7XYZ123"
+                                maxlength="10"
+                                autocomplete="off"
+                            >
+                            <button type="button" id="verifyCodeBtn" class="btn-verify">
+                                <i class="fas fa-check"></i> Verify
                             </button>
                         </div>
+                        <small>Enter the 10-character M-Pesa transaction code from your SMS</small>
                     </div>
 
-                    <!-- Contact Support -->
-                    <div class="support-section">
+                    <!-- Upload Receipt Section -->
+                    <div id="uploadReceiptSection" class="upload-receipt-section" style="display: none;">
+                        <div class="upload-header">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>Or upload M-Pesa confirmation screenshot</span>
+                        </div>
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="receiptUpload" accept="image/*" hidden>
+                            <label for="receiptUpload" class="upload-label">
+                                <i class="fas fa-image"></i>
+                                <span>Click to upload screenshot</span>
+                            </label>
+                            <div id="uploadPreview" class="upload-preview" style="display: none;">
+                                <img id="previewImage" src="" alt="Receipt preview">
+                                <button type="button" class="remove-preview" onclick="removePreview()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="button" id="submitReceiptBtn" class="btn-submit-receipt" style="display: none;">
+                            <i class="fas fa-paper-plane"></i> Submit for Verification
+                        </button>
+                    </div>
+
+                    <!-- Support Contact -->
+                    <div class="support-contact">
                         <p><strong>Need help?</strong></p>
-                        <a href="tel:+254759695025" class="support-link">
-                            <i class="fas fa-phone"></i> Call: 0759 695 025
-                        </a>
-                        <a href="sms:+254759695025" class="support-link">
-                            <i class="fas fa-sms"></i> Text: 0759 695 025
-                        </a>
+                        <div class="contact-buttons">
+                            <a href="tel:+254759695025" class="contact-btn">
+                                <i class="fas fa-phone"></i> Call Us
+                            </a>
+                            <a href="https://wa.me/254759695025" target="_blank" class="contact-btn whatsapp">
+                                <i class="fab fa-whatsapp"></i> WhatsApp
+                            </a>
+                        </div>
                     </div>
                 </div>
 
-                <div class="payment-footer">
-                    <button type="button" id="cancelPaymentBtn" class="cancel-btn">
-                        <i class="fas fa-times"></i> Cancel
+                <div class="modal-footer">
+                    <button type="button" id="cancelPaymentBtn" class="btn-cancel">
+                        <i class="fas fa-times"></i> Cancel Payment
                     </button>
                 </div>
             </div>
         </div>
 
         <!-- Success Modal -->
-        <div id="successModal" class="success-modal">
-            <div class="success-content">
-                <div class="success-icon">
-                    <i class="fas fa-check-circle"></i>
+        <div id="successModal" class="modal-overlay">
+            <div class="modal-container success-modal">
+                <div class="success-animation">
+                    <div class="checkmark-circle">
+                        <i class="fas fa-check"></i>
+                    </div>
                 </div>
                 <h2>Order Placed Successfully!</h2>
-                <p>Your order has been received and is being processed.</p>
-                <div class="order-ref">
-                    <strong>Order ID:</strong> <span id="orderRefNumber"></span>
+                <p>Thank you for your order. We'll start processing it right away.</p>
+                
+                <div class="order-details-box">
+                    <div class="detail-item">
+                        <span>Order ID</span>
+                        <strong id="orderRefNumber">ORD-XXXX</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>Payment</span>
+                        <strong id="paymentMethodDisplay">M-Pesa</strong>
+                    </div>
                 </div>
-                <button onclick="window.location.href='orders.html'" class="view-orders-btn">
-                    <i class="fas fa-list"></i> View My Orders
-                </button>
-                <button onclick="window.location.href='index.html'" class="continue-shopping-btn">
-                    <i class="fas fa-home"></i> Continue Shopping
-                </button>
+
+                <div class="success-actions">
+                    <a href="orderTracking.html" class="btn-primary">
+                        <i class="fas fa-truck"></i> Track Order
+                    </a>
+                    <a href="index.html" class="btn-secondary">
+                        <i class="fas fa-home"></i> Continue Shopping
+                    </a>
+                </div>
             </div>
         </div>
     </main>
