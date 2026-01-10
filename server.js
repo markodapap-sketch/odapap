@@ -86,20 +86,29 @@ app.use('/api/', limiter);
 // CORS Configuration - Production
 const allowedOrigins = [
     'http://13.201.184.44',
+    'https://13.201.184.44',
     'http://localhost:5000',
+    'https://localhost:5000',
     'http://localhost:5500',
-    'http://127.0.0.1:5500'
+    'https://localhost:5500',
+    'http://127.0.0.1:5500',
+    'https://127.0.0.1:5500',
+    'http://localhost:3000',
+    'https://localhost:3000'
 ];
 
 app.use(cors({
     origin: function(origin, callback) {
         // Allow requests with no origin (mobile apps, curl, etc.)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        
+        // Allow all origins in development or if origin matches allowed list
+        if (allowedOrigins.indexOf(origin) !== -1 || NODE_ENV === 'development') {
             callback(null, true);
         } else {
-            console.log('⚠️ Blocked by CORS:', origin);
-            callback(null, true); // Allow all for now, restrict later
+            // In production, still allow but log for monitoring
+            console.log('⚠️ CORS request from:', origin);
+            callback(null, true); // Allow all origins for API accessibility
         }
     },
     methods: ['GET', 'POST', 'OPTIONS'],
