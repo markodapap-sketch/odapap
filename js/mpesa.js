@@ -17,10 +17,8 @@ const MPESA_CONFIG = {
     POLL_INTERVAL: 3000,  // 3 seconds
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
-    // Change this to your server URL when testing
-    // For VS Code port forwarding: https://m58405c3-8580.uks1.devtunnels.ms
-    // For production: your actual domain
-    API_BASE_URL: 'https://m58405c3-8580.uks1.devtunnels.ms/api/mpesa',
+    // Production API URL - EC2 Server
+    API_BASE_URL: 'http://13.201.184.44/api/mpesa',
 };
 
 /**
@@ -160,12 +158,12 @@ export class MpesaPaymentManager {
             };
             
             // Call backend to initiate STK Push
-            const response = await this.callBackendAPI('/initiate', {
+            const response = await this.callBackendAPI('/stkpush', {
                 transactionId: transactionDocRef.id,
                 phoneNumber: normalizedPhone,
                 amount: amountNum,
                 accountReference: accountReference || transactionRef,
-                description: description || 'Payment'
+                transactionDesc: description || 'Payment'
             });
             
             if (response.success) {
@@ -438,7 +436,7 @@ export class MpesaPaymentManager {
      * This allows the system to continue functioning with manual verification
      */
     getFallbackResponse(endpoint, data) {
-        if (endpoint === '/initiate') {
+        if (endpoint === '/stkpush') {
             return {
                 success: true,
                 checkoutRequestId: `FALLBACK-${Date.now()}`,
