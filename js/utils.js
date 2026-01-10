@@ -104,3 +104,20 @@ export async function updateChatCounter(db, userId) {
         navCounter.textContent = unreadCount > 0 ? unreadCount : '';
     }
 }
+
+/**
+ * Update all navigation counters (cart, wishlist, notifications)
+ */
+export async function updateNavCounters(db, userId) {
+    if (!db || !userId) return;
+    
+    try {
+        await Promise.all([
+            updateCartCounter(db, userId),
+            updateWishlistCounter(db, userId),
+            updateChatCounter(db, userId)
+        ]);
+    } catch (error) {
+        console.error('Error updating nav counters:', error);
+    }
+}
