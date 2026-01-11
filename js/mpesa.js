@@ -8,7 +8,6 @@
 
 import { getFirestore, collection, doc, addDoc, getDoc, updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from './firebase.js';
-//import axios from 'axios';
 
 const db = getFirestore(app);
 
@@ -18,25 +17,23 @@ const MPESA_CONFIG = {
     POLL_INTERVAL: 3000,  // 3 seconds
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
-    // Production API URL - Use api.odapap.com subdomain for M-Pesa API
-    // Main site (odapap.com) is on GitHub Pages, API subdomain points to EC2
+    // Production API URL - Dynamically detect protocol and use same origin or EC2 Server
     API_BASE_URL: (() => {
         const hostname = window.location.hostname;
         const protocol = window.location.protocol;
         
-        // If running on the EC2 server directly, use same origin
+        // If running on the EC2 server (13.201.184.44), use same origin
         if (hostname === '13.201.184.44') {
             return `${protocol}//${hostname}/api/mpesa`;
         }
         
-        // If running on localhost, use EC2 server directly (for local dev)
+        // If running on localhost, use EC2 server with http (for local dev)
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'http://13.201.184.44/api/mpesa';
         }
         
-        // For production (odapap.com), use api subdomain with same protocol
-        // This requires: api.odapap.com DNS A record → 13.201.184.44
-        return `${protocol}//api.odapap.com/api/mpesa`;
+        // For any other domain (custom domain), use same origin
+        return `${protocol}//${window.location.host}/api/mpesa`;
     })(),
 };
 
@@ -612,19 +609,4 @@ export async function checkFreeShipping(orderTotal) {
     return false;
 }
 
-/**
- * M-Pesa integration helper functions
- */
-
-async function initiateSTKPush({ phone, amount, accountReference, transactionDesc }) {
-    const response = await axios.post('/api/mpesa/stkpush', {
-        phone,
-        amount,
-        accountReference,
-        transactionDesc
-    });
-    return response.data;
-}
-
 export default MpesaPaymentManager;
-
