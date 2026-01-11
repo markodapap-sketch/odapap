@@ -4,6 +4,8 @@
  * manual code verification, and concurrent transaction support.
  * 
  * Compatible with: checkout.html, deposit.html
+ * 
+ * IMPORTANT: Backend API runs on EC2 server at 13.201.184.44
  */
 
 import { getFirestore, collection, doc, addDoc, getDoc, updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
@@ -17,20 +19,17 @@ const MPESA_CONFIG = {
     POLL_INTERVAL: 3000,  // 3 seconds
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
-    // Production API URL - Dynamically detect protocol and use same origin or EC2 Server
-    API_BASE_URL: (() => {
-        const hostname = window.location.hostname;
-
-        
-        // If running on localhost, use EC2 server with http (for local dev)
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://13.201.184.44/api/mpesa';
-        }
-        
-        // For production (odapap.com or EC2 IP), always use EC2 IP with http
-        return 'http://13.201.184.44/api/mpesa';
-    })(),
+    
+    // CRITICAL: Always use EC2 IP where Node.js backend is running
+    // Frontend can be on odapap.com, localhost, or anywhere
+    // Backend is always at 13.201.184.44
+    API_BASE_URL: 'http://13.201.184.44/api/mpesa'
 };
+
+// Log configuration on load
+console.log('🔧 M-Pesa Module Loaded');
+console.log('📡 API Endpoint:', MPESA_CONFIG.API_BASE_URL);
+console.log('🌐 Current Domain:', window.location.hostname);
 
 /**
  * Normalize phone number to 254XXXXXXXXX format
@@ -198,7 +197,7 @@ export class MpesaPaymentManager {
                     checkoutRequestId: response.checkoutRequestId
                 };
             } else {
-                throw new Error(response.message || 'Failed to initiate payment');
+                throw new Error(response.error || response.message || 'Failed to initiate payment');
             }
             
         } catch (error) {
@@ -342,7 +341,7 @@ export class MpesaPaymentManager {
                     phoneNumber: this.currentTransaction?.phone
                 });
                 
-                if (response.valid) {
+                if (response.success && response.data?.verified) {
                     // Update transaction as completed
                     if (this.currentTransaction?.id) {
                         await this.updateTransactionStatus(this.currentTransaction.id, 'completed', null, {
@@ -362,7 +361,7 @@ export class MpesaPaymentManager {
                     
                     return { success: true, code };
                 } else {
-                    throw new Error(response.message || 'Could not verify transaction');
+                    throw new Error(response.error || response.message || 'Could not verify transaction');
                 }
             } catch (apiError) {
                 // If API verification fails, create a pending verification for admin review
@@ -408,7 +407,11 @@ export class MpesaPaymentManager {
      */
     async callBackendAPI(endpoint, data, retries = MPESA_CONFIG.MAX_RETRIES) {
         const url = `${MPESA_CONFIG.API_BASE_URL}${endpoint}`;
-        console.log('🔄 API Request to:', url);
+        
+        console.log('🔄 M-Pesa API Request:');
+        console.log('   URL:', url);
+        console.log('   Endpoint:', endpoint);
+        console.log('   Data:', data);
         
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
@@ -423,27 +426,43 @@ export class MpesaPaymentManager {
                     body: JSON.stringify(data)
                 });
                 
-                const result = await response.json();
+                console.log('📥 Response received:');
+                console.log('   Status:', response.status, response.statusText);
+                console.log('   Headers:', Object.fromEntries(response.headers.entries()));
                 
-                if (!response.ok) {
-                    throw new Error(result.message || `HTTP ${response.status}`);
+                // Check if response is JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    const text = await response.text();
+                    console.error('❌ Non-JSON response received:', text.substring(0, 200));
+                    throw new Error('Server returned non-JSON response. Backend may not be running.');
                 }
                 
-                console.log('✅ API Response:', result);
+                const result = await response.json();
+                console.log('📦 JSON Response:', result);
+                
+                if (!response.ok) {
+                    throw new Error(result.error || result.message || `HTTP ${response.status}`);
+                }
+                
+                console.log('✅ API call successful');
                 return result;
+                
             } catch (error) {
-                console.error(`API call attempt ${attempt} failed:`, error);
-                console.error('Request URL was:', url);
+                console.error(`❌ API attempt ${attempt}/${retries} failed:`);
+                console.error('   Error type:', error.name);
+                console.error('   Error message:', error.message);
+                console.error('   URL was:', url);
                 
                 if (attempt === retries) {
-                    // On final retry failure, simulate success for development
-                    // In production, this should throw the error
-                    console.warn('All API attempts failed, using fallback mode');
+                    console.warn('⚠️ All API attempts failed, using fallback mode');
                     return this.getFallbackResponse(endpoint, data);
                 }
                 
                 // Wait before retrying (exponential backoff)
-                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+                const waitTime = Math.pow(2, attempt) * 1000;
+                console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
             }
         }
     }
@@ -453,6 +472,8 @@ export class MpesaPaymentManager {
      * This allows the system to continue functioning with manual verification
      */
     getFallbackResponse(endpoint, data) {
+        console.log('🔄 Using fallback response for:', endpoint);
+        
         if (endpoint === '/stkpush') {
             return {
                 success: true,
@@ -464,12 +485,12 @@ export class MpesaPaymentManager {
         
         if (endpoint === '/verify') {
             return {
-                valid: false,
+                success: false,
                 message: 'Automatic verification unavailable. Your code has been submitted for manual review.'
             };
         }
         
-        return { success: false, message: 'Service temporarily unavailable' };
+        return { success: false, error: 'Service temporarily unavailable' };
     }
 
     /**
