@@ -22,7 +22,7 @@ const MPESA_CONFIG = {
     
     // TEMPORARY: Use HTTP endpoint (works if site accessed via http://odapap.com)
     // For production with HTTPS, set up SSL on api.odapap.com first
-    API_BASE_URL: https://api.odapap.com
+    API_BASE_URL: "https://api.odapap.com"
 };
 
 // Log configuration on load
@@ -625,4 +625,3 @@ export async function checkFreeShipping(orderTotal) {
 }
 
 export default MpesaPaymentManager;
-
