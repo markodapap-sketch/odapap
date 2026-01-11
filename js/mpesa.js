@@ -20,10 +20,17 @@ const MPESA_CONFIG = {
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
     
-    // CRITICAL: Always use EC2 IP where Node.js backend is running
-    // Frontend can be on odapap.com, localhost, or anywhere
-    // Backend is always at 13.201.184.44
-    API_BASE_URL: 'http://13.201.184.44/api/mpesa'
+    // CRITICAL: Use HTTPS API subdomain for production
+    // For local development, falls back to HTTP
+    API_BASE_URL: (() => {
+        // If on production domain, use HTTPS API subdomain
+        if (window.location.hostname === 'odapap.com' || 
+            window.location.hostname === 'www.odapap.com') {
+            return 'https://api.odapap.com/api/mpesa';
+        }
+        // For localhost/development, use HTTP
+        return 'http://13.201.184.44/api/mpesa';
+    })()
 };
 
 // Log configuration on load
