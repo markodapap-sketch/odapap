@@ -20,20 +20,15 @@ const MPESA_CONFIG = {
     // Production API URL - Dynamically detect protocol and use same origin or EC2 Server
     API_BASE_URL: (() => {
         const hostname = window.location.hostname;
-        const protocol = window.location.protocol;
-        
-        // If running on the EC2 server (13.201.184.44), use same origin
-        if (hostname === '13.201.184.44') {
-            return `${protocol}//${hostname}/api/mpesa`;
-        }
+
         
         // If running on localhost, use EC2 server with http (for local dev)
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
             return 'http://13.201.184.44/api/mpesa';
         }
         
-        // For any other domain (custom domain), use same origin
-        return `${protocol}//${window.location.host}/api/mpesa`;
+        // For production (odapap.com or EC2 IP), always use EC2 IP with http
+        return 'http://13.201.184.44/api/mpesa';
     })(),
 };
 
