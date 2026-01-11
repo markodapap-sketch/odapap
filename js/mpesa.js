@@ -5,7 +5,7 @@
  * 
  * Compatible with: checkout.html, deposit.html
  * 
- * IMPORTANT: Backend API runs on EC2 server at 13.201.184.44
+ * IMPORTANT: Backend API runs on EC2 server at api.odapap.com
  */
 
 import { getFirestore, collection, doc, addDoc, getDoc, updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
@@ -20,8 +20,7 @@ const MPESA_CONFIG = {
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
     
-    // TEMPORARY: Use HTTP endpoint (works if site accessed via http://odapap.com)
-    // For production with HTTPS, set up SSL on api.odapap.com first
+    // Production API endpoint
     API_BASE_URL: "https://api.odapap.com"
 };
 
@@ -166,8 +165,8 @@ export class MpesaPaymentManager {
                 amount: amountNum
             };
             
-            // Call backend to initiate STK Push
-            const response = await this.callBackendAPI('/stkpush', {
+            // Call backend to initiate STK Push - FIXED ENDPOINT
+            const response = await this.callBackendAPI('/api/mpesa/stkpush', {
                 transactionId: transactionDocRef.id,
                 phoneNumber: normalizedPhone,
                 amount: amountNum,
@@ -332,9 +331,9 @@ export class MpesaPaymentManager {
                 throw new Error('This transaction code has already been used');
             }
             
-            // Call backend to verify with Safaricom (if available)
+            // Call backend to verify with Safaricom - FIXED ENDPOINT
             try {
-                const response = await this.callBackendAPI('/verify', {
+                const response = await this.callBackendAPI('/api/mpesa/verify', {
                     mpesaCode: code,
                     expectedAmount: expectedAmount || this.currentTransaction?.amount,
                     phoneNumber: this.currentTransaction?.phone
@@ -473,7 +472,7 @@ export class MpesaPaymentManager {
     getFallbackResponse(endpoint, data) {
         console.log('🔄 Using fallback response for:', endpoint);
         
-        if (endpoint === '/stkpush') {
+        if (endpoint === '/api/mpesa/stkpush') {
             return {
                 success: true,
                 checkoutRequestId: `FALLBACK-${Date.now()}`,
@@ -482,7 +481,7 @@ export class MpesaPaymentManager {
             };
         }
         
-        if (endpoint === '/verify') {
+        if (endpoint === '/api/mpesa/verify') {
             return {
                 success: false,
                 message: 'Automatic verification unavailable. Your code has been submitted for manual review.'
