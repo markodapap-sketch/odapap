@@ -8,7 +8,7 @@
 
 import { getFirestore, collection, doc, addDoc, getDoc, updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from './firebase.js';
-import axios from 'axios';
+//import axios from 'axios';
 
 const db = getFirestore(app);
 
@@ -627,3 +627,4 @@ async function initiateSTKPush({ phone, amount, accountReference, transactionDes
 }
 
 export default MpesaPaymentManager;
+
