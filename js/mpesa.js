@@ -20,17 +20,9 @@ const MPESA_CONFIG = {
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
     
-    // CRITICAL: Use HTTPS API subdomain for production
-    // For local development, falls back to HTTP
-    API_BASE_URL: (() => {
-        // If on production domain, use HTTPS API subdomain
-        if (window.location.hostname === 'odapap.com' || 
-            window.location.hostname === 'www.odapap.com') {
-            return 'https://api.odapap.com/api/mpesa';
-        }
-        // For localhost/development, use HTTP
-        return 'http://13.201.184.44/api/mpesa';
-    })()
+    // TEMPORARY: Use HTTP endpoint (works if site accessed via http://odapap.com)
+    // For production with HTTPS, set up SSL on api.odapap.com first
+    API_BASE_URL: 'http://13.201.184.44/api/mpesa'
 };
 
 // Log configuration on load
