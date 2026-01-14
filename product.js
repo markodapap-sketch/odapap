@@ -12,6 +12,10 @@ import {
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
+import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
+
+// Setup global image error handling on load
+setupGlobalImageErrorHandler();
 
 // Get the minimum price from variations/attributes and its associated retail price
 function getMinPriceFromVariations(product) {
@@ -121,7 +125,9 @@ class ProductPage {
                 throw new Error('No product ID provided');
             }
 
-            this.showLoading();
+            // Show content immediately
+            this.productContent.style.display = 'grid';
+            
             await this.loadProduct();
             await this.loadSimilarProducts();
             if (this.auth.currentUser) {
@@ -129,7 +135,6 @@ class ProductPage {
                 await this.updateWishlistCounter();
                 await this.updateChatCounter();
             }
-            this.hideLoading();
 
         } catch (error) {
             console.error('Error initializing product page:', error);
@@ -379,20 +384,29 @@ class ProductPage {
 
     displayBulkPricing() {
         if (!this.product.bulkPricing || this.product.bulkPricing.length === 0) {
-            this.bulkPricingContainer.style.display = 'none';
+            if (this.bulkPricingContainer) this.bulkPricingContainer.style.display = 'none';
             return;
         }
 
-        this.bulkPricingContainer.style.display = 'block';
+        if (this.bulkPricingContainer) this.bulkPricingContainer.style.display = 'block';
         const bulkListEl = document.getElementById('bulkPricingList');
+        if (!bulkListEl) return;
+        
         bulkListEl.innerHTML = '';
 
         this.product.bulkPricing.forEach(tier => {
+            // Skip invalid tiers
+            if (!tier || tier.price === undefined || tier.price === null) return;
+            
             const tierEl = document.createElement('div');
             tierEl.className = 'bulk-tier-item';
+            const minQty = tier.min || tier.minQty || 1;
+            const maxQty = tier.max || tier.maxQty || '∞';
+            const price = Number(tier.price) || 0;
+            
             tierEl.innerHTML = `
-                <span class="tier-range">${tier.min} - ${tier.max || '∞'} units</span>
-                <span class="tier-price">KES ${tier.price.toLocaleString()}/unit</span>
+                <span class="tier-range">${minQty} - ${maxQty} units</span>
+                <span class="tier-price">KES ${price.toLocaleString()}/unit</span>
             `;
             bulkListEl.appendChild(tierEl);
         });
@@ -418,9 +432,10 @@ class ProductPage {
 
         this.imageUrls.forEach((url, index) => {
             const thumbnail = document.createElement('img');
-            thumbnail.src = url;
+            thumbnail.src = getImageUrl(url, 'product');
             thumbnail.classList.add('thumbnail');
             thumbnail.loading = 'lazy';
+            thumbnail.dataset.fallback = 'product';
             thumbnail.addEventListener('click', () => this.setMainImage(index));
             this.thumbnailContainer.appendChild(thumbnail);
         });
@@ -433,7 +448,8 @@ class ProductPage {
 
     setMainImage(index) {
         this.currentImageIndex = index;
-        this.mainImage.src = this.imageUrls[index];
+        this.mainImage.src = getImageUrl(this.imageUrls[index], 'product');
+        this.mainImage.dataset.fallback = 'product';
         this.currentImageIndexEl.textContent = index + 1;
 
         document.querySelectorAll('.thumbnail').forEach((thumb, i) => {
@@ -535,14 +551,17 @@ class ProductPage {
         const productCard = document.createElement('div');
         productCard.classList.add('similar-product-card');
         
-        const firstImage = product.photoTraceUrl || 
-                          (product.imageUrls && product.imageUrls[0]) || 
-                          'images/product-placeholder.png';
+        const firstImage = getImageUrl(
+            product.photoTraceUrl || 
+            (product.imageUrls && product.imageUrls[0]) || 
+            null, 
+            'product'
+        );
 
         productCard.innerHTML = `
             <div class="product-link" data-product-id="${productId}">
                 <div class="product-image">
-                    <img src="${firstImage}" alt="${product.name}" loading="lazy">
+                    <img src="${firstImage}" alt="${product.name}" loading="lazy" data-fallback="product">
                 </div>
                 <div class="product-info">
                     <h4 class="product-name">${product.name}</h4>
@@ -571,7 +590,7 @@ class ProductPage {
                 <button class="fullscreen-nav-btn fullscreen-prev" ${this.currentImageIndex === 0 ? 'disabled' : ''}>
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <img src="${this.imageUrls[this.currentImageIndex]}" alt="Fullscreen Product Image">
+                <img src="${getImageUrl(this.imageUrls[this.currentImageIndex], 'product')}" alt="Fullscreen Product Image" data-fallback="product">
                 <button class="fullscreen-nav-btn fullscreen-next" ${this.currentImageIndex === this.imageUrls.length - 1 ? 'disabled' : ''}>
                     <i class="fas fa-chevron-right"></i>
                 </button>
@@ -827,18 +846,14 @@ class ProductPage {
     }
 
     showLoading() {
-        this.loadingSpinner.style.display = 'flex';
-        this.productContent.style.display = 'none';
-        this.errorMessage.style.display = 'none';
+        // No-op - removed loader for faster perceived performance
     }
 
     hideLoading() {
-        this.loadingSpinner.style.display = 'none';
         this.productContent.style.display = 'grid';
     }
 
     showError(message) {
-        this.loadingSpinner.style.display = 'none';
         this.productContent.style.display = 'none';
         this.errorMessage.style.display = 'block';
         this.errorMessage.textContent = message;

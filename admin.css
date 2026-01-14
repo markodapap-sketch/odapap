@@ -251,6 +251,32 @@ body {
     gap: 14px;
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--gray-200);
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.metric-card.clickable {
+    cursor: pointer;
+    padding-right: 36px;
+}
+
+.metric-card.clickable:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow);
+    transform: translateY(-2px);
+}
+
+.metric-arrow {
+    position: absolute;
+    right: 14px;
+    color: var(--gray-400);
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.metric-card.clickable:hover .metric-arrow {
+    color: var(--primary);
+    transform: translateX(3px);
 }
 
 .metric-icon {
@@ -274,6 +300,59 @@ body {
 .metric-info { display: flex; flex-direction: column; }
 .metric-value { font-size: 20px; font-weight: 700; color: var(--dark); }
 .metric-label { font-size: 12px; color: var(--gray-500); }
+
+/* ===== SALES STATISTICS CARD ===== */
+.sales-stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 20px;
+    color: white;
+}
+
+.sales-stats-header {
+    margin-bottom: 16px;
+}
+
+.sales-stats-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sales-stats-header h3 i {
+    opacity: 0.8;
+}
+
+.sales-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.sales-stat {
+    text-align: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius);
+    backdrop-filter: blur(4px);
+}
+
+.sales-value {
+    display: block;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.sales-label {
+    font-size: 11px;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
 /* ===== DASHBOARD GRID ===== */
 .dashboard-grid {
@@ -464,9 +543,49 @@ body {
 .action-btn.edit { background: #fef3c7; color: #92400e; }
 .action-btn.delete { background: #fee2e2; color: #991b1b; }
 .action-btn.verify { background: #d1fae5; color: #065f46; }
+.action-btn.unverify { background: #fee2e2; color: #991b1b; }
 .action-btn.msg { background: #e9d5ff; color: #6b21a8; }
 
 .action-btn:hover { transform: scale(1.1); }
+
+/* ===== VERIFIED BADGE ===== */
+.verified-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+    margin-left: 4px;
+    font-size: 14px;
+}
+
+.verified-badge i {
+    filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3));
+}
+
+/* ===== VERIFICATION BUTTONS ===== */
+.btn-verified {
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
+    color: white !important;
+    border: none !important;
+}
+
+.btn-verified:hover {
+    background: linear-gradient(135deg, #2563eb, #1e40af) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.btn-unverified {
+    background: var(--gray-100) !important;
+    color: var(--gray-600) !important;
+    border: 1px solid var(--gray-300) !important;
+}
+
+.btn-unverified:hover {
+    background: #d1fae5 !important;
+    color: #065f46 !important;
+    border-color: #10b981 !important;
+}
 
 /* ===== PRIME TAGS ===== */
 .prime-tags {
@@ -873,6 +992,142 @@ body {
 .btn-sm {
     padding: 6px 12px !important;
     font-size: 12px !important;
+}
+
+/* Delivery Areas Settings */
+.delivery-areas-config {
+    padding: 16px;
+    background: var(--gray-50);
+    border-radius: var(--radius);
+}
+
+.area-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    border-radius: var(--radius);
+    margin-bottom: 20px;
+    color: var(--green);
+    font-size: 14px;
+}
+
+.area-status-banner i {
+    font-size: 18px;
+}
+
+.region-section {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.region-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.region-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.region-section h4 i {
+    color: var(--primary);
+    font-size: 16px;
+}
+
+.county-toggles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+}
+
+.county-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.county-toggle:hover {
+    border-color: var(--primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.county-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.county-toggle .county-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dark);
+}
+
+.county-toggle .county-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    background: var(--gray-200);
+    color: var(--gray-600);
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.county-toggle .county-badge.active {
+    background: var(--green);
+    color: white;
+}
+
+.county-toggle input:checked + .county-name + .county-badge {
+    background: var(--green);
+    color: white;
+}
+
+.county-toggle input:checked + .county-name + .county-badge::after {
+    content: 'Active';
+}
+
+.county-toggle input:not(:checked) + .county-name + .county-badge::after {
+    content: 'Inactive';
+}
+
+.county-toggle .county-badge {
+    font-size: 0;
+}
+
+.expand-regions-btn {
+    width: 100%;
+    justify-content: center;
+}
+
+.hidden-regions {
+    margin-top: 20px;
+}
+
+.hidden-regions h4 {
+    margin-top: 20px;
+}
+
+.hidden-regions h4:first-child {
+    margin-top: 0;
 }
 
 /* Shipping Settings */
@@ -1715,4 +1970,7 @@ body {
     .metrics { grid-template-columns: 1fr 1fr; }
     .verifications-list { grid-template-columns: 1fr; }
     .settings-grid { grid-template-columns: 1fr; }
+    .sales-grid { grid-template-columns: repeat(2, 1fr); }
+    .sales-value { font-size: 16px; }
+    .sales-label { font-size: 10px; }
 }

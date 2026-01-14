@@ -3,6 +3,10 @@ import { getFirestore, collection, doc, getDocs, deleteDoc, addDoc, updateDoc, g
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
 import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 const auth = getAuth(app);
 const firestore = getFirestore(app);

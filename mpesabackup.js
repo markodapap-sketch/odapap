@@ -4,12 +4,11 @@
  * manual code verification, and concurrent transaction support.
  * 
  * Compatible with: checkout.html, deposit.html
- * 
- * IMPORTANT: Backend API runs on EC2 server at api.odapap.com
  */
 
 import { getFirestore, collection, doc, addDoc, getDoc, updateDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from './firebase.js';
+import axios from 'axios';
 
 const db = getFirestore(app);
 
@@ -19,15 +18,27 @@ const MPESA_CONFIG = {
     POLL_INTERVAL: 3000,  // 3 seconds
     MAX_RETRIES: 3,
     MANUAL_CODE_SHOW_AFTER: 60, // Show manual entry after 60 seconds
-    
-    // Production API endpoint
-    API_BASE_URL: "https://api.odapap.com"
+    // Production API URL - Use api.odapap.com subdomain for M-Pesa API
+    // Main site (odapap.com) is on GitHub Pages, API subdomain points to EC2
+    API_BASE_URL: (() => {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        
+        // If running on the EC2 server directly, use same origin
+        if (hostname === '13.201.184.44') {
+            return `${protocol}//${hostname}/api/mpesa`;
+        }
+        
+        // If running on localhost, use EC2 server directly (for local dev)
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'http://13.201.184.44/api/mpesa';
+        }
+        
+        // For production (odapap.com), use api subdomain with same protocol
+        // This requires: api.odapap.com DNS A record → 13.201.184.44
+        return `${protocol}//api.odapap.com/api/mpesa`;
+    })(),
 };
-
-// Log configuration on load
-console.log('🔧 M-Pesa Module Loaded');
-console.log('📡 API Endpoint:', MPESA_CONFIG.API_BASE_URL);
-console.log('🌐 Current Domain:', window.location.hostname);
 
 /**
  * Normalize phone number to 254XXXXXXXXX format
@@ -165,8 +176,8 @@ export class MpesaPaymentManager {
                 amount: amountNum
             };
             
-            // Call backend to initiate STK Push - FIXED ENDPOINT
-            const response = await this.callBackendAPI('/api/mpesa/stkpush', {
+            // Call backend to initiate STK Push
+            const response = await this.callBackendAPI('/stkpush', {
                 transactionId: transactionDocRef.id,
                 phoneNumber: normalizedPhone,
                 amount: amountNum,
@@ -195,7 +206,7 @@ export class MpesaPaymentManager {
                     checkoutRequestId: response.checkoutRequestId
                 };
             } else {
-                throw new Error(response.error || response.message || 'Failed to initiate payment');
+                throw new Error(response.message || 'Failed to initiate payment');
             }
             
         } catch (error) {
@@ -331,15 +342,15 @@ export class MpesaPaymentManager {
                 throw new Error('This transaction code has already been used');
             }
             
-            // Call backend to verify with Safaricom - FIXED ENDPOINT
+            // Call backend to verify with Safaricom (if available)
             try {
-                const response = await this.callBackendAPI('/api/mpesa/verify', {
+                const response = await this.callBackendAPI('/verify', {
                     mpesaCode: code,
                     expectedAmount: expectedAmount || this.currentTransaction?.amount,
                     phoneNumber: this.currentTransaction?.phone
                 });
                 
-                if (response.success && response.data?.verified) {
+                if (response.valid) {
                     // Update transaction as completed
                     if (this.currentTransaction?.id) {
                         await this.updateTransactionStatus(this.currentTransaction.id, 'completed', null, {
@@ -359,7 +370,7 @@ export class MpesaPaymentManager {
                     
                     return { success: true, code };
                 } else {
-                    throw new Error(response.error || response.message || 'Could not verify transaction');
+                    throw new Error(response.message || 'Could not verify transaction');
                 }
             } catch (apiError) {
                 // If API verification fails, create a pending verification for admin review
@@ -405,11 +416,7 @@ export class MpesaPaymentManager {
      */
     async callBackendAPI(endpoint, data, retries = MPESA_CONFIG.MAX_RETRIES) {
         const url = `${MPESA_CONFIG.API_BASE_URL}${endpoint}`;
-        
-        console.log('🔄 M-Pesa API Request:');
-        console.log('   URL:', url);
-        console.log('   Endpoint:', endpoint);
-        console.log('   Data:', data);
+        console.log('🔄 API Request to:', url);
         
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
@@ -424,43 +431,27 @@ export class MpesaPaymentManager {
                     body: JSON.stringify(data)
                 });
                 
-                console.log('📥 Response received:');
-                console.log('   Status:', response.status, response.statusText);
-                console.log('   Headers:', Object.fromEntries(response.headers.entries()));
-                
-                // Check if response is JSON
-                const contentType = response.headers.get('content-type');
-                if (!contentType || !contentType.includes('application/json')) {
-                    const text = await response.text();
-                    console.error('❌ Non-JSON response received:', text.substring(0, 200));
-                    throw new Error('Server returned non-JSON response. Backend may not be running.');
-                }
-                
                 const result = await response.json();
-                console.log('📦 JSON Response:', result);
                 
                 if (!response.ok) {
-                    throw new Error(result.error || result.message || `HTTP ${response.status}`);
+                    throw new Error(result.message || `HTTP ${response.status}`);
                 }
                 
-                console.log('✅ API call successful');
+                console.log('✅ API Response:', result);
                 return result;
-                
             } catch (error) {
-                console.error(`❌ API attempt ${attempt}/${retries} failed:`);
-                console.error('   Error type:', error.name);
-                console.error('   Error message:', error.message);
-                console.error('   URL was:', url);
+                console.error(`API call attempt ${attempt} failed:`, error);
+                console.error('Request URL was:', url);
                 
                 if (attempt === retries) {
-                    console.warn('⚠️ All API attempts failed, using fallback mode');
+                    // On final retry failure, simulate success for development
+                    // In production, this should throw the error
+                    console.warn('All API attempts failed, using fallback mode');
                     return this.getFallbackResponse(endpoint, data);
                 }
                 
                 // Wait before retrying (exponential backoff)
-                const waitTime = Math.pow(2, attempt) * 1000;
-                console.log(`⏳ Waiting ${waitTime}ms before retry...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
             }
         }
     }
@@ -470,9 +461,7 @@ export class MpesaPaymentManager {
      * This allows the system to continue functioning with manual verification
      */
     getFallbackResponse(endpoint, data) {
-        console.log('🔄 Using fallback response for:', endpoint);
-        
-        if (endpoint === '/api/mpesa/stkpush') {
+        if (endpoint === '/stkpush') {
             return {
                 success: true,
                 checkoutRequestId: `FALLBACK-${Date.now()}`,
@@ -481,14 +470,14 @@ export class MpesaPaymentManager {
             };
         }
         
-        if (endpoint === '/api/mpesa/verify') {
+        if (endpoint === '/verify') {
             return {
-                success: false,
+                valid: false,
                 message: 'Automatic verification unavailable. Your code has been submitted for manual review.'
             };
         }
         
-        return { success: false, error: 'Service temporarily unavailable' };
+        return { success: false, message: 'Service temporarily unavailable' };
     }
 
     /**
@@ -621,6 +610,20 @@ export async function checkFreeShipping(orderTotal) {
     }
     
     return false;
+}
+
+/**
+ * M-Pesa integration helper functions
+ */
+
+async function initiateSTKPush({ phone, amount, accountReference, transactionDesc }) {
+    const response = await axios.post('/api/mpesa/stkpush', {
+        phone,
+        amount,
+        accountReference,
+        transactionDesc
+    });
+    return response.data;
 }
 
 export default MpesaPaymentManager;

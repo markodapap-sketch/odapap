@@ -4,10 +4,14 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "http
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { counties } from './js/locationData.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 const EDIT_LOCK_DURATION = 24 * 60 * 60 * 1000;
 const LOCKED_FIELDS = ['name', 'phone'];

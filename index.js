@@ -6,6 +6,7 @@ import { showNotification } from './notifications.js';
 import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 import { categoryHierarchy } from './js/categoryData.js';
 import { initializeImageSliders } from './imageSlider.js';
+import { setupGlobalImageErrorHandler, getImageUrl, PLACEHOLDERS, initLazyLoading } from './js/imageCache.js';
 
 // Firebase
 const auth = getAuth(app);
@@ -504,7 +505,8 @@ async function loadFeaturedItems() {
       const seller = sellers[sellerId] || {};
       const priceData = getMinPriceFromVariations(data);
       const imageUrls = data.imageUrls || [];
-      const mainImg = imageUrls[0] || 'images/placeholder.png';
+      const mainImg = getImageUrl(imageUrls[0], 'product');
+      const sellerImg = getImageUrl(seller.profilePicUrl, 'profile');
       const isVerified = seller.isVerified === true;
       
       const margin = priceData.retailPrice && priceData.retailPrice > priceData.price 
@@ -515,12 +517,12 @@ async function loadFeaturedItems() {
         <article class="featured-card" onclick="location.href='product.html?id=${data.id}'">
           <div class="featured-badge"><i class="fas fa-star"></i> Featured</div>
           <div class="featured-img">
-            <img src="${mainImg}" alt="${data.name}" loading="lazy">
+            <img src="${mainImg}" alt="${data.name}" loading="lazy" data-fallback="product">
           </div>
           <div class="featured-info">
             <h3>${data.name}</h3>
             <div class="featured-seller">
-              <img src="${seller.profilePicUrl || 'images/profile-placeholder.png'}" alt="">
+              <img src="${sellerImg}" alt="" data-fallback="profile">
               <span>${seller.name || 'Seller'}${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</span>
             </div>
             <div class="featured-price">
@@ -623,13 +625,14 @@ function renderProducts() {
   
   container.innerHTML = allListings.map(listing => {
     const imageUrls = listing.imageUrls || [];
-    const firstImage = imageUrls[0] || 'images/product-placeholder.png';
+    const firstImage = getImageUrl(imageUrls[0], 'product');
+    const sellerPic = getImageUrl(listing.sellerPic, 'profile');
     
     return `
       <div class="listing-item">
         <div class="product-item">
           <div class="profile">
-            <img src="${listing.sellerPic}" alt="${listing.sellerName}" onclick="goToUserProfile('${listing.sellerUid}')" loading="lazy">
+            <img src="${sellerPic}" alt="${listing.sellerName}" onclick="goToUserProfile('${listing.sellerUid}')" loading="lazy" data-fallback="profile">
             <div class="uploader-info">
               <p class="uploader-name"><strong>${listing.sellerName}</strong>${listing.isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
               <p class="product-name">${listing.name}</p>
@@ -649,7 +652,7 @@ function renderProducts() {
           <div class="product-image-container" onclick="goToProduct('${listing.id}')">
             <div class="image-slider">
               ${imageUrls.map((url, index) => `
-                <img src="${url}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}">
+                <img src="${getImageUrl(url, 'product')}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}" data-fallback="product">
               `).join('')}
               <div class="product-tags">
                 ${listing.subcategory ? `<span>${listing.subcategory}</span>` : ''}
@@ -941,6 +944,36 @@ function showQuantityModal(id, listing, isCart) {
 
 // ===== SEARCH =====
 function setupSearch() {
+  // Import and initialize dynamic search
+  import('./js/dynamicSearch.js').then(module => {
+    // Full header search form
+    const searchInput = $('searchInput');
+    if (searchInput) {
+      module.initDynamicSearch('searchInput', {
+        maxSuggestions: 6,
+        minChars: 1,
+        showCategories: true,
+        showRecent: true
+      });
+    }
+    
+    // Compact header search
+    const compactSearchInput = $('compactSearchInput');
+    if (compactSearchInput) {
+      module.initDynamicSearch('compactSearchInput', {
+        maxSuggestions: 5,
+        minChars: 1,
+        showCategories: true,
+        showRecent: true
+      });
+    }
+  }).catch(err => {
+    console.log('Dynamic search not available, using fallback:', err);
+    setupFallbackSearch();
+  });
+}
+
+function setupFallbackSearch() {
   // Full header search form
   const searchForm = $('searchForm');
   const searchInput = $('searchInput');
@@ -1011,6 +1044,9 @@ const badgeObserver = new MutationObserver(syncBadgeCounts);
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // Setup global image error handling to prevent excessive Firestore reads
+  setupGlobalImageErrorHandler();
+  
   // Setup search handlers
   setupSearch();
   
@@ -1018,6 +1054,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadHeroSlides();
   
   await Promise.all([loadCategories(), loadProducts(), loadFeaturedItems()]);
+  
+  // Initialize lazy loading for images
+  initLazyLoading();
   
   // Initial badge sync
   setTimeout(syncBadgeCounts, 500);

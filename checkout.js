@@ -10,10 +10,15 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstati
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
 import { MpesaPaymentManager, normalizePhoneNumber, isValidPhoneNumber, formatPhoneForDisplay, getShippingFee, checkFreeShipping } from './js/mpesa.js';
+import { OdaModal } from './js/odaModal.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 class CheckoutManager {
     constructor() {
@@ -258,10 +263,8 @@ class CheckoutManager {
                 
                 this.buyerLocationEl.textContent = [county, subcounty, ward].filter(Boolean).join(', ') || 'Not set';
                 
-                // Check if user is from Mombasa
-                if (!county.toLowerCase().includes('mombasa')) {
-                    this.shippingNotice.style.display = 'flex';
-                }
+                // Check if user's county is in enabled delivery areas
+                await this.checkDeliveryArea(county);
                 
                 // Pre-fill M-Pesa phone with user's phone (support both field names)
                 if (userPhone && this.mpesaPhoneInput) {
@@ -281,6 +284,42 @@ class CheckoutManager {
             }
         } catch (error) {
             console.error('Error loading user info:', error);
+        }
+    }
+
+    async checkDeliveryArea(county) {
+        try {
+            const { getDoc, doc } = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
+            const settingsDoc = await getDoc(doc(db, "Settings", "deliveryAreas"));
+            
+            let enabledAreas = ['Mombasa']; // Default to Mombasa
+            if (settingsDoc.exists()) {
+                enabledAreas = settingsDoc.data().enabledCounties || ['Mombasa'];
+            }
+            
+            // Check if user's county is in enabled areas (case-insensitive)
+            const isInDeliveryArea = enabledAreas.some(area => 
+                county.toLowerCase().includes(area.toLowerCase()) || 
+                area.toLowerCase().includes(county.toLowerCase())
+            );
+            
+            if (!isInDeliveryArea && county) {
+                this.shippingNotice.style.display = 'flex';
+                // Update notice message
+                const noticeText = this.shippingNotice.querySelector('p');
+                if (noticeText) {
+                    const areasList = enabledAreas.join(', ');
+                    noticeText.innerHTML = `We currently deliver to <strong>${areasList}</strong> only. Your location (${county}) is outside our delivery area. Please update your profile location.`;
+                }
+            } else {
+                this.shippingNotice.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error checking delivery area:', error);
+            // Fallback to old behavior
+            if (!county.toLowerCase().includes('mombasa')) {
+                this.shippingNotice.style.display = 'flex';
+            }
         }
     }
 
@@ -766,6 +805,11 @@ class CheckoutManager {
             // Get primary seller
             const primarySellerId = this.orderItems[0]?.sellerId || null;
 
+            // Update stock for each item if payment is completed
+            if (paymentData.paymentStatus === 'completed' || paymentMethod === 'pay_on_delivery') {
+                await this.updateProductStock();
+            }
+
             // Prepare order data
             const orderData = {
                 orderId,
@@ -810,6 +854,9 @@ class CheckoutManager {
             // Also save to user's orders subcollection for easy querying
             await addDoc(collection(db, `users/${this.user.uid}/orders`), orderData);
 
+            // Create notifications for sellers
+            await this.notifySellerOfNewOrder(orderData);
+
             // Clear cart/buyNow
             await this.clearOrderSource();
 
@@ -837,6 +884,75 @@ class CheckoutManager {
         }
     }
 
+    async updateProductStock() {
+        try {
+            for (const item of this.orderItems) {
+                if (!item.listingId) continue;
+                
+                const listingRef = doc(db, 'Listings', item.listingId);
+                const listingDoc = await getDoc(listingRef);
+                
+                if (listingDoc.exists()) {
+                    const currentData = listingDoc.data();
+                    const currentStock = currentData.totalStock || 0;
+                    const newStock = Math.max(0, currentStock - item.quantity);
+                    
+                    // Update the stock
+                    await updateDoc(listingRef, {
+                        totalStock: newStock,
+                        soldCount: (currentData.soldCount || 0) + item.quantity,
+                        updatedAt: serverTimestamp()
+                    });
+                    
+                    console.log(`Updated stock for ${item.name}: ${currentStock} -> ${newStock}`);
+                }
+            }
+        } catch (error) {
+            console.error('Error updating product stock:', error);
+            // Don't throw - stock update failure shouldn't prevent order completion
+        }
+    }
+
+    async notifySellerOfNewOrder(orderData) {
+        try {
+            // Get unique seller IDs from order items
+            const sellerIds = new Set();
+            orderData.items.forEach(item => {
+                if (item.sellerId) sellerIds.add(item.sellerId);
+            });
+            
+            // Also add primary seller
+            if (orderData.sellerId) sellerIds.add(orderData.sellerId);
+            
+            // Create notification for each seller
+            for (const sellerId of sellerIds) {
+                // Get items for this seller
+                const sellerItems = orderData.items.filter(item => item.sellerId === sellerId);
+                const itemNames = sellerItems.map(i => i.productName || i.name).slice(0, 2).join(', ');
+                const itemCount = sellerItems.length;
+                
+                const notification = {
+                    userId: sellerId,
+                    type: 'new_order',
+                    title: '🛒 New Order Received!',
+                    message: `You have a new order for ${itemNames}${itemCount > 2 ? ` and ${itemCount - 2} more` : ''}. Order ID: ${orderData.orderId}`,
+                    orderId: orderData.orderId,
+                    amount: orderData.totalAmount,
+                    buyerName: orderData.buyerDetails?.name || 'Customer',
+                    read: false,
+                    createdAt: serverTimestamp()
+                };
+                
+                await addDoc(collection(db, "Notifications"), notification);
+            }
+            
+            console.log(`Notifications sent to ${sellerIds.size} seller(s)`);
+        } catch (error) {
+            console.error('Error sending seller notifications:', error);
+            // Don't throw - notification failure shouldn't prevent order completion
+        }
+    }
+
     showSuccessModal(orderId, paymentMethod, paymentStatus) {
         this.clearPaymentTimer();
         
@@ -846,21 +962,126 @@ class CheckoutManager {
         
         if (this.successModal) {
             this.successModal.classList.add('active');
+            
+            // Set order reference
             if (this.orderRefNumber) {
                 this.orderRefNumber.textContent = orderId;
             }
-            if (this.paymentMethodDisplay) {
-                let methodText = paymentMethod === 'mpesa' ? 'M-Pesa' : 'Pay on Delivery';
-                if (paymentStatus === 'pending_verification') {
-                    methodText += ' (Pending Verification)';
-                }
-                this.paymentMethodDisplay.textContent = methodText;
+            
+            // Set order date
+            const orderDateEl = document.getElementById('orderDateDisplay');
+            if (orderDateEl) {
+                orderDateEl.textContent = new Date().toLocaleDateString('en-KE', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
             }
+            
+            // Set payment status with appropriate styling
+            const paymentBadge = document.getElementById('paymentStatusBadge');
+            if (this.paymentMethodDisplay && paymentBadge) {
+                let methodText = paymentMethod === 'mpesa' ? 'M-Pesa' : 'Pay on Delivery';
+                let statusIcon = 'fa-check-circle';
+                let badgeClass = 'success';
+                
+                if (paymentStatus === 'pending_verification') {
+                    methodText += ' - Pending Verification';
+                    statusIcon = 'fa-clock';
+                    badgeClass = 'warning';
+                } else if (paymentMethod === 'mpesa') {
+                    methodText += ' - Confirmed';
+                } else {
+                    methodText += ' - Pay when delivered';
+                    statusIcon = 'fa-hand-holding-usd';
+                    badgeClass = 'info';
+                }
+                
+                paymentBadge.className = `status-badge ${badgeClass}`;
+                paymentBadge.innerHTML = `<i class="fas ${statusIcon}"></i><span>${methodText}</span>`;
+            }
+            
+            // Handle repay section for unpaid orders
+            const repaySection = document.getElementById('repaySection');
+            if (repaySection) {
+                if (paymentStatus === 'pending_verification' || paymentStatus === 'failed') {
+                    repaySection.style.display = 'block';
+                    // Store order info for repay
+                    repaySection.dataset.orderId = orderId;
+                    repaySection.dataset.amount = this.orderTotal;
+                } else {
+                    repaySection.style.display = 'none';
+                }
+            }
+            
+            // Handle POD notice
+            const podNotice = document.getElementById('podNotice');
+            const podAmount = document.getElementById('podAmount');
+            if (podNotice) {
+                if (paymentMethod === 'pay_on_delivery') {
+                    podNotice.style.display = 'flex';
+                    if (podAmount) {
+                        podAmount.textContent = `KSh ${this.orderTotal?.toLocaleString() || '0'}`;
+                    }
+                } else {
+                    podNotice.style.display = 'none';
+                }
+            }
+            
+            // Update track order link
+            const trackOrderLink = document.getElementById('trackOrderLink');
+            if (trackOrderLink) {
+                trackOrderLink.href = `orderTracking.html?orderId=${orderId}`;
+            }
+            
+            // Trigger confetti animation
+            this.triggerConfetti();
         }
     }
+    
+    triggerConfetti() {
+        const container = document.getElementById('confettiContainer');
+        if (!container) return;
+        
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dfe6e9'];
+        const confettiCount = 50;
+        
+        for (let i = 0; i < confettiCount; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti-piece';
+            confetti.style.cssText = `
+                position: absolute;
+                width: ${Math.random() * 10 + 5}px;
+                height: ${Math.random() * 10 + 5}px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                left: ${Math.random() * 100}%;
+                animation: confetti-fall ${Math.random() * 2 + 2}s ease-out forwards;
+                animation-delay: ${Math.random() * 0.5}s;
+                border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                transform: rotate(${Math.random() * 360}deg);
+            `;
+            container.appendChild(confetti);
+        }
+        
+        // Clean up confetti after animation
+        setTimeout(() => {
+            container.innerHTML = '';
+        }, 4000);
+    }
 
-    cancelPayment() {
-        if (confirm('Are you sure you want to cancel this payment?')) {
+    async cancelPayment() {
+        const confirmed = await OdaModal.confirm({
+            title: 'Cancel Payment?',
+            message: 'Are you sure you want to cancel this payment? You will need to start the checkout process again.',
+            confirmText: 'Yes, Cancel',
+            cancelText: 'Continue Payment',
+            type: 'warning'
+        });
+        
+        if (confirmed) {
             if (this.mpesaManager) {
                 this.mpesaManager.cancel();
             }
@@ -869,6 +1090,83 @@ class CheckoutManager {
                 this.paymentModal.classList.remove('active');
             }
             this.updateProgressStep(1);
+        }
+    }
+
+    async retryPayment() {
+        const repaySection = document.getElementById('repaySection');
+        if (!repaySection) return;
+        
+        const orderId = repaySection.dataset.orderId;
+        const amount = parseFloat(repaySection.dataset.amount) || 0;
+        
+        if (!orderId || !amount) {
+            OdaModal.alert({
+                title: 'Error',
+                message: 'Unable to retrieve order details for repayment.',
+                type: 'error'
+            });
+            return;
+        }
+        
+        try {
+            // Close success modal
+            if (this.successModal) {
+                this.successModal.classList.remove('active');
+            }
+            
+            // Initialize M-Pesa payment for this order
+            const phoneInput = document.getElementById('mpesaPhone');
+            if (!phoneInput || !phoneInput.value) {
+                OdaModal.alert({
+                    title: 'Phone Required',
+                    message: 'Please enter your M-Pesa phone number to retry payment.',
+                    type: 'warning'
+                });
+                // Redirect to checkout with order info
+                window.location.href = `checkout.html?retryOrder=${orderId}`;
+                return;
+            }
+            
+            // Show payment modal
+            if (this.paymentModal) {
+                this.paymentModal.classList.add('active');
+            }
+            
+            // Process M-Pesa payment
+            if (this.mpesaManager) {
+                const paymentResult = await this.mpesaManager.initiatePayment(phoneInput.value, amount);
+                
+                if (paymentResult.success) {
+                    // Update order payment status
+                    const { doc, updateDoc } = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
+                    const orderRef = doc(db, 'orders', orderId);
+                    await updateDoc(orderRef, {
+                        paymentStatus: 'paid',
+                        mpesaCode: paymentResult.mpesaCode,
+                        paidAt: new Date().toISOString()
+                    });
+                    
+                    OdaModal.alert({
+                        title: 'Payment Successful!',
+                        message: `Your payment of KSh ${amount.toLocaleString()} has been received.`,
+                        type: 'success'
+                    });
+                    
+                    // Hide repay section
+                    repaySection.style.display = 'none';
+                    
+                    // Show success modal again
+                    this.showSuccessModal(orderId, 'mpesa', 'paid');
+                }
+            }
+        } catch (error) {
+            console.error('Retry payment error:', error);
+            OdaModal.alert({
+                title: 'Payment Failed',
+                message: 'Unable to process payment. Please try again or contact support.',
+                type: 'error'
+            });
         }
     }
 
@@ -929,8 +1227,25 @@ window.removePreview = function() {
     if (receiptUpload) receiptUpload.value = '';
 };
 
+// Global variable to hold checkout manager instance
+let checkoutManagerInstance = null;
+
+// Global function for retry payment
+window.retryPayment = async function() {
+    if (checkoutManagerInstance) {
+        await checkoutManagerInstance.retryPayment();
+    } else {
+        console.error('Checkout manager not initialized');
+        OdaModal.alert({
+            title: 'Error',
+            message: 'Unable to retry payment. Please refresh the page and try again.',
+            type: 'error'
+        });
+    }
+};
+
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', () => {
-    const checkoutManager = new CheckoutManager();
-    checkoutManager.initialize();
+    checkoutManagerInstance = new CheckoutManager();
+    checkoutManagerInstance.initialize();
 });

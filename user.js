@@ -12,9 +12,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 let currentUser = null;
 let profileUserId = null;

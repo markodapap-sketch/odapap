@@ -19,11 +19,15 @@ import { initializeImageSliders } from './imageSlider.js';
 import { showLoader, hideLoader } from './loader.js';
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
+import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
 
 // Initialize Firebase services
 const auth = getAuth(app);
 const storage = getStorage(app);
 const firestore = getFirestore(app);
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 // Caching for Firestore reads
 const userCache = new Map();
@@ -778,9 +782,10 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
       const userData = userDataMap[uploaderId] || {};
 
       const displayName = userData.name || userData.username || "Unknown User";
-      const isVerified = userData.isVerified === true;
+      const isVerified = userData.isVerified === true || userData.verified === true;
       const imageUrls = listing.imageUrls || [];
-      const firstImageUrl = imageUrls.length > 0 ? imageUrls[0] : "images/product-placeholder.png";
+      const firstImageUrl = getImageUrl(imageUrls[0], 'product');
+      const sellerPic = getImageUrl(userData.profilePicUrl, 'profile');
       const sellerId = listing.uploaderId || listing.userId;
 
       const listingElement = document.createElement("div");
@@ -788,7 +793,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
       listingElement.innerHTML = `
         <div class="product-item">
           <div class="profile">
-            <img src="${userData.profilePicUrl || "images/profile-placeholder.png"}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')" loading="lazy">
+            <img src="${sellerPic}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')" loading="lazy" data-fallback="profile">
             <div class="uploader-info">
               <p class="uploader-name"><strong>${displayName}</strong>${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
               <p class="product-name">${listing.name}</p>
@@ -808,7 +813,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
           <div class="product-image-container" onclick="goToProduct('${listing.id}')">
             <div class="image-slider">
               ${imageUrls.map((url, index) => `
-                <img src="${url}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}">
+                <img src="${getImageUrl(url, 'product')}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}" data-fallback="product">
               `).join('')}
               <div class="product-tags">
                 ${listing.subcategory ? `<span class="product-condition">${listing.subcategory}</span>` : ''}

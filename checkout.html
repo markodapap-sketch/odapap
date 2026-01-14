@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.png">
-    <link rel="apple-touch-icon" href="images/logo.png">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
     <title>Checkout - Oda Pap B2B</title>
     <link rel="stylesheet" href="checkout.css">
     <link rel="stylesheet" href="css/header.css">
@@ -371,34 +371,133 @@
             </div>
         </div>
 
-        <!-- Success Modal -->
+        <!-- Success Modal - Enhanced Post-Purchase Experience -->
         <div id="successModal" class="modal-overlay">
-            <div class="modal-container success-modal">
-                <div class="success-animation">
-                    <div class="checkmark-circle">
-                        <i class="fas fa-check"></i>
+            <div class="modal-container success-modal enhanced-success">
+                <!-- Animated Success Header -->
+                <div class="success-header">
+                    <div class="success-animation">
+                        <div class="checkmark-circle">
+                            <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                                <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+                                <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                            </svg>
+                        </div>
+                        <div class="confetti-container" id="confettiContainer"></div>
                     </div>
+                    <h2>🎉 Order Placed Successfully!</h2>
+                    <p class="success-subtitle">Thank you for shopping with Oda Pap. Your order is being processed.</p>
                 </div>
-                <h2>Order Placed Successfully!</h2>
-                <p>Thank you for your order. We'll start processing it right away.</p>
-                
-                <div class="order-details-box">
-                    <div class="detail-item">
-                        <span>Order ID</span>
-                        <strong id="orderRefNumber">ORD-XXXX</strong>
+
+                <!-- Order Summary Card -->
+                <div class="order-confirmation-card">
+                    <div class="order-header-info">
+                        <div class="order-id-display">
+                            <label>Order Reference</label>
+                            <strong id="orderRefNumber">ORD-XXXX</strong>
+                            <button class="copy-btn" onclick="copyOrderId()" title="Copy Order ID">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <div class="order-date-display">
+                            <label>Order Date</label>
+                            <strong id="orderDateDisplay"></strong>
+                        </div>
                     </div>
-                    <div class="detail-item">
-                        <span>Payment</span>
-                        <strong id="paymentMethodDisplay">M-Pesa</strong>
+                    
+                    <div class="payment-status-display">
+                        <div class="status-badge" id="paymentStatusBadge">
+                            <i class="fas fa-check-circle"></i>
+                            <span id="paymentMethodDisplay">M-Pesa - Confirmed</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="success-actions">
-                    <a href="orderTracking.html" class="btn-primary">
-                        <i class="fas fa-truck"></i> Track Order
+                <!-- What Happens Next - Simple Message -->
+                <div class="next-steps-simple">
+                    <div class="step-message">
+                        <i class="fas fa-info-circle"></i>
+                        <div>
+                            <strong>What's Next?</strong>
+                            <p id="nextStepText">The seller will confirm your order and prepare it for delivery. You'll receive updates via SMS.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Repay Option for Unpaid Orders -->
+                    <div class="repay-section" id="repaySection" style="display: none;">
+                        <div class="repay-alert">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <div>
+                                <strong>Payment Required</strong>
+                                <p>Your order is pending payment. Please complete payment to proceed.</p>
+                            </div>
+                        </div>
+                        <button class="btn-repay" id="repayBtn" onclick="retryPayment()">
+                            <i class="fas fa-credit-card"></i> Pay Now
+                        </button>
+                    </div>
+                    
+                    <!-- Pay on Delivery Notice -->
+                    <div class="pod-notice" id="podNotice" style="display: none;">
+                        <i class="fas fa-hand-holding-usd"></i>
+                        <div>
+                            <strong>Pay on Delivery</strong>
+                            <p>Please prepare <span id="podAmount">KES 0</span> in cash for the delivery person. Exact change is appreciated.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="success-quick-actions">
+                    <a href="" id="trackOrderLink" class="action-card primary">
+                        <div class="action-icon">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div class="action-text">
+                            <strong>Track Your Order</strong>
+                            <span>Real-time updates on delivery</span>
+                        </div>
+                        <i class="fas fa-chevron-right"></i>
                     </a>
-                    <a href="index.html" class="btn-secondary">
-                        <i class="fas fa-home"></i> Continue Shopping
+                    
+                    <div class="action-row">
+                        <a href="profile.html#orders" class="action-card secondary">
+                            <i class="fas fa-list-alt"></i>
+                            <span>View All Orders</span>
+                        </a>
+                        <a href="" id="shareOrderLink" class="action-card secondary" onclick="shareOrder(event)">
+                            <i class="fas fa-share-alt"></i>
+                            <span>Share</span>
+                        </a>
+                        <a href="customer_care.html" class="action-card secondary">
+                            <i class="fas fa-headset"></i>
+                            <span>Get Help</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Notification Preferences -->
+                <div class="notification-preferences">
+                    <div class="pref-header">
+                        <i class="fas fa-bell"></i>
+                        <span>Get notified about your order status</span>
+                    </div>
+                    <div class="pref-options">
+                        <label class="pref-option">
+                            <input type="checkbox" checked disabled>
+                            <span>SMS Updates</span>
+                        </label>
+                        <label class="pref-option">
+                            <input type="checkbox" id="emailNotifyCheck">
+                            <span>Email Updates</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Continue Shopping Button -->
+                <div class="success-footer-actions">
+                    <a href="index.html" class="btn-continue-shopping">
+                        <i class="fas fa-shopping-bag"></i> Continue Shopping
                     </a>
                 </div>
             </div>
@@ -406,5 +505,36 @@
     </main>
 
     <script type="module" src="checkout.js"></script>
+    <script>
+        // Copy order ID to clipboard
+        function copyOrderId() {
+            const orderId = document.getElementById('orderRefNumber').textContent;
+            navigator.clipboard.writeText(orderId).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i>';
+                }, 2000);
+            });
+        }
+
+        // Share order
+        function shareOrder(e) {
+            e.preventDefault();
+            const orderId = document.getElementById('orderRefNumber').textContent;
+            const shareData = {
+                title: 'My Oda Pap Order',
+                text: `I just placed an order on Oda Pap! Order ID: ${orderId}`,
+                url: window.location.origin + '/orderTracking.html?orderId=' + orderId
+            };
+            
+            if (navigator.share) {
+                navigator.share(shareData);
+            } else {
+                navigator.clipboard.writeText(shareData.url);
+                alert('Order link copied to clipboard!');
+            }
+        }
+    </script>
 </body>
 </html>

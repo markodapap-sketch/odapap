@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="icon" type="image/jpeg" href="images/logo.png">
-    <link rel="apple-touch-icon" href="images/logo.png">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
     <title>Admin Dashboard - Oda Pap</title>
     <link rel="stylesheet" href="admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -71,19 +71,21 @@
             </div>
             
             <div class="metrics">
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('orders')">
                     <div class="metric-icon blue"><i class="fas fa-shopping-cart"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricOrders">0</span>
                         <span class="metric-label">Total Orders</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('orders')">
                     <div class="metric-icon orange"><i class="fas fa-clock"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricPending">0</span>
                         <span class="metric-label">Pending</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
                 <div class="metric-card">
                     <div class="metric-icon green"><i class="fas fa-money-bill-wave"></i></div>
@@ -92,25 +94,52 @@
                         <span class="metric-label">Revenue</span>
                     </div>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('users')">
                     <div class="metric-icon purple"><i class="fas fa-users"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricUsers">0</span>
                         <span class="metric-label">Users</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('products')">
                     <div class="metric-icon teal"><i class="fas fa-boxes"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricProducts">0</span>
                         <span class="metric-label">Products</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
                 <div class="metric-card">
                     <div class="metric-icon pink"><i class="fas fa-store"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricStoreValue">KES 0</span>
                         <span class="metric-label">Store Value</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Statistics Card -->
+            <div class="sales-stats-card">
+                <div class="sales-stats-header">
+                    <h3><i class="fas fa-chart-line"></i> Sales Statistics</h3>
+                </div>
+                <div class="sales-grid">
+                    <div class="sales-stat">
+                        <span class="sales-value" id="totalSalesCount">0</span>
+                        <span class="sales-label">Total Sales</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="totalRevenueAmount">KES 0</span>
+                        <span class="sales-label">Total Revenue</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="monthSalesCount">0</span>
+                        <span class="sales-label">This Month Sales</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="monthRevenueAmount">KES 0</span>
+                        <span class="sales-label">This Month Revenue</span>
                     </div>
                 </div>
             </div>
@@ -422,6 +451,206 @@
                 <h2>Settings</h2>
             </div>
             <div class="settings-grid">
+                <!-- Delivery Areas Management -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-map-marked-alt"></i> Delivery Areas</h3>
+                        <button class="btn btn-primary btn-sm" id="saveDeliveryAreasBtn"><i class="fas fa-save"></i> Save Changes</button>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Enable or disable delivery to specific counties. Currently serving Mombasa. Enable more areas to expand operations.</p>
+                        
+                        <div class="delivery-areas-config">
+                            <div class="area-status-banner" id="areaStatusBanner">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Active delivery areas: <strong id="activeAreasCount">1</strong></span>
+                            </div>
+                            
+                            <div class="region-section">
+                                <h4><i class="fas fa-water"></i> Coast Region</h4>
+                                <div class="county-toggles" id="coastCounties">
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Mombasa" data-region="coast" checked>
+                                        <span class="county-name">Mombasa</span>
+                                        <span class="county-badge active">Active</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Kwale" data-region="coast">
+                                        <span class="county-name">Kwale</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Kilifi" data-region="coast">
+                                        <span class="county-name">Kilifi</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Tana River" data-region="coast">
+                                        <span class="county-name">Tana River</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Lamu" data-region="coast">
+                                        <span class="county-name">Lamu</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Taita-Taveta" data-region="coast">
+                                        <span class="county-name">Taita-Taveta</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="region-section">
+                                <h4><i class="fas fa-city"></i> Nairobi Region</h4>
+                                <div class="county-toggles" id="nairobiCounties">
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Nairobi" data-region="nairobi">
+                                        <span class="county-name">Nairobi</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="region-section">
+                                <h4><i class="fas fa-mountain"></i> Central Region</h4>
+                                <div class="county-toggles" id="centralCounties">
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Kiambu" data-region="central">
+                                        <span class="county-name">Kiambu</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Muranga" data-region="central">
+                                        <span class="county-name">Muranga</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Nyeri" data-region="central">
+                                        <span class="county-name">Nyeri</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Kirinyaga" data-region="central">
+                                        <span class="county-name">Kirinyaga</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                    <label class="county-toggle">
+                                        <input type="checkbox" data-county="Nyandarua" data-region="central">
+                                        <span class="county-name">Nyandarua</span>
+                                        <span class="county-badge">Inactive</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="region-section collapsed" id="moreRegions">
+                                <button class="btn btn-outline btn-sm expand-regions-btn" id="expandRegionsBtn">
+                                    <i class="fas fa-chevron-down"></i> Show More Regions
+                                </button>
+                                
+                                <div class="hidden-regions" style="display: none;">
+                                    <h4><i class="fas fa-sun"></i> Eastern Region</h4>
+                                    <div class="county-toggles">
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Machakos" data-region="eastern">
+                                            <span class="county-name">Machakos</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Makueni" data-region="eastern">
+                                            <span class="county-name">Makueni</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kitui" data-region="eastern">
+                                            <span class="county-name">Kitui</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Embu" data-region="eastern">
+                                            <span class="county-name">Embu</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Meru" data-region="eastern">
+                                            <span class="county-name">Meru</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <h4><i class="fas fa-tree"></i> Rift Valley Region</h4>
+                                    <div class="county-toggles">
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Nakuru" data-region="rift-valley">
+                                            <span class="county-name">Nakuru</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kajiado" data-region="rift-valley">
+                                            <span class="county-name">Kajiado</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Narok" data-region="rift-valley">
+                                            <span class="county-name">Narok</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Uasin Gishu" data-region="rift-valley">
+                                            <span class="county-name">Uasin Gishu (Eldoret)</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kericho" data-region="rift-valley">
+                                            <span class="county-name">Kericho</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <h4><i class="fas fa-fish"></i> Nyanza Region</h4>
+                                    <div class="county-toggles">
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kisumu" data-region="nyanza">
+                                            <span class="county-name">Kisumu</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Migori" data-region="nyanza">
+                                            <span class="county-name">Migori</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kisii" data-region="nyanza">
+                                            <span class="county-name">Kisii</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                    </div>
+                                    
+                                    <h4><i class="fas fa-wheat-alt"></i> Western Region</h4>
+                                    <div class="county-toggles">
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Kakamega" data-region="western">
+                                            <span class="county-name">Kakamega</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Bungoma" data-region="western">
+                                            <span class="county-name">Bungoma</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                        <label class="county-toggle">
+                                            <input type="checkbox" data-county="Busia" data-region="western">
+                                            <span class="county-name">Busia</span>
+                                            <span class="county-badge">Inactive</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Shipping Fee Settings -->
                 <div class="card full-width">
                     <div class="card-header">

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.png">
-    <link rel="apple-touch-icon" href="images/logo.png">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
     <title>Search Results - Oda Pap</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="search.css">
@@ -56,8 +56,12 @@
         import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { app } from "./js/firebase.js";
         import { showNotification } from './notifications.js';
+        import { setupGlobalImageErrorHandler, getImageUrl, PLACEHOLDERS, initLazyLoading } from './js/imageCache.js';
         
         const db = getFirestore(app);
+        
+        // Setup global image error handling
+        setupGlobalImageErrorHandler();
 
         // Get min price from variations
         function getMinPrice(product) {
@@ -152,12 +156,12 @@
 
             resultsContainer.innerHTML = results.map(product => {
                 const price = getMinPrice(product);
-                const imageUrl = product.imageUrls?.[0] || 'images/product-placeholder.png';
+                const imageUrl = getImageUrl(product.imageUrls?.[0], 'product');
                 
                 return `
                     <div class="product-card" onclick="window.location.href='product.html?id=${product.id}'">
                         <div class="product-image">
-                            <img src="${imageUrl}" alt="${product.name}" loading="lazy">
+                            <img src="${imageUrl}" alt="${product.name}" loading="lazy" data-fallback="product">
                             ${product.brand ? `<span class="product-brand">${product.brand}</span>` : ''}
                         </div>
                         <div class="product-info">
@@ -168,6 +172,9 @@
                     </div>
                 `;
             }).join('');
+            
+            // Initialize lazy loading after rendering
+            initLazyLoading();
         }
         
         function countVariants(product) {

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+    <title>Seller Dashboard - Oda Pap</title>
+    <link rel="stylesheet" href="seller-dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+        <button class="menu-btn" id="menuBtn"><i class="fas fa-bars"></i></button>
+        <h1>Seller Dashboard</h1>
+        <a href="index.html" class="home-btn"><i class="fas fa-home"></i></a>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <img src="images/logo.png" alt="Oda Pap" class="logo">
+            <span>Seller Hub</span>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-section="overview">
+                <i class="fas fa-chart-line"></i>
+                <span>Overview</span>
+            </button>
+            <button class="nav-item" data-section="orders">
+                <i class="fas fa-shopping-bag"></i>
+                <span>My Orders</span>
+                <span class="badge" id="ordersBadge">0</span>
+            </button>
+            <button class="nav-item" data-section="products">
+                <i class="fas fa-box"></i>
+                <span>My Products</span>
+            </button>
+            <button class="nav-item" data-section="earnings">
+                <i class="fas fa-wallet"></i>
+                <span>Earnings</span>
+            </button>
+            <button class="nav-item" data-section="store">
+                <i class="fas fa-store"></i>
+                <span>Store Settings</span>
+            </button>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <a href="listing.html" class="add-product-btn">
+                <i class="fas fa-plus"></i> Add Product
+            </a>
+            <div class="seller-profile" id="sellerProfile">
+                <img src="" alt="" id="sellerAvatar">
+                <div class="seller-info">
+                    <span class="seller-name" id="sellerName">Loading...</span>
+                    <span class="seller-status" id="sellerVerified"></span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Overview Section -->
+        <section class="section active" id="overview-section">
+            <h2 class="section-title">Dashboard Overview</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-card clickable" onclick="switchSection('orders')">
+                    <div class="stat-icon pending"><i class="fas fa-clock"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="pendingOrders">0</span>
+                        <span class="stat-label">Pending Orders</span>
+                    </div>
+                    <i class="fas fa-chevron-right stat-arrow"></i>
+                </div>
+                <div class="stat-card clickable" onclick="switchSection('earnings')">
+                    <div class="stat-icon earnings"><i class="fas fa-money-bill-wave"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalEarnings">KES 0</span>
+                        <span class="stat-label">Total Earnings</span>
+                    </div>
+                    <i class="fas fa-chevron-right stat-arrow"></i>
+                </div>
+                <div class="stat-card clickable" onclick="switchSection('products')">
+                    <div class="stat-icon products"><i class="fas fa-boxes"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="totalProducts">0</span>
+                        <span class="stat-label">Active Products</span>
+                    </div>
+                    <i class="fas fa-chevron-right stat-arrow"></i>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon rating"><i class="fas fa-star"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="avgRating">N/A</span>
+                        <span class="stat-label">Avg Rating</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sales Stats -->
+            <div class="card sales-stats">
+                <div class="card-header">
+                    <h3><i class="fas fa-chart-bar" style="color:#10b981"></i> Sales Overview</h3>
+                </div>
+                <div class="sales-grid">
+                    <div class="sales-stat">
+                        <span class="sales-value" id="totalSales">0</span>
+                        <span class="sales-label">Total Sales</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="totalRevenue">KES 0</span>
+                        <span class="sales-label">Total Revenue</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="monthSales">0</span>
+                        <span class="sales-label">This Month</span>
+                    </div>
+                    <div class="sales-stat">
+                        <span class="sales-value" id="monthRevenue">KES 0</span>
+                        <span class="sales-label">Monthly Revenue</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Orders Quick View -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Recent Orders</h3>
+                    <button class="btn-link" onclick="switchSection('orders')">View All</button>
+                </div>
+                <div class="order-list" id="recentOrdersList">
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>No orders yet</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Low Stock Alert -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> Low Stock Alert</h3>
+                </div>
+                <div class="low-stock-list" id="lowStockList">
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle" style="color:#10b981"></i>
+                        <p>All products are well stocked</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Orders Section -->
+        <section class="section" id="orders-section">
+            <h2 class="section-title">My Orders</h2>
+            
+            <div class="filters-bar">
+                <select id="orderStatusFilter">
+                    <option value="all">All Orders</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="out_for_delivery">Out for Delivery</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="cancelled">Cancelled</option>
+                </select>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="orderSearch" placeholder="Search orders...">
+                </div>
+            </div>
+            
+            <div class="orders-container" id="ordersContainer">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading orders...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Products Section -->
+        <section class="section" id="products-section">
+            <h2 class="section-title">My Products</h2>
+            
+            <div class="filters-bar">
+                <select id="productStockFilter">
+                    <option value="all">All Products</option>
+                    <option value="in_stock">In Stock</option>
+                    <option value="low_stock">Low Stock</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                </select>
+                <a href="listing.html" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Product
+                </a>
+            </div>
+            
+            <div class="products-grid" id="productsGrid">
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading products...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Earnings Section -->
+        <section class="section" id="earnings-section">
+            <h2 class="section-title">Earnings & Payouts</h2>
+            
+            <div class="earnings-summary">
+                <div class="earnings-card available">
+                    <span class="label">Available Balance</span>
+                    <span class="amount" id="availableBalance">KES 0</span>
+                    <button class="btn btn-primary" id="withdrawBtn">Withdraw</button>
+                </div>
+                <div class="earnings-card pending">
+                    <span class="label">Pending Clearance</span>
+                    <span class="amount" id="pendingEarnings">KES 0</span>
+                    <small>Released after delivery confirmation</small>
+                </div>
+                <div class="earnings-card total">
+                    <span class="label">Lifetime Earnings</span>
+                    <span class="amount" id="lifetimeEarnings">KES 0</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3>Transaction History</h3>
+                </div>
+                <div class="transactions-list" id="transactionsList">
+                    <div class="empty-state">
+                        <i class="fas fa-receipt"></i>
+                        <p>No transactions yet</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Store Settings Section -->
+        <section class="section" id="store-section">
+            <h2 class="section-title">Store Settings</h2>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3>Store Profile</h3>
+                </div>
+                <form id="storeSettingsForm" class="store-form">
+                    <div class="form-group">
+                        <label>Store Name</label>
+                        <input type="text" id="storeName" placeholder="Your Store Name">
+                    </div>
+                    <div class="form-group">
+                        <label>Store Description</label>
+                        <textarea id="storeDescription" placeholder="Tell buyers about your store..." rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Business Location</label>
+                        <input type="text" id="storeLocation" placeholder="e.g., Nairobi, Kenya">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Phone</label>
+                        <input type="tel" id="storePhone" placeholder="+254...">
+                    </div>
+                    <div class="form-group">
+                        <label>Processing Time</label>
+                        <select id="processingTime">
+                            <option value="same_day">Same Day</option>
+                            <option value="1_day">1 Business Day</option>
+                            <option value="2_3_days">2-3 Business Days</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Settings</button>
+                </form>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h3>Verification Status</h3>
+                </div>
+                <div class="verification-status" id="verificationStatus">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Order Details Modal -->
+    <div class="modal" id="orderModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Order Details</h3>
+                <button class="close-btn" id="closeOrderModal">&times;</button>
+            </div>
+            <div class="modal-body" id="orderModalBody">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Dispatch Photo Modal -->
+    <div class="modal" id="dispatchModal">
+        <div class="modal-content dispatch-modal">
+            <div class="modal-header">
+                <h3><i class="fas fa-camera"></i> Upload Dispatch Proof</h3>
+                <button class="close-btn" id="closeDispatchModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="dispatch-info">Take a photo of the packaged order before dispatch. This helps build trust with buyers.</p>
+                
+                <div class="dispatch-upload-area" id="dispatchUploadArea">
+                    <input type="file" id="dispatchPhotoInput" accept="image/*" capture="environment" style="display:none">
+                    <div class="upload-placeholder" id="dispatchPlaceholder">
+                        <i class="fas fa-camera"></i>
+                        <span>Tap to take photo or upload</span>
+                    </div>
+                    <img id="dispatchPreview" class="dispatch-preview" style="display:none">
+                </div>
+                
+                <div class="form-group">
+                    <label>Add a note (optional)</label>
+                    <textarea id="dispatchNote" placeholder="e.g., Package ready, will be picked up by courier today..." rows="2"></textarea>
+                </div>
+                
+                <div class="dispatch-actions">
+                    <button class="btn btn-secondary" id="cancelDispatch">Cancel</button>
+                    <button class="btn btn-primary" id="confirmDispatch" disabled>
+                        <i class="fas fa-truck"></i> Mark as Dispatched
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script type="module" src="seller-dashboard.js"></script>
+</body>
+</html>

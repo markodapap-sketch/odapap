@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <link rel="icon" type="image/jpeg" href="images/logo.png">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
     <title>Sell on Oda Pap</title>
     <link rel="stylesheet" href="listing.css">
     <link rel="stylesheet" href="css/header.css">
@@ -155,11 +155,27 @@
                             <div id="variants-box"></div>
                             <button type="button" class="btn-outline" id="add-variant-btn"><i class="fas fa-plus"></i> Add Variant Type</button>
 
-                            <details class="bulk-box">
-                                <summary><i class="fas fa-percent"></i> Bulk Discounts (Optional)</summary>
-                                <p class="field-desc" style="padding:10px 14px 0;">Offer discounts for bulk purchases to attract more buyers.</p>
+                            <details class="bulk-box" open>
+                                <summary><i class="fas fa-layer-group"></i> Bulk Order Pricing</summary>
+                                <div class="bulk-info-banner">
+                                    <div class="bulk-info-icon"><i class="fas fa-truck-loading"></i></div>
+                                    <div class="bulk-info-text">
+                                        <strong>Attract more wholesale buyers!</strong>
+                                        <span>Set quantity-based discounts to encourage larger orders.</span>
+                                    </div>
+                                </div>
+                                <div class="bulk-tiers-header">
+                                    <span>Minimum Quantity</span>
+                                    <span>Discount</span>
+                                    <span></span>
+                                </div>
                                 <div id="bulk-tiers"></div>
-                                <button type="button" class="btn-text" id="add-tier-btn"><i class="fas fa-plus"></i> Add Discount Tier</button>
+                                <button type="button" class="btn-add-tier" id="add-tier-btn">
+                                    <i class="fas fa-plus-circle"></i> Add Bulk Tier
+                                </button>
+                                <div class="bulk-example">
+                                    <p><i class="fas fa-lightbulb"></i> <strong>Example:</strong> 10+ units = 5% off, 50+ units = 10% off, 100+ units = 15% off</p>
+                                </div>
                             </details>
                         </div>
                     </div>

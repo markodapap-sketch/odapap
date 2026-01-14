@@ -8,10 +8,14 @@ import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, u
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from "./js/firebase.js";
 import { categoryHierarchy, brandsByCategory } from './js/categoryData.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -919,11 +923,31 @@ function addTier() {
 }
 
 function renderTiers() {
-    $('bulk-tiers').innerHTML = state.bulkTiers.map(t => `
+    const container = $('bulk-tiers');
+    if (!container) return;
+    
+    container.innerHTML = state.bulkTiers.map((t, idx) => `
         <div class="tier-row" data-tid="${t.id}">
-            <input type="number" placeholder="Min qty" min="2" value="${t.qty}" onchange="updateTier(${t.id}, 'qty', this.value)">
-            <input type="number" placeholder="% off" min="1" max="50" value="${t.discount}" onchange="updateTier(${t.id}, 'discount', this.value)">
-            <button type="button" onclick="removeTier(${t.id})"><i class="fas fa-times"></i></button>
+            <div class="tier-input-wrapper">
+                <input type="number" 
+                       placeholder="${idx === 0 ? 'e.g., 10' : idx === 1 ? 'e.g., 50' : 'e.g., 100'}" 
+                       min="2" 
+                       value="${t.qty}" 
+                       onchange="updateTier(${t.id}, 'qty', this.value)">
+                <span class="tier-input-label">+ units</span>
+            </div>
+            <div class="tier-input-wrapper">
+                <input type="number" 
+                       placeholder="${idx === 0 ? 'e.g., 5' : idx === 1 ? 'e.g., 10' : 'e.g., 15'}" 
+                       min="1" 
+                       max="50" 
+                       value="${t.discount}" 
+                       onchange="updateTier(${t.id}, 'discount', this.value)">
+                <span class="tier-input-label">% off</span>
+            </div>
+            <button type="button" onclick="removeTier(${t.id})" title="Remove tier">
+                <i class="fas fa-trash-alt"></i>
+            </button>
         </div>
     `).join('');
 }

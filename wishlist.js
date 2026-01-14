@@ -2,6 +2,10 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getFirestore, collection, doc, getDocs, deleteDoc, addDoc, getDoc, query, where } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
+import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+
+// Setup global image error handling
+setupGlobalImageErrorHandler();
 
 // Initialize Firebase services using the app instance
 const auth = getAuth(app);

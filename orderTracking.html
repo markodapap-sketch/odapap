@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/jpeg" href="images/logo.png">
-    <link rel="apple-touch-icon" href="images/logo.png">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
     <title>Order Tracking - Oda Pap</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="css/header.css">
@@ -120,27 +120,82 @@
         </div>
     </div>
 
-    <!-- Review Modal -->
+    <!-- Review Modal - Enhanced with Photo Upload -->
     <div id="reviewModal" class="modal" style="display: none;">
-        <div class="modal-content">
+        <div class="modal-content modal-large">
             <div class="modal-header">
-                <h2><i class="fas fa-star"></i> Rate Your Order</h2>
+                <h2><i class="fas fa-star" style="color: #ffc107;"></i> Rate Your Order</h2>
                 <button class="close-btn" onclick="closeReviewModal()">×</button>
             </div>
             <div class="modal-body">
                 <div class="review-product-info" id="reviewProductInfo"></div>
-                <div class="star-rating" id="starRating">
-                    <i class="fas fa-star" data-rating="1"></i>
-                    <i class="fas fa-star" data-rating="2"></i>
-                    <i class="fas fa-star" data-rating="3"></i>
-                    <i class="fas fa-star" data-rating="4"></i>
-                    <i class="fas fa-star" data-rating="5"></i>
+                
+                <!-- Star Rating -->
+                <div class="review-rating-section">
+                    <h4>How would you rate this product?</h4>
+                    <div class="star-rating" id="starRating">
+                        <i class="fas fa-star" data-rating="1"></i>
+                        <i class="fas fa-star" data-rating="2"></i>
+                        <i class="fas fa-star" data-rating="3"></i>
+                        <i class="fas fa-star" data-rating="4"></i>
+                        <i class="fas fa-star" data-rating="5"></i>
+                    </div>
+                    <p class="rating-text" id="ratingText">Select a rating</p>
                 </div>
-                <p class="rating-text" id="ratingText">Select a rating</p>
-                <textarea id="reviewText" placeholder="Write your review (optional)..." rows="4"></textarea>
+                
+                <!-- Review Text -->
+                <div class="review-text-section">
+                    <h4><i class="fas fa-comment-alt"></i> Share your experience</h4>
+                    <textarea id="reviewText" placeholder="Tell others what you think about this product..." rows="4"></textarea>
+                </div>
+                
+                <!-- Photo Upload for Review -->
+                <div class="review-photo-section">
+                    <h4><i class="fas fa-camera"></i> Add Photos (Optional)</h4>
+                    <p class="upload-hint">Share photos of your purchase to help other buyers</p>
+                    <div class="review-photo-upload">
+                        <input type="file" id="reviewPhotoInput" accept="image/*" hidden multiple>
+                        <label for="reviewPhotoInput" class="upload-trigger-small">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Photos</span>
+                        </label>
+                        <div class="review-photo-previews" id="reviewPhotoPreviews"></div>
+                    </div>
+                </div>
+                
+                <!-- Review Tags (Quick Feedback) -->
+                <div class="review-tags-section">
+                    <h4><i class="fas fa-tags"></i> Quick Tags (Optional)</h4>
+                    <div class="review-tags" id="reviewTags">
+                        <label class="review-tag">
+                            <input type="checkbox" value="great_quality">
+                            <span>Great Quality</span>
+                        </label>
+                        <label class="review-tag">
+                            <input type="checkbox" value="fast_delivery">
+                            <span>Fast Delivery</span>
+                        </label>
+                        <label class="review-tag">
+                            <input type="checkbox" value="good_value">
+                            <span>Good Value</span>
+                        </label>
+                        <label class="review-tag">
+                            <input type="checkbox" value="as_described">
+                            <span>As Described</span>
+                        </label>
+                        <label class="review-tag">
+                            <input type="checkbox" value="great_packaging">
+                            <span>Great Packaging</span>
+                        </label>
+                        <label class="review-tag">
+                            <input type="checkbox" value="responsive_seller">
+                            <span>Responsive Seller</span>
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="modal-actions">
-                <button onclick="submitReview()" class="btn-primary">
+                <button onclick="submitReview()" class="btn-primary" id="submitReviewBtn">
                     <i class="fas fa-check"></i> Submit Review
                 </button>
                 <button onclick="closeReviewModal()" class="btn-secondary">Cancel</button>
@@ -210,6 +265,78 @@
         </div>
     </div>
 
+    <!-- Delivery Confirmation Modal with Photo Upload -->
+    <div id="deliveryConfirmModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2><i class="fas fa-check-circle" style="color: #4caf50;"></i> Confirm Delivery</h2>
+                <button class="close-btn" onclick="closeDeliveryConfirmModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="delivery-confirm-info">
+                    <p id="deliveryConfirmOrderId"></p>
+                    <div class="delivery-confirm-product" id="deliveryConfirmProduct"></div>
+                </div>
+                
+                <!-- Photo Upload Section -->
+                <div class="photo-upload-section">
+                    <h4><i class="fas fa-camera"></i> Take a Photo of Your Delivery (Optional)</h4>
+                    <p class="upload-hint">Upload a photo of the delivered items to confirm receipt and help resolve any future disputes.</p>
+                    
+                    <div class="photo-upload-area" id="deliveryPhotoArea">
+                        <input type="file" id="deliveryPhotoInput" accept="image/*" capture="environment" hidden multiple>
+                        <label for="deliveryPhotoInput" class="upload-trigger">
+                            <div class="upload-icon">
+                                <i class="fas fa-camera"></i>
+                            </div>
+                            <span>Tap to take photo or upload</span>
+                        </label>
+                        <div class="photo-previews" id="deliveryPhotoPreviews"></div>
+                    </div>
+                </div>
+                
+                <!-- Condition Rating -->
+                <div class="condition-rating-section">
+                    <h4><i class="fas fa-box-open"></i> How was the package condition?</h4>
+                    <div class="condition-options" id="conditionOptions">
+                        <label class="condition-option" data-condition="excellent">
+                            <input type="radio" name="packageCondition" value="excellent">
+                            <div class="condition-icon"><i class="fas fa-grin-stars"></i></div>
+                            <span>Excellent</span>
+                        </label>
+                        <label class="condition-option" data-condition="good">
+                            <input type="radio" name="packageCondition" value="good">
+                            <div class="condition-icon"><i class="fas fa-smile"></i></div>
+                            <span>Good</span>
+                        </label>
+                        <label class="condition-option" data-condition="fair">
+                            <input type="radio" name="packageCondition" value="fair">
+                            <div class="condition-icon"><i class="fas fa-meh"></i></div>
+                            <span>Fair</span>
+                        </label>
+                        <label class="condition-option" data-condition="damaged">
+                            <input type="radio" name="packageCondition" value="damaged">
+                            <div class="condition-icon"><i class="fas fa-frown"></i></div>
+                            <span>Damaged</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Notes -->
+                <div class="delivery-notes-section">
+                    <h4><i class="fas fa-sticky-note"></i> Additional Notes (Optional)</h4>
+                    <textarea id="deliveryNotes" placeholder="Any comments about the delivery..." rows="3"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button onclick="confirmDelivery()" class="btn-primary" id="confirmDeliveryBtn">
+                    <i class="fas fa-check"></i> Confirm Receipt
+                </button>
+                <button onclick="closeDeliveryConfirmModal()" class="btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <footer>
         <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
     </footer>
@@ -220,6 +347,7 @@
         import { app } from "./js/firebase.js";
         import { showNotification } from './notifications.js';
         import { updateNavCounters } from './js/utils.js';
+        import { OdaModal } from './js/odaModal.js';
 
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -376,6 +504,16 @@
                         ${status === 'pending' && !order.sellerConfirmed && !canCancelOrder(order) ? `
                             <span class="status-badge warning" title="Orders can only be cancelled after 2 hours"><i class="fas fa-clock"></i> Cancel in ${getTimeUntilCancel(order)}</span>
                         ` : ''}
+                        ${status === 'out_for_delivery' && !order.buyerConfirmedDelivery ? `
+                            <button class="btn-confirm-delivery" onclick="openDeliveryConfirmModal('${order.id}')">
+                                <i class="fas fa-box-open"></i> Confirm Delivery
+                            </button>
+                        ` : ''}
+                        ${status === 'delivered' && !order.buyerConfirmedDelivery ? `
+                            <button class="btn-confirm-delivery secondary" onclick="openDeliveryConfirmModal('${order.id}')">
+                                <i class="fas fa-camera"></i> Add Delivery Photo
+                            </button>
+                        ` : ''}
                         ${status === 'delivered' && !order.reviewed ? `
                             <button class="btn-review" onclick="openReviewModal('${order.id}')">
                                 <i class="fas fa-star"></i> Leave Review
@@ -383,6 +521,9 @@
                         ` : ''}
                         ${status === 'delivered' && order.reviewed ? `
                             <span class="reviewed-badge"><i class="fas fa-check-circle"></i> Reviewed</span>
+                        ` : ''}
+                        ${order.buyerConfirmedDelivery ? `
+                            <span class="confirmed-badge"><i class="fas fa-camera-retro"></i> Receipt Confirmed</span>
                         ` : ''}
                         ${(status === 'delivered' || status === 'out_for_delivery') && !order.disputeFiled ? `
                             <button class="btn-dispute" onclick="openDisputeModal('${order.id}')">
@@ -593,43 +734,145 @@
             document.getElementById('ratingText').textContent = selectedRating ? ratingTexts[selectedRating] : 'Select a rating';
         }
 
+        // Review photo handling
+        let reviewPhotos = [];
+        
+        document.getElementById('reviewPhotoInput')?.addEventListener('change', async function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            
+            const previewContainer = document.getElementById('reviewPhotoPreviews');
+            
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                if (reviewPhotos.length >= 5) {
+                    showNotification('Maximum 5 photos allowed', 'warning');
+                    break;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'review-photo-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Review photo">
+                        <button class="remove-photo" onclick="removeReviewPhoto(${reviewPhotos.length})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(previewItem);
+                };
+                reader.readAsDataURL(file);
+                
+                reviewPhotos.push(file);
+            }
+            
+            e.target.value = '';
+        });
+
+        window.removeReviewPhoto = function(index) {
+            reviewPhotos.splice(index, 1);
+            const previewContainer = document.getElementById('reviewPhotoPreviews');
+            previewContainer.innerHTML = '';
+            
+            reviewPhotos.forEach((file, i) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'review-photo-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Review photo">
+                        <button class="remove-photo" onclick="removeReviewPhoto(${i})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(previewItem);
+                };
+                reader.readAsDataURL(file);
+            });
+        };
+
         window.submitReview = async function() {
             if (!selectedOrder || !selectedRating) {
                 showNotification('Please select a rating', 'error');
                 return;
             }
 
+            const submitBtn = document.getElementById('submitReviewBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
             const reviewText = document.getElementById('reviewText').value.trim();
             const user = auth.currentUser;
             const firstItem = selectedOrder.items?.[0] || selectedOrder;
+            
+            // Get selected tags
+            const selectedTags = [];
+            document.querySelectorAll('#reviewTags input:checked').forEach(checkbox => {
+                selectedTags.push(checkbox.value);
+            });
 
             try {
+                let photoUrls = [];
+                
+                // Upload review photos if any
+                if (reviewPhotos.length > 0) {
+                    const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js");
+                    const storage = getStorage();
+                    
+                    for (const photo of reviewPhotos) {
+                        const fileName = `reviews/${user.uid}/${selectedOrder.id}/${Date.now()}_${photo.name}`;
+                        const storageRef = ref(storage, fileName);
+                        await uploadBytes(storageRef, photo);
+                        const url = await getDownloadURL(storageRef);
+                        photoUrls.push(url);
+                    }
+                }
+
                 // Add review to Reviews collection
                 await addDoc(collection(db, 'Reviews'), {
                     orderId: selectedOrder.id,
                     userId: user.uid,
                     userEmail: user.email,
+                    userName: user.displayName || 'Anonymous',
                     listingId: firstItem.listingId || firstItem.productId,
                     sellerId: firstItem.sellerId || firstItem.uploaderId,
                     rating: selectedRating,
                     review: reviewText,
+                    photos: photoUrls,
+                    tags: selectedTags,
                     productName: firstItem.name,
+                    productImage: firstItem.photoUrl || firstItem.imageUrl,
+                    verified: true, // Verified purchase
                     createdAt: Timestamp.now()
                 });
 
                 // Mark order as reviewed
                 await updateDoc(doc(db, 'Orders', selectedOrder.id), {
                     reviewed: true,
-                    reviewedAt: Timestamp.now()
+                    reviewedAt: Timestamp.now(),
+                    reviewRating: selectedRating
                 });
 
-                showNotification('Review submitted successfully!');
+                showNotification('Review submitted successfully! Thank you for your feedback.', 'success');
                 closeReviewModal();
                 loadOrders();
             } catch (error) {
                 console.error('Error submitting review:', error);
                 showNotification('Failed to submit review', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check"></i> Submit Review';
             }
+        };
+
+        // Reset review modal on open
+        const originalOpenReviewModal = window.openReviewModal;
+        window.openReviewModal = function(orderId) {
+            reviewPhotos = [];
+            document.getElementById('reviewPhotoPreviews').innerHTML = '';
+            document.querySelectorAll('#reviewTags input').forEach(cb => cb.checked = false);
+            originalOpenReviewModal(orderId);
         };
 
         // Helper function to check if order can be cancelled (2 hour delay)
@@ -663,7 +906,15 @@
                 return;
             }
 
-            const confirmed = confirm('Are you sure you want to cancel this order? If you have already paid, a refund will be initiated.');
+            const confirmed = await OdaModal.confirm({
+                title: 'Cancel Order?',
+                message: order.paymentStatus === 'completed' 
+                    ? 'Are you sure you want to cancel this order? Since you have already paid, a refund will be initiated and processed within 24-48 hours.'
+                    : 'Are you sure you want to cancel this order? This action cannot be undone.',
+                confirmText: 'Yes, Cancel Order',
+                cancelText: 'Keep Order',
+                type: order.paymentStatus === 'completed' ? 'warning' : 'danger'
+            });
             if (!confirmed) return;
 
             try {
@@ -793,6 +1044,195 @@
             }, 500);
         };
 
+        // =============================================
+        // Delivery Confirmation with Photo Upload
+        // =============================================
+        let deliveryPhotos = [];
+        let selectedCondition = null;
+
+        // Open delivery confirmation modal
+        window.openDeliveryConfirmModal = function(orderId) {
+            selectedOrder = allOrders.find(o => o.id === orderId);
+            if (!selectedOrder) return;
+            
+            // Reset state
+            deliveryPhotos = [];
+            selectedCondition = null;
+            
+            const firstItem = selectedOrder.items?.[0] || selectedOrder;
+            document.getElementById('deliveryConfirmOrderId').innerHTML = `<strong>Order #${orderId.slice(-8).toUpperCase()}</strong>`;
+            document.getElementById('deliveryConfirmProduct').innerHTML = `
+                <img src="${firstItem.photoUrl || firstItem.imageUrl || 'images/product-placeholder.png'}" 
+                     alt="${firstItem.name}" onerror="this.src='images/product-placeholder.png'">
+                <div>
+                    <h4>${firstItem.name || 'Product'}</h4>
+                    <p>Qty: ${firstItem.quantity || 1}${(selectedOrder.items?.length || 1) > 1 ? ` (+${selectedOrder.items.length - 1} more)` : ''}</p>
+                </div>
+            `;
+            
+            // Reset photo previews
+            document.getElementById('deliveryPhotoPreviews').innerHTML = '';
+            document.querySelector('.upload-trigger').style.display = 'flex';
+            
+            // Reset condition selection
+            document.querySelectorAll('.condition-option').forEach(opt => opt.classList.remove('selected'));
+            document.querySelectorAll('input[name="packageCondition"]').forEach(r => r.checked = false);
+            
+            // Reset notes
+            document.getElementById('deliveryNotes').value = '';
+            
+            document.getElementById('deliveryConfirmModal').style.display = 'flex';
+        };
+
+        window.closeDeliveryConfirmModal = function() {
+            document.getElementById('deliveryConfirmModal').style.display = 'none';
+            selectedOrder = null;
+            deliveryPhotos = [];
+            selectedCondition = null;
+        };
+
+        // Photo upload handling
+        document.getElementById('deliveryPhotoInput')?.addEventListener('change', async function(e) {
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
+            
+            const previewContainer = document.getElementById('deliveryPhotoPreviews');
+            
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                if (deliveryPhotos.length >= 4) {
+                    showNotification('Maximum 4 photos allowed', 'warning');
+                    break;
+                }
+                
+                // Read file for preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'photo-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Delivery photo">
+                        <button class="remove-photo" onclick="removeDeliveryPhoto(${deliveryPhotos.length})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(previewItem);
+                };
+                reader.readAsDataURL(file);
+                
+                deliveryPhotos.push(file);
+            }
+            
+            // Hide upload trigger if max photos reached
+            if (deliveryPhotos.length >= 4) {
+                document.querySelector('.upload-trigger').style.display = 'none';
+            }
+            
+            // Clear input
+            e.target.value = '';
+        });
+
+        window.removeDeliveryPhoto = function(index) {
+            deliveryPhotos.splice(index, 1);
+            // Rebuild previews
+            const previewContainer = document.getElementById('deliveryPhotoPreviews');
+            previewContainer.innerHTML = '';
+            
+            deliveryPhotos.forEach((file, i) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'photo-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="Delivery photo">
+                        <button class="remove-photo" onclick="removeDeliveryPhoto(${i})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+                    previewContainer.appendChild(previewItem);
+                };
+                reader.readAsDataURL(file);
+            });
+            
+            // Show upload trigger again
+            document.querySelector('.upload-trigger').style.display = 'flex';
+        };
+
+        // Condition option selection
+        document.querySelectorAll('.condition-option').forEach(opt => {
+            opt.addEventListener('click', function() {
+                document.querySelectorAll('.condition-option').forEach(o => o.classList.remove('selected'));
+                this.classList.add('selected');
+                this.querySelector('input').checked = true;
+                selectedCondition = this.dataset.condition;
+            });
+        });
+
+        // Confirm delivery with photo upload
+        window.confirmDelivery = async function() {
+            if (!selectedOrder) return;
+            
+            const confirmBtn = document.getElementById('confirmDeliveryBtn');
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirming...';
+            
+            try {
+                let photoUrls = [];
+                
+                // Upload photos if any
+                if (deliveryPhotos.length > 0) {
+                    const { getStorage, ref, uploadBytes, getDownloadURL } = await import("https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js");
+                    const storage = getStorage();
+                    
+                    for (const photo of deliveryPhotos) {
+                        const fileName = `delivery-confirmations/${auth.currentUser.uid}/${selectedOrder.id}/${Date.now()}_${photo.name}`;
+                        const storageRef = ref(storage, fileName);
+                        await uploadBytes(storageRef, photo);
+                        const url = await getDownloadURL(storageRef);
+                        photoUrls.push(url);
+                    }
+                }
+                
+                const notes = document.getElementById('deliveryNotes').value.trim();
+                
+                // Update order with delivery confirmation
+                await updateDoc(doc(db, 'Orders', selectedOrder.id), {
+                    buyerConfirmedDelivery: true,
+                    buyerConfirmedAt: Timestamp.now(),
+                    deliveryPhotos: photoUrls,
+                    packageCondition: selectedCondition || 'not_specified',
+                    deliveryNotes: notes,
+                    status: 'delivered'
+                });
+                
+                // Create delivery confirmation record
+                await addDoc(collection(db, 'DeliveryConfirmations'), {
+                    orderId: selectedOrder.id,
+                    userId: auth.currentUser.uid,
+                    photos: photoUrls,
+                    packageCondition: selectedCondition || 'not_specified',
+                    notes: notes,
+                    confirmedAt: Timestamp.now()
+                });
+                
+                showNotification('Delivery confirmed successfully! Thank you for your feedback.', 'success');
+                closeDeliveryConfirmModal();
+                
+                // Offer to leave a review
+                setTimeout(() => {
+                    openReviewModal(selectedOrder.id);
+                }, 500);
+                
+                loadOrders();
+            } catch (error) {
+                console.error('Error confirming delivery:', error);
+                showNotification('Failed to confirm delivery. Please try again.', 'error');
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Receipt';
+            }
+        };
+
         // Load orders when user is authenticated
         onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -895,23 +1335,30 @@
 
         .filter-tabs {
             display: flex;
-            gap: 12px;
-            margin-bottom: 30px;
+            gap: 8px;
+            margin-bottom: 20px;
             overflow-x: auto;
-            padding: 10px 0;
+            padding: 8px 0;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .filter-tabs::-webkit-scrollbar {
+            display: none;
         }
 
         .tab-btn {
             background: white;
-            border: 2px solid #e0e0e0;
-            padding: 10px 20px;
-            border-radius: 25px;
+            border: 1px solid #e0e0e0;
+            padding: 8px 14px;
+            border-radius: 20px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
-            color: #424242;
-            transition: all 0.3s ease;
+            color: #666;
+            transition: all 0.2s ease;
             white-space: nowrap;
+            flex-shrink: 0;
         }
 
         .tab-btn:hover {
@@ -1104,25 +1551,26 @@
 
         .order-footer {
             display: flex;
-            gap: 12px;
-            padding: 16px 20px;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 12px 16px;
             border-top: 1px solid #e0e0e0;
             align-items: center;
         }
 
         .btn-repay, .btn-view-details, .btn-review {
-            flex: 1;
-            padding: 10px 16px;
+            flex: 0 0 auto;
+            padding: 8px 12px;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            transition: all 0.3s ease;
+            gap: 5px;
+            transition: all 0.2s ease;
         }
 
         .btn-repay {
@@ -1152,13 +1600,61 @@
             background: #43a047;
         }
 
-        .reviewed-badge {
-            color: #4CAF50;
-            font-size: 13px;
+        .btn-confirm-delivery {
+            flex: 0 0 auto;
+            padding: 8px 12px;
+            background: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
             font-weight: 600;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 6px;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-confirm-delivery:hover {
+            background: #1976d2;
+        }
+
+        .btn-confirm-delivery.secondary {
+            background: transparent;
+            border: 1px solid #2196f3;
+            color: #2196f3;
+        }
+
+        .btn-confirm-delivery.secondary:hover {
+            background: #2196f3;
+            color: white;
+        }
+
+        .reviewed-badge, .confirmed-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reviewed-badge {
+            background: #e8f5e9;
+            color: #4CAF50;
+        }
+
+        .confirmed-badge {
+            background: #e3f2fd;
+            color: #2196f3;
+        }
+
+        .status-badge.warning {
+            font-size: 11px;
+            padding: 6px 10px;
         }
 
         /* Modal Styles */
@@ -1459,20 +1955,20 @@
 
         /* Cancel and Dispute Button Styles */
         .btn-cancel {
-            flex: 1;
-            padding: 10px 16px;
-            border: 2px solid #f44336;
+            flex: 0 0 auto;
+            padding: 8px 12px;
+            border: 1px solid #f44336;
             background: transparent;
             color: #f44336;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            transition: all 0.3s ease;
+            gap: 5px;
+            transition: all 0.2s ease;
         }
 
         .btn-cancel:hover {
@@ -1481,20 +1977,20 @@
         }
 
         .btn-dispute {
-            flex: 1;
-            padding: 10px 16px;
-            border: 2px solid #ff9800;
+            flex: 0 0 auto;
+            padding: 8px 12px;
+            border: 1px solid #ff9800;
             background: transparent;
             color: #ff9800;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
-            transition: all 0.3s ease;
+            gap: 5px;
+            transition: all 0.2s ease;
         }
 
         .btn-dispute:hover {
@@ -1608,6 +2104,540 @@
 
             .order-footer {
                 flex-direction: column;
+            }
+        }
+
+        /* =============================================
+           Delivery Confirmation Modal Styles
+           ============================================= */
+        .delivery-confirm-info {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .delivery-confirm-product {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .delivery-confirm-product img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .delivery-confirm-product h4 {
+            margin: 0 0 4px;
+            font-size: 14px;
+        }
+
+        .delivery-confirm-product p {
+            margin: 0;
+            font-size: 12px;
+            color: #757575;
+        }
+
+        /* Photo Upload Section */
+        .photo-upload-section {
+            margin-bottom: 24px;
+        }
+
+        .photo-upload-section h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .photo-upload-section h4 i {
+            color: #ff5722;
+        }
+
+        .upload-hint {
+            font-size: 12px;
+            color: #757575;
+            margin-bottom: 16px;
+        }
+
+        .photo-upload-area {
+            border: 2px dashed #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .photo-upload-area:hover {
+            border-color: #ff5722;
+            background: #fff3e0;
+        }
+
+        .upload-trigger {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            padding: 20px;
+        }
+
+        .upload-trigger .upload-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #ff5722 0%, #ff7043 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+
+        .upload-trigger span {
+            font-size: 14px;
+            color: #757575;
+        }
+
+        .photo-previews {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .photo-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .photo-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-preview-item .remove-photo {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 24px;
+            height: 24px;
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        /* Condition Rating */
+        .condition-rating-section {
+            margin-bottom: 24px;
+        }
+
+        .condition-rating-section h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .condition-rating-section h4 i {
+            color: #ff5722;
+        }
+
+        .condition-options {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .condition-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .condition-option input {
+            display: none;
+        }
+
+        .condition-option:hover {
+            border-color: #ff5722;
+            background: #fff3e0;
+        }
+
+        .condition-option.selected {
+            border-color: #4caf50;
+            background: #e8f5e9;
+        }
+
+        .condition-option .condition-icon {
+            font-size: 28px;
+        }
+
+        .condition-option[data-condition="excellent"] .condition-icon {
+            color: #4caf50;
+        }
+
+        .condition-option[data-condition="good"] .condition-icon {
+            color: #8bc34a;
+        }
+
+        .condition-option[data-condition="fair"] .condition-icon {
+            color: #ff9800;
+        }
+
+        .condition-option[data-condition="damaged"] .condition-icon {
+            color: #f44336;
+        }
+
+        .condition-option span {
+            font-size: 12px;
+            font-weight: 500;
+            color: #424242;
+        }
+
+        /* Delivery Notes */
+        .delivery-notes-section {
+            margin-bottom: 24px;
+        }
+
+        .delivery-notes-section h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .delivery-notes-section h4 i {
+            color: #ff5722;
+        }
+
+        #deliveryNotes {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        #deliveryNotes:focus {
+            outline: none;
+            border-color: #ff5722;
+        }
+
+        /* Confirm Delivery Button */
+        .btn-confirm-delivery {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-confirm-delivery:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-confirm-delivery.secondary {
+            background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+        }
+
+        .btn-confirm-delivery.secondary:hover {
+            box-shadow: 0 4px 12px rgba(255, 87, 34, 0.4);
+        }
+
+        /* Confirmed Badge */
+        .confirmed-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 480px) {
+            .condition-options {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .photo-previews {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* =============================================
+           Enhanced Review Modal Styles
+           ============================================= */
+        .review-product-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+
+        .review-product-info img {
+            width: 70px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .review-product-info h4 {
+            margin: 0 0 4px;
+            font-size: 15px;
+        }
+
+        .review-product-info p {
+            margin: 0;
+            font-size: 12px;
+            color: #757575;
+        }
+
+        .review-rating-section {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .review-rating-section h4 {
+            margin-bottom: 16px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .star-rating {
+            display: inline-flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .star-rating i {
+            font-size: 32px;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .star-rating i:hover,
+        .star-rating i.active {
+            color: #ffc107;
+            transform: scale(1.1);
+        }
+
+        .rating-text {
+            font-size: 14px;
+            color: #757575;
+            font-weight: 500;
+        }
+
+        .review-text-section,
+        .review-photo-section,
+        .review-tags-section {
+            margin-bottom: 24px;
+        }
+
+        .review-text-section h4,
+        .review-photo-section h4,
+        .review-tags-section h4 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .review-text-section h4 i,
+        .review-photo-section h4 i,
+        .review-tags-section h4 i {
+            color: #ff5722;
+        }
+
+        #reviewText {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        #reviewText:focus {
+            outline: none;
+            border-color: #ffc107;
+        }
+
+        /* Review Photo Upload */
+        .review-photo-upload {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .upload-trigger-small {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 80px;
+            height: 80px;
+            border: 2px dashed #e0e0e0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .upload-trigger-small:hover {
+            border-color: #ff5722;
+            background: #fff3e0;
+        }
+
+        .upload-trigger-small i {
+            font-size: 20px;
+            color: #757575;
+        }
+
+        .upload-trigger-small span {
+            font-size: 10px;
+            color: #757575;
+        }
+
+        .review-photo-previews {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .review-photo-item {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .review-photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .review-photo-item .remove-photo {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 22px;
+            height: 22px;
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+        }
+
+        /* Review Tags */
+        .review-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .review-tag {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .review-tag input {
+            display: none;
+        }
+
+        .review-tag span {
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #616161;
+            transition: all 0.3s ease;
+        }
+
+        .review-tag:hover span {
+            border-color: #ff5722;
+            background: #fff3e0;
+        }
+
+        .review-tag input:checked + span {
+            background: #ff5722;
+            border-color: #ff5722;
+            color: white;
+        }
+
+        @media (max-width: 480px) {
+            .star-rating i {
+                font-size: 28px;
+            }
+
+            .upload-trigger-small,
+            .review-photo-item {
+                width: 70px;
+                height: 70px;
             }
         }
     </style>

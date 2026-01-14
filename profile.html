@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/jpeg" href="images/logo.png">
-  <link rel="apple-touch-icon" href="images/logo.png">
+  <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
   <title>Profile - Oda Pap</title>
   <link rel="stylesheet" href="css/header.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
@@ -432,6 +432,124 @@
     
     /* Hidden */
     .hidden-input { display: none; }
+
+    /* Order Modal Styles */
+    .order-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .order-modal-content {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 450px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .order-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      background: white;
+      border-radius: 12px 12px 0 0;
+    }
+    .order-modal-header h3 {
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ff5722;
+    }
+    .order-modal-close {
+      background: #f5f5f5;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .order-modal-body { padding: 16px; }
+    .order-detail-section {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .order-detail-section h4 {
+      font-size: 0.8rem;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+    .order-detail-section p {
+      font-size: 0.85rem;
+      color: #333;
+      margin: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .order-detail-section p i { color: #999; font-size: 0.8rem; }
+    .order-detail-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      background: #fafafa;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .order-detail-item img {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+    .order-detail-item-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .order-detail-item-info strong { font-size: 0.85rem; color: #333; }
+    .order-detail-item-info small { font-size: 0.7rem; color: #999; }
+    .order-detail-item-info span { font-size: 0.75rem; color: #666; }
+    .order-detail-item-price {
+      font-weight: 600;
+      color: #ff5722;
+      font-size: 0.9rem;
+    }
+    .order-detail-totals {
+      background: #f9f9f9;
+      padding: 12px;
+      border-radius: 8px;
+    }
+    .order-detail-totals > div {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+    }
+    .order-detail-totals .total-row {
+      font-weight: 700;
+      font-size: 1rem;
+      border-top: 1px solid #ddd;
+      padding-top: 8px;
+      margin-top: 8px;
+      color: #ff5722;
+    }
   </style>
 </head>
 <body>
@@ -543,6 +661,10 @@
 
   <!-- Quick Actions -->
   <div class="quick-actions">
+    <a href="seller-dashboard.html" class="quick-action">
+      <i class="fas fa-chart-line"></i>
+      <span>Seller Hub</span>
+    </a>
     <a href="deposit.html" class="quick-action">
       <i class="fas fa-plus-circle"></i>
       <span>Deposit</span>
@@ -554,10 +676,6 @@
     <a href="listing.html" class="quick-action">
       <i class="fas fa-store"></i>
       <span>Sell</span>
-    </a>
-    <a href="cart.html" class="quick-action">
-      <i class="fas fa-shopping-cart"></i>
-      <span>Cart</span>
     </a>
   </div>
 
@@ -660,6 +778,11 @@
     <a href="wishlist.html" class="menu-link">
       <i class="fas fa-heart"></i>
       <span>Wishlist</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
+    <a href="seller-dashboard.html" class="menu-link">
+      <i class="fas fa-store"></i>
+      <span>My Shop</span>
       <i class="fas fa-chevron-right arrow"></i>
     </a>
     <a href="orderTracking.html" class="menu-link">
@@ -1035,7 +1158,7 @@
     function renderSellerOrders() {
       const container = document.getElementById('seller-orders-list');
       let filteredOrders = currentOrderFilter === 'all' ? allSellerOrders 
-        : allSellerOrders.filter(o => (o.status || 'pending').toLowerCase() === currentOrderFilter);
+        : allSellerOrders.filter(o => (o.status || o.orderStatus || 'pending').toLowerCase() === currentOrderFilter);
 
       if (filteredOrders.length === 0) {
         container.innerHTML = `<div class="orders-empty"><i class="fas fa-box-open"></i>No ${currentOrderFilter === 'all' ? '' : currentOrderFilter} orders</div>`;
@@ -1044,24 +1167,30 @@
 
       let html = '';
       filteredOrders.slice(0, 8).forEach(order => {
-        const status = order.status || 'pending';
-        const itemName = order.itemName || order.items?.[0]?.name || 'Item';
-        const itemImage = order.itemImage || order.items?.[0]?.image || 'images/profile-placeholder.png';
-        const qty = order.quantity || order.items?.[0]?.quantity || 1;
-        const total = order.total || order.totalAmount || 0;
-        const orderId = order.id.slice(-6).toUpperCase();
+        const status = order.status || order.orderStatus || 'pending';
+        // Get the first item info - check all possible field names
+        const firstItem = order.items?.[0] || {};
+        const itemName = firstItem.productName || firstItem.name || order.itemName || 'Product';
+        const itemImage = firstItem.imageUrl || firstItem.image || firstItem.photoTraceUrl || order.itemImage || 'images/product-placeholder.png';
+        const qty = firstItem.quantity || order.quantity || 1;
+        const total = order.totalAmount || order.total || firstItem.totalPrice || 0;
+        const orderId = (order.orderId || order.id).slice(-6).toUpperCase();
+        const buyerName = order.buyerDetails?.name || 'Customer';
+        const orderDate = order.createdAt?.toDate?.() || (order.createdAt ? new Date(order.createdAt) : new Date());
+        const itemCount = order.items?.length || 1;
 
         html += `
-          <div class="order-card">
+          <div class="order-card" style="cursor: pointer;" onclick="showOrderDetails('${order.id}')">
             <div class="order-card-header">
               <span class="order-id">#${orderId}</span>
               <span class="order-status ${status.toLowerCase()}">${status}</span>
             </div>
             <div class="order-card-body">
-              <img src="${itemImage}" class="order-item-img" onerror="this.src='images/profile-placeholder.png'">
+              <img src="${itemImage}" class="order-item-img" onerror="this.src='images/product-placeholder.png'" alt="${itemName}">
               <div class="order-item-details">
-                <div class="order-item-name">${itemName}</div>
-                <div class="order-item-qty">Qty: ${qty}</div>
+                <div class="order-item-name">${itemName}${itemCount > 1 ? ` +${itemCount-1} more` : ''}</div>
+                <div class="order-item-qty">Qty: ${qty} • ${buyerName}</div>
+                <div style="font-size: 0.65rem; color: #999;">${orderDate.toLocaleDateString()}</div>
               </div>
               <div class="order-item-price">KES ${total.toLocaleString()}</div>
             </div>
@@ -1088,23 +1217,77 @@
     }
 
     function renderOrderActions(order) {
-      const status = (order.status || 'pending').toLowerCase();
+      const status = (order.status || order.orderStatus || 'pending').toLowerCase();
       if (status === 'pending') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-accept" data-order-id="${order.id}">Accept</button>
-          <button class="order-action-btn btn-cancel-order" data-order-id="${order.id}">Cancel</button>
+          <button class="order-action-btn btn-accept" data-order-id="${order.id}" onclick="event.stopPropagation();">Accept</button>
+          <button class="order-action-btn btn-cancel-order" data-order-id="${order.id}" onclick="event.stopPropagation();">Cancel</button>
         </div>`;
-      } else if (status === 'processing') {
+      } else if (status === 'processing' || status === 'confirmed' || status === 'seller_confirmed') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-ship" data-order-id="${order.id}">Ship</button>
+          <button class="order-action-btn btn-ship" data-order-id="${order.id}" onclick="event.stopPropagation();">Ship</button>
         </div>`;
-      } else if (status === 'shipped') {
+      } else if (status === 'shipped' || status === 'out_for_delivery') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-complete" data-order-id="${order.id}">Complete</button>
+          <button class="order-action-btn btn-complete" data-order-id="${order.id}" onclick="event.stopPropagation();">Complete</button>
         </div>`;
       }
       return '';
     }
+
+    // Show order details modal
+    window.showOrderDetails = function(orderId) {
+      const order = allSellerOrders.find(o => o.id === orderId);
+      if (!order) return;
+      
+      const modal = document.createElement('div');
+      modal.className = 'order-modal-overlay';
+      modal.innerHTML = `
+        <div class="order-modal-content">
+          <div class="order-modal-header">
+            <h3><i class="fas fa-shopping-bag"></i> Order #${(order.orderId || order.id).slice(-8).toUpperCase()}</h3>
+            <button class="order-modal-close" onclick="this.closest('.order-modal-overlay').remove()"><i class="fas fa-times"></i></button>
+          </div>
+          <div class="order-modal-body">
+            <div class="order-detail-section">
+              <h4>Buyer Details</h4>
+              <p><strong>${order.buyerDetails?.name || 'N/A'}</strong></p>
+              <p><i class="fas fa-phone"></i> ${order.buyerDetails?.phone || order.mpesaPhone || 'N/A'}</p>
+              <p><i class="fas fa-map-marker-alt"></i> ${order.buyerDetails?.location || 'N/A'}</p>
+              <p><i class="fas fa-home"></i> ${order.buyerDetails?.deliveryAddress || 'N/A'}</p>
+            </div>
+            <div class="order-detail-section">
+              <h4>Items Sold</h4>
+              ${order.items?.map(item => `
+                <div class="order-detail-item">
+                  <img src="${item.imageUrl || 'images/product-placeholder.png'}" alt="${item.productName || item.name}" onerror="this.src='images/product-placeholder.png'">
+                  <div class="order-detail-item-info">
+                    <strong>${item.productName || item.name || 'Product'}</strong>
+                    ${item.selectedVariation ? `<small>${item.selectedVariation.title}: ${item.selectedVariation.attr_name}</small>` : ''}
+                    <span>Qty: ${item.quantity} × KES ${(item.pricePerUnit || item.price || 0).toLocaleString()}</span>
+                  </div>
+                  <div class="order-detail-item-price">KES ${(item.totalPrice || 0).toLocaleString()}</div>
+                </div>
+              `).join('') || '<p>No item details</p>'}
+            </div>
+            <div class="order-detail-section">
+              <h4>Payment</h4>
+              <p>Method: <strong>${order.paymentMethod || 'N/A'}</strong></p>
+              <p>Status: <span class="order-status ${order.paymentStatus || 'pending'}">${order.paymentStatus || 'pending'}</span></p>
+              ${order.mpesaTransactionId ? `<p>M-Pesa: ${order.mpesaTransactionId}</p>` : ''}
+            </div>
+            <div class="order-detail-totals">
+              <div><span>Subtotal</span><span>KES ${(order.subtotal || 0).toLocaleString()}</span></div>
+              <div><span>Shipping</span><span>KES ${(order.shippingFee || 0).toLocaleString()}</span></div>
+              ${order.discount ? `<div><span>Discount</span><span>-KES ${order.discount.toLocaleString()}</span></div>` : ''}
+              <div class="total-row"><span>Total</span><span>KES ${(order.totalAmount || 0).toLocaleString()}</span></div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    };
 
     async function updateOrderStatus(orderId, newStatus) {
       try {

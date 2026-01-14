@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/jpeg" href="images/logo.png">
-  <link rel="apple-touch-icon" href="images/logo.png">
+  <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
   <title>Seller Profile - Oda Pap</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
@@ -247,17 +247,21 @@
       display: grid;
       grid-template-columns: repeat(2, 1fr);
       gap: 10px;
+      overflow: hidden;
     }
     .item-card {
       background: #fafafa;
       border-radius: 8px;
       overflow: hidden;
       text-decoration: none;
+      max-width: 100%;
     }
     .item-card img {
       width: 100%;
       height: 100px;
       object-fit: cover;
+      max-width: 100%;
+      display: block;
     }
     .item-info {
       padding: 8px;
@@ -626,15 +630,17 @@
         snapshot.forEach(doc => {
           const item = doc.data();
           const price = item.sellingPrice || item.price || 0;
-          const image = item.images?.[0] || item.imageUrl || 'images/profile-placeholder.png';
+          // Fix: Check all possible image field names
+          const image = item.photoTraceUrl || item.imageUrls?.[0] || item.images?.[0] || item.imageUrl || 'images/product-placeholder.png';
+          const stock = item.totalStock || item.stock || 0;
           
           html += `
             <a href="product.html?id=${doc.id}" class="item-card">
-              <img src="${image}" alt="${item.name}" onerror="this.src='images/profile-placeholder.png'">
+              <img src="${image}" alt="${item.name}" onerror="this.src='images/product-placeholder.png'">
               <div class="item-info">
                 <div class="item-title">${item.name || 'Unnamed Item'}</div>
                 <div class="item-price">KES ${price.toLocaleString()}</div>
-                <div class="item-stock">${item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}</div>
+                <div class="item-stock">${stock > 0 ? `${stock} in stock` : 'Out of stock'}</div>
               </div>
             </a>
           `;

@@ -346,6 +346,55 @@ function updateMetrics() {
     $('metricUsers').textContent = state.users.length;
     $('metricProducts').textContent = state.products.length;
     $('metricStoreValue').textContent = `KES ${storeValue.toLocaleString()}`;
+    
+    // Update sales statistics
+    updateSalesStats();
+}
+
+function updateSalesStats() {
+    const orders = state.orders;
+    const delivered = orders.filter(o => o.orderStatus === 'delivered');
+    
+    // Calculate totals
+    let totalSales = 0;
+    let totalRevenue = 0;
+    delivered.forEach(o => {
+        totalRevenue += o.totalAmount || 0;
+        o.items?.forEach(i => totalSales += i.quantity || 1);
+    });
+    
+    // Calculate this month's stats
+    const now = new Date();
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    let monthSales = 0;
+    let monthRevenue = 0;
+    delivered.forEach(o => {
+        let orderDate;
+        if (o.orderDate?.toDate) {
+            orderDate = o.orderDate.toDate();
+        } else if (o.orderDate) {
+            orderDate = new Date(o.orderDate);
+        } else {
+            return;
+        }
+        
+        if (orderDate >= firstOfMonth) {
+            monthRevenue += o.totalAmount || 0;
+            o.items?.forEach(i => monthSales += i.quantity || 1);
+        }
+    });
+    
+    // Update DOM
+    const totalSalesEl = $('totalSalesCount');
+    const totalRevenueEl = $('totalRevenueAmount');
+    const monthSalesEl = $('monthSalesCount');
+    const monthRevenueEl = $('monthRevenueAmount');
+    
+    if (totalSalesEl) totalSalesEl.textContent = totalSales.toLocaleString();
+    if (totalRevenueEl) totalRevenueEl.textContent = `KES ${totalRevenue.toLocaleString()}`;
+    if (monthSalesEl) monthSalesEl.textContent = monthSales.toLocaleString();
+    if (monthRevenueEl) monthRevenueEl.textContent = `KES ${monthRevenue.toLocaleString()}`;
 }
 
 function updateOrdersBadge() {
@@ -566,13 +615,14 @@ window.viewOrder = function(id) {
             </div>
             <div class="order-info-box">
                 <h4>Delivery</h4>
-                <p>${order.deliveryDetails?.address || 'N/A'}</p>
-                <p>${order.deliveryDetails?.city || ''}</p>
+                <p>${order.buyerDetails?.deliveryAddress || order.deliveryDetails?.address || 'N/A'}</p>
+                <p>${order.buyerDetails?.location || order.deliveryDetails?.city || ''}</p>
             </div>
             <div class="order-info-box">
                 <h4>Payment</h4>
                 <p><strong>${order.paymentMethod || 'N/A'}</strong></p>
                 <p>Status: ${order.paymentStatus || 'pending'}</p>
+                ${order.mpesaTransactionId ? `<p>M-Pesa: ${order.mpesaTransactionId}</p>` : ''}
             </div>
             <div class="order-info-box">
                 <h4>Date</h4>
@@ -580,17 +630,29 @@ window.viewOrder = function(id) {
             </div>
         </div>
         <div class="order-items">
-            <h4>Items</h4>
+            <h4>Items Purchased</h4>
             ${order.items?.map(i => `
-                <div class="order-item">
-                    <span>${i.productName} × ${i.quantity}</span>
-                    <span>KES ${(i.totalPrice || 0).toLocaleString()}</span>
+                <div class="order-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 8px;">
+                    <img src="${i.imageUrl || 'images/product-placeholder.png'}" alt="${i.productName || i.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;" onerror="this.src='images/product-placeholder.png'">
+                    <div style="flex: 1;">
+                        <strong>${i.productName || i.name || 'Unknown Product'}</strong>
+                        ${i.selectedVariation ? `<br><small style="color: #666;">${i.selectedVariation.title || ''}: ${i.selectedVariation.attr_name || ''}</small>` : ''}
+                        <br><small>Listing ID: ${i.listingId || 'N/A'}</small>
+                    </div>
+                    <div style="text-align: right;">
+                        <span>× ${i.quantity}</span>
+                        <br><strong>KES ${(i.totalPrice || 0).toLocaleString()}</strong>
+                    </div>
                 </div>
-            `).join('') || '<p>No items</p>'}
+            `).join('') || '<p>No items details available</p>'}
         </div>
         <div class="order-total">
-            <span>Total</span>
-            <span>KES ${(order.totalAmount || 0).toLocaleString()}</span>
+            <div style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+                <div style="display: flex; justify-content: space-between;"><span>Subtotal</span><span>KES ${(order.subtotal || 0).toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span>Shipping</span><span>KES ${(order.shippingFee || 0).toLocaleString()}</span></div>
+                ${order.discount ? `<div style="display: flex; justify-content: space-between;"><span>Discount</span><span>-KES ${(order.discount || 0).toLocaleString()}</span></div>` : ''}
+                <div style="display: flex; justify-content: space-between; font-weight: bold; border-top: 1px solid #ddd; padding-top: 8px;"><span>Total</span><span>KES ${(order.totalAmount || 0).toLocaleString()}</span></div>
+            </div>
         </div>
     `;
     $('orderModal').classList.add('active');
@@ -615,6 +677,9 @@ window.changeStatus = async function(id, current) {
     
     if (newStatus && statuses.includes(newStatus) && newStatus !== current) {
         try {
+            // Get order details for notification
+            const order = state.orders.find(o => o.id === id);
+            
             const updates = { 
                 orderStatus: newStatus, 
                 status: newStatus,
@@ -644,6 +709,12 @@ window.changeStatus = async function(id, current) {
             }
             
             await updateDoc(doc(db, "Orders", id), updates);
+            
+            // Notify buyer of status change
+            if (order && order.buyerInfo && order.buyerInfo.userId) {
+                await notifyBuyerOfStatusChange(order, newStatus);
+            }
+            
             showNotification('Status updated');
             loadOrders().then(() => {
                 updateMetrics();
@@ -654,6 +725,61 @@ window.changeStatus = async function(id, current) {
         }
     }
 };
+
+// Notify buyer when admin changes order status
+async function notifyBuyerOfStatusChange(order, newStatus) {
+    try {
+        const notificationData = getAdminNotificationData(order, newStatus);
+        if (!notificationData) return;
+        
+        await addDoc(collection(db, "Notifications"), {
+            userId: order.buyerInfo.userId,
+            orderId: order.id,
+            type: notificationData.type,
+            title: notificationData.title,
+            message: notificationData.message,
+            amount: order.totalAmount || order.amount,
+            read: false,
+            createdAt: Timestamp.now()
+        });
+    } catch (error) {
+        console.error('Error sending buyer notification:', error);
+    }
+}
+
+function getAdminNotificationData(order, status) {
+    const productName = order.productName || (order.items && order.items[0]?.name) || 'Your order';
+    
+    const notifications = {
+        confirmed: {
+            type: 'order_confirmed',
+            title: 'Order Approved! ✅',
+            message: `${productName} has been verified by Oda Pap and is ready for dispatch.`
+        },
+        out_for_delivery: {
+            type: 'order_shipped',
+            title: 'Order Dispatched! 🚚',
+            message: `${productName} is on its way to you.`
+        },
+        delivered: {
+            type: 'order_delivered',
+            title: 'Order Delivered! 📦',
+            message: `${productName} has been marked as delivered. Please confirm receipt.`
+        },
+        cancelled: {
+            type: 'order_cancelled',
+            title: 'Order Cancelled ❌',
+            message: `${productName} has been cancelled.`
+        },
+        refunded: {
+            type: 'order_cancelled',
+            title: 'Refund Processed 💰',
+            message: `Your refund for ${productName} has been processed.`
+        }
+    };
+    
+    return notifications[status] || null;
+}
 
 // ============= Products Page =============
 function renderProducts(products = state.products) {
@@ -970,21 +1096,32 @@ function renderUsers(users = state.users) {
     
     tbody.innerHTML = users.map(u => {
         const listings = state.products.filter(p => p.uploaderId === u.id).length;
+        const verifiedBadge = u.verified 
+            ? '<span class="verified-badge" title="Verified Seller"><i class="fas fa-check-circle"></i></span>'
+            : '';
         return `
             <tr>
                 <td>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <img src="${u.profilePicUrl || 'https://placehold.co/32x32/e2e8f0/64748b?text=U'}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://placehold.co/32x32/e2e8f0/64748b?text=U'">
-                        <span>${u.name || 'N/A'}</span>
+                        <span>${u.name || 'N/A'} ${verifiedBadge}</span>
                     </div>
                 </td>
                 <td class="hide-sm">${u.email || 'N/A'}</td>
                 <td>
                     <button class="btn btn-sm btn-outline" onclick="viewUserListings('${u.id}')">${listings} listings</button>
                 </td>
-                <td class="hide-sm"><span class="status ${u.verified ? 'verified' : 'unverified'}">${u.verified ? 'Verified' : 'Unverified'}</span></td>
+                <td class="hide-sm">
+                    <button class="btn btn-sm ${u.verified ? 'btn-verified' : 'btn-unverified'}" onclick="toggleUserVerification('${u.id}', ${!u.verified})">
+                        <i class="fas fa-${u.verified ? 'check-circle' : 'circle'}"></i>
+                        ${u.verified ? 'Verified' : 'Unverified'}
+                    </button>
+                </td>
                 <td>
                     <div class="action-btns">
+                        <button class="action-btn ${u.verified ? 'unverify' : 'verify'}" onclick="toggleUserVerification('${u.id}', ${!u.verified})" title="${u.verified ? 'Remove Verification' : 'Verify User'}">
+                            <i class="fas fa-${u.verified ? 'times-circle' : 'badge-check'}"></i>
+                        </button>
                         <button class="action-btn view" onclick="viewUserListings('${u.id}')" title="View Listings"><i class="fas fa-box"></i></button>
                         <button class="action-btn msg" onclick="messageUser('${u.id}')" title="Message"><i class="fas fa-envelope"></i></button>
                     </div>
@@ -993,6 +1130,40 @@ function renderUsers(users = state.users) {
         `;
     }).join('');
 }
+
+// Toggle user verification status
+window.toggleUserVerification = async function(userId, shouldVerify) {
+    try {
+        const user = state.users.find(u => u.id === userId);
+        if (!user) {
+            showNotification('User not found', 'error');
+            return;
+        }
+        
+        // Update Firestore
+        await updateDoc(doc(db, 'Users', userId), {
+            verified: shouldVerify,
+            verifiedAt: shouldVerify ? Timestamp.now() : null,
+            verifiedBy: shouldVerify ? state.user.uid : null
+        });
+        
+        // Update local state
+        user.verified = shouldVerify;
+        
+        // Re-render users
+        renderUsers();
+        
+        showNotification(
+            shouldVerify 
+                ? `${user.name || 'User'} has been verified! They now have a blue tick.` 
+                : `Verification removed from ${user.name || 'User'}`,
+            'success'
+        );
+    } catch (error) {
+        console.error('Error updating verification:', error);
+        showNotification('Failed to update verification status', 'error');
+    }
+};
 
 function searchUsers(q) {
     q = q.toLowerCase();
@@ -1558,6 +1729,110 @@ async function loadSettings() {
     loadHeroSlides();
     loadSurveySettings();
     loadShippingSettings();
+    loadDeliveryAreas();
+}
+
+// ============= Delivery Areas Management =============
+async function loadDeliveryAreas() {
+    try {
+        // Load delivery areas settings from Firestore
+        const settingsDoc = await getDoc(doc(db, "Settings", "deliveryAreas"));
+        let enabledAreas = ['Mombasa']; // Default to Mombasa only
+        
+        if (settingsDoc.exists()) {
+            enabledAreas = settingsDoc.data().enabledCounties || ['Mombasa'];
+        }
+        
+        // Update checkboxes based on saved settings
+        document.querySelectorAll('.county-toggle input[type="checkbox"]').forEach(checkbox => {
+            const county = checkbox.dataset.county;
+            checkbox.checked = enabledAreas.includes(county);
+        });
+        
+        updateActiveAreasCount();
+        setupDeliveryAreasEventListeners();
+    } catch (err) {
+        console.error('Error loading delivery areas:', err);
+    }
+}
+
+function setupDeliveryAreasEventListeners() {
+    // Save delivery areas button
+    $('saveDeliveryAreasBtn')?.addEventListener('click', saveDeliveryAreas);
+    
+    // County toggle changes
+    document.querySelectorAll('.county-toggle input[type="checkbox"]').forEach(checkbox => {
+        checkbox.addEventListener('change', updateActiveAreasCount);
+    });
+    
+    // Expand more regions button
+    $('expandRegionsBtn')?.addEventListener('click', () => {
+        const hiddenRegions = document.querySelector('.hidden-regions');
+        const btn = $('expandRegionsBtn');
+        if (hiddenRegions.style.display === 'none') {
+            hiddenRegions.style.display = 'block';
+            btn.innerHTML = '<i class="fas fa-chevron-up"></i> Show Less Regions';
+        } else {
+            hiddenRegions.style.display = 'none';
+            btn.innerHTML = '<i class="fas fa-chevron-down"></i> Show More Regions';
+        }
+    });
+}
+
+function updateActiveAreasCount() {
+    const checkedCount = document.querySelectorAll('.county-toggle input[type="checkbox"]:checked').length;
+    const countEl = $('activeAreasCount');
+    if (countEl) {
+        countEl.textContent = checkedCount;
+    }
+    
+    // Update banner color based on count
+    const banner = $('areaStatusBanner');
+    if (banner) {
+        if (checkedCount === 0) {
+            banner.style.background = 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)';
+            banner.style.color = 'var(--red)';
+        } else if (checkedCount === 1) {
+            banner.style.background = 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)';
+            banner.style.color = 'var(--orange)';
+        } else {
+            banner.style.background = 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)';
+            banner.style.color = 'var(--green)';
+        }
+    }
+}
+
+async function saveDeliveryAreas() {
+    const btn = $('saveDeliveryAreasBtn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    btn.disabled = true;
+    
+    try {
+        const enabledCounties = [];
+        document.querySelectorAll('.county-toggle input[type="checkbox"]:checked').forEach(checkbox => {
+            enabledCounties.push(checkbox.dataset.county);
+        });
+        
+        if (enabledCounties.length === 0) {
+            showNotification('Please select at least one delivery area', 'error');
+            return;
+        }
+        
+        await setDoc(doc(db, "Settings", "deliveryAreas"), {
+            enabledCounties,
+            updatedAt: Timestamp.now(),
+            updatedBy: state.user?.email
+        }, { merge: true });
+        
+        showNotification(`Delivery areas updated! Now serving ${enabledCounties.length} ${enabledCounties.length === 1 ? 'county' : 'counties'}.`, 'success');
+    } catch (err) {
+        console.error('Error saving delivery areas:', err);
+        showNotification('Failed to save delivery areas', 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
 }
 
 // ============= Survey Settings =============
