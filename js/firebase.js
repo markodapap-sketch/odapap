@@ -14,14 +14,16 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-s
   // https://firebase.google.com/docs/web/setup#available-libraries
 
   // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
-    apiKey: "AIzaSyDez809vabqwQrGi5KaQ1-crKvk8oL5x90",
-    authDomain: "oda-pap-46469.firebaseapp.com",
-    databaseURL: "https://oda-pap-46469-default-rtdb.firebaseio.com",
-    projectId: "oda-pap-46469",
-    storageBucket: "oda-pap-46469.appspot.com",
-    messagingSenderId: "104112612296",
-    appId: "1:104112612296:web:0d7893046b3fadcf2d56fd"
+    apiKey: "AIzaSyBc-ujBFH8ysXZ7xaPaNdvD_i4-ivthnnU",
+    authDomain: "oda-pap-d44c2.firebaseapp.com",
+    databaseURL: "https://oda-pap-d44c2-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "oda-pap-d44c2",
+    storageBucket: "oda-pap-d44c2.firebasestorage.app",
+    messagingSenderId: "516981877774",
+    appId: "1:516981877774:web:1d5532749958218dbae05f",
+    measurementId: "G-KRSVFTQZK4"
   };
 
   // Initialize Firebase
