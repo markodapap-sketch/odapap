@@ -1059,8 +1059,8 @@ async function handleSubmit(e) {
     
     // Check if profile is complete
     if (!state.profileComplete) {
-        toast('Please complete your profile before listing products', 'error', 5000);
-        $('profile-warning').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        sessionStorage.setItem('profileMessage', 'Please complete your profile before listing products');
+        window.location.href = 'profile.html';
         return;
     }
     
@@ -2275,19 +2275,17 @@ async function loadProfile(user) {
             const complete = d.name && (d.county || d.location) && d.phone;
             state.profileComplete = complete;
             
-            // Show warning and disable form if profile incomplete
-            const warningEl = $('profile-warning');
-            warningEl.style.display = complete ? 'none' : 'flex';
-            
-            // Disable new listing tab if profile incomplete
-            const newListingSection = $('new-listing');
+            // Redirect to profile if incomplete
             if (!complete) {
-                newListingSection.style.pointerEvents = 'none';
-                newListingSection.style.opacity = '0.5';
-            } else {
-                newListingSection.style.pointerEvents = '';
-                newListingSection.style.opacity = '';
+                // Store message in session for profile page
+                sessionStorage.setItem('profileMessage', 'Please complete your profile before listing products');
+                window.location.href = 'profile.html';
+                return;
             }
+            
+            // Hide warning if complete
+            const warningEl = $('profile-warning');
+            warningEl.style.display = 'none';
         }
     } catch (e) {
         console.error('Profile load error:', e);

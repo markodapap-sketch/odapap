@@ -122,6 +122,37 @@ app.use(cors({
     credentials: true
 }));
 
+// ===== CRITICAL CORS FIX - Handle preflight OPTIONS requests =====
+app.options('*', cors({
+    origin: function(origin, callback) {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1 || NODE_ENV === 'development') {
+            callback(null, true);
+        } else {
+            console.log('⚠️ CORS preflight from:', origin);
+            callback(null, true);
+        }
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204
+}));
+
+// Ensure all API routes send CORS headers explicitly
+app.use('/api', (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    next();
+});
+// ===== END CORS FIX =====
+
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -588,16 +619,16 @@ app.use((err, req, res, next) => {
 // ===========================================
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`
-╔════════════════════════════════════════════════════════════╗
+╔═══════════════════════════════════════════════════════════╗
 ║                    ODA PAP SERVER                          ║
-╠════════════════════════════════════════════════════════════╣
+╠═══════════════════════════════════════════════════════════╣
 ║  Status:      ✅ Running                                   ║
 ║  Environment: ${NODE_ENV.padEnd(43)}║
 ║  Port:        ${PORT.toString().padEnd(43)}║
 ║  Base URL:    ${BASE_URL.padEnd(43)}║
 ║  M-Pesa:      ${MPESA_CONFIG.environment.padEnd(43)}║
 ║  Callback:    ${CALLBACK_URL.substring(0, 43).padEnd(43)}║
-╚════════════════════════════════════════════════════════════╝
+╚═══════════════════════════════════════════════════════════╝
     `);
 });
 

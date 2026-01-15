@@ -1103,8 +1103,85 @@ const debouncedSearch = debounce((e) => {
   performSearch(e.target.value);
 }, 300);
 
+// Load categories dynamically for mega menu
+async function loadMegaMenuCategories() {
+  const megaMenuGrid = document.getElementById('categoryMegaMenuGrid');
+  if (!megaMenuGrid) return;
+  
+  try {
+    // Fetch all listings to get unique categories
+    const listingsQuery = query(collection(firestore, 'listings'));
+    const listingsSnapshot = await getDocs(listingsQuery);
+    
+    // Get unique categories and their counts
+    const categoryCounts = {};
+    listingsSnapshot.forEach(doc => {
+      const listing = doc.data();
+      if (listing.category) {
+        categoryCounts[listing.category] = (categoryCounts[listing.category] || 0) + 1;
+      }
+    });
+    
+    // Sort by count (most popular first)
+    const sortedCategories = Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1]);
+    
+    // Helper to get icon for category
+    const getCategoryIcon = (catName) => {
+      const iconMap = {
+        'Electronics': 'tv',
+        'Fashion': 'tshirt',
+        'Beauty': 'heart',
+        'Phones': 'mobile-alt',
+        'Kitchenware': 'blender',
+        'Furniture': 'couch',
+        'Food': 'carrot',
+        'Foodstuffs': 'carrot',
+        'Accessories': 'headphones',
+        'Pharmaceutical': 'pills',
+        'Pharma': 'pills',
+        'Student': 'graduation-cap',
+        'Rentals': 'building',
+        'Kids': 'hat-wizard',
+        'Baby Products': 'baby',
+        'Service': 'tools',
+        'General Shop': 'star'
+      };
+      return iconMap[catName] || 'box';
+    };
+    
+    // Helper to get short label
+    const getShortLabel = (catName) => {
+      const shortMap = {
+        'Kitchenware': 'Kitchen',
+        'Foodstuffs': 'Food',
+        'Pharmaceutical': 'Pharma',
+        'Student Centre': 'Student',
+        'Baby Products': 'Baby',
+        'Service Men': 'Services'
+      };
+      return shortMap[catName] || catName;
+    };
+    
+    // Render categories
+    megaMenuGrid.innerHTML = sortedCategories
+      .map(([cat, count]) => {
+        const urlSafe = encodeURIComponent(cat);
+        return `<a href="category.html?category=${urlSafe}"><i class="fas fa-${getCategoryIcon(cat)}"></i> ${getShortLabel(cat)}</a>`;
+      }).join('');
+      
+  } catch (error) {
+    console.error('Error loading mega menu categories:', error);
+    // Fallback to empty state
+    megaMenuGrid.innerHTML = '<p style="text-align:center;color:#999;">Categories unavailable</p>';
+  }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
+  // Load mega menu categories dynamically
+  loadMegaMenuCategories();
+  
   // Get category from URL
   const urlParams = new URLSearchParams(window.location.search);
   const category = urlParams.get('category');

@@ -450,26 +450,92 @@ function initHeroCarousel() {
 // ===== CATEGORIES =====
 async function loadCategories() {
   const strip = $('categoryStrip');
-  if (!strip) return;
+  const megaGrid = $('megaCatGrid');
   
   // Use cached listings
   const listings = await getCachedListings();
-  const counts = {};
+  
+  // Get unique categories from actual listings
+  const categoryCounts = {};
   listings.forEach(l => {
-    const cat = l.category;
-    counts[cat] = (counts[cat] || 0) + 1;
+    if (l.category) {
+      categoryCounts[l.category] = (categoryCounts[l.category] || 0) + 1;
+    }
   });
   
-  // Render - exclude general-shop from regular categories
-  strip.innerHTML = Object.keys(categoryHierarchy)
-    .filter(k => counts[k] > 0 && k !== 'general-shop')
-    .map(k => `
-      <a href="category.html?category=${k}" class="cat-card">
-        <i class="fas fa-${catIcons[k] || 'box'}"></i>
-        <span>${categoryHierarchy[k].label}</span>
-        <span class="count">${counts[k]}</span>
-      </a>
-    `).join('');
+  // Sort categories by count (most products first)
+  const sortedCategories = Object.entries(categoryCounts)
+    .sort((a, b) => b[1] - a[1]);
+  
+  // Helper to get icon for category
+  const getCategoryIcon = (catName) => {
+    const iconMap = {
+      'Electronics': 'tv',
+      'Fashion': 'tshirt',
+      'Beauty': 'heart',
+      'Phones': 'mobile-alt',
+      'Kitchenware': 'blender',
+      'Furniture': 'couch',
+      'Food': 'carrot',
+      'Foodstuffs': 'carrot',
+      'Accessories': 'headphones',
+      'Pharmaceutical': 'pills',
+      'Pharma': 'pills',
+      'Student': 'graduation-cap',
+      'Rentals': 'building',
+      'Kids': 'hat-wizard',
+      'Baby Products': 'baby',
+      'Service': 'tools',
+      'General Shop': 'star'
+    };
+    return iconMap[catName] || 'box';
+  };
+  
+  // Helper to get short label for category
+  const getShortLabel = (catName) => {
+    const shortMap = {
+      'Electronics': 'Electronics',
+      'Kitchenware': 'Kitchen',
+      'Foodstuffs': 'Food',
+      'Pharmaceutical': 'Pharma',
+      'Student Centre': 'Student',
+      'Baby Products': 'Baby',
+      'Service Men': 'Services'
+    };
+    return shortMap[catName] || catName;
+  };
+  
+  // Render category strip (exclude general-shop style categories)
+  if (strip) {
+    strip.innerHTML = sortedCategories
+      .filter(([cat]) => cat.toLowerCase() !== 'general shop')
+      .map(([cat, count]) => {
+        const urlSafe = encodeURIComponent(cat);
+        return `
+          <a href="category.html?category=${urlSafe}" class="cat-card">
+            <i class="fas fa-${getCategoryIcon(cat)}"></i>
+            <span>${getShortLabel(cat)}</span>
+            <span class="count">${count}</span>
+          </a>
+        `;
+      }).join('');
+  }
+  
+  // Render mega menu categories
+  if (megaGrid) {
+    megaGrid.innerHTML = sortedCategories
+      .map(([cat, count]) => {
+        const urlSafe = encodeURIComponent(cat);
+        const isGeneral = cat.toLowerCase().includes('general');
+        return `
+          <a href="category.html?category=${urlSafe}" class="mega-cat${isGeneral ? ' featured' : ''}">
+            <i class="fas fa-${getCategoryIcon(cat)}"></i>
+            <span>${getShortLabel(cat)}</span>
+            ${isGeneral ? '<small>Curated picks</small>' : ''}
+          </a>
+        `;
+      }).join('');
+  }
 }
 
 // ===== FEATURED ITEMS (Prime Categories - General Shop) =====
