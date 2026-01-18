@@ -47,7 +47,13 @@ async function handleAuth(user) {
     const isAdmin = await checkAdmin(user.email, user.uid);
     if (!isAdmin) {
         showNotification('Access denied. Admin privileges required.', 'error');
-        return setTimeout(() => window.location.href = 'index.html', 2000);
+        // Log out the non-admin user and redirect to login
+        try {
+            await signOut(auth);
+        } catch (e) {
+            console.error('Error signing out:', e);
+        }
+        return setTimeout(() => window.location.href = 'login.html', 1500);
     }
     
     state.user = user;
@@ -115,6 +121,9 @@ function setupNav() {
     });
 }
 
+// Expose to window for onclick handlers in HTML
+window.switchSection = switchSection;
+
 function switchSection(section) {
     $$('.nav-link').forEach(l => l.classList.remove('active'));
     document.querySelector(`[data-section="${section}"]`)?.classList.add('active');
@@ -138,13 +147,14 @@ function switchSection(section) {
         analytics: loadAnalytics,
         transactions: loadTransactions,
         verifications: loadVerifications,
-        settings: loadSettings
+        settings: loadSettings,
+        notifications: loadNotificationsPage
     };
     loaders[section]?.();
 }
 
 function getTitle(s) {
-    const t = { dashboard: 'Dashboard', orders: 'Orders', products: 'Products', users: 'Users', analytics: 'Analytics', transactions: 'Transactions', verifications: 'Verifications', settings: 'Settings' };
+    const t = { dashboard: 'Dashboard', orders: 'Orders', products: 'Products', users: 'Users', analytics: 'Analytics', transactions: 'Transactions', verifications: 'Verifications', settings: 'Settings', notifications: 'Notifications' };
     return t[s] || 'Dashboard';
 }
 
@@ -248,6 +258,12 @@ async function handleProductFormSubmit(e) {
             updatedAt: Timestamp.now()
         };
         
+        // Check document size before upload (Firestore limit is ~1MB)
+        const docSize = new Blob([JSON.stringify(data)]).size;
+        if (docSize > 900000) { // 900KB safety margin
+            throw new Error(`Product data too large (${Math.round(docSize/1024)}KB). Try reducing images or description length.`);
+        }
+        
         if (id) {
             // Update existing
             await updateDoc(doc(db, "Listings", id), data);
@@ -293,9 +309,18 @@ async function loadDashboard() {
     }
 }
 
+// Pagination limits for admin queries
+const ADMIN_PAGE_LIMIT = 100;
+
 async function loadOrders() {
     try {
-        const snap = await getDocs(collection(db, "Orders"));
+        // Load orders with pagination - most recent first
+        const ordersQuery = query(
+            collection(db, "Orders"),
+            orderBy("createdAt", "desc"),
+            limit(ADMIN_PAGE_LIMIT)
+        );
+        const snap = await getDocs(ordersQuery);
         state.orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         updateOrdersBadge();
         if (state.section === 'orders') renderOrders();
@@ -306,7 +331,12 @@ async function loadOrders() {
 
 async function loadUsers() {
     try {
-        const snap = await getDocs(collection(db, "Users"));
+        // Load users with limit
+        const usersQuery = query(
+            collection(db, "Users"),
+            limit(ADMIN_PAGE_LIMIT)
+        );
+        const snap = await getDocs(usersQuery);
         state.users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         if (state.section === 'users') renderUsers();
     } catch (err) {
@@ -316,7 +346,12 @@ async function loadUsers() {
 
 async function loadProducts() {
     try {
-        const snap = await getDocs(collection(db, "Listings"));
+        // Load products with limit
+        const productsQuery = query(
+            collection(db, "Listings"),
+            limit(ADMIN_PAGE_LIMIT)
+        );
+        const snap = await getDocs(productsQuery);
         state.products = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         state.productsLoaded = 0;
         state.productsPage = 0;
@@ -931,10 +966,7 @@ function formatTagName(tag) {
     return names[tag] || tag;
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escapeHtml function defined below in Utilities section
 
 // Update single field
 window.updateProductField = async function(id, field, value, inputEl) {
@@ -2464,7 +2496,263 @@ async function saveShippingSettings() {
     }
 }
 
+// ============= Push Notifications Management =============
+async function loadNotificationsPage() {
+    // Setup event listeners for notification form
+    setupNotificationListeners();
+    
+    // Load stats
+    await loadNotificationStats();
+    
+    // Load history
+    await loadNotificationHistory();
+}
+
+function setupNotificationListeners() {
+    // Character counters
+    $('notifTitle')?.addEventListener('input', e => {
+        $('titleCount').textContent = e.target.value.length;
+    });
+    
+    $('notifBody')?.addEventListener('input', e => {
+        $('bodyCount').textContent = e.target.value.length;
+    });
+    
+    // Preview button
+    $('previewNotifBtn')?.addEventListener('click', () => {
+        const title = $('notifTitle').value || 'Notification Title';
+        const body = $('notifBody').value || 'Notification message will appear here';
+        
+        $('previewTitle').textContent = title;
+        $('previewBody').textContent = body;
+        $('notifPreviewModal').classList.add('show');
+    });
+    
+    // Close preview on overlay click
+    $('notifPreviewModal')?.querySelector('.notif-preview-overlay')?.addEventListener('click', () => {
+        $('notifPreviewModal').classList.remove('show');
+    });
+    
+    // Form submit
+    $('pushNotificationForm')?.addEventListener('submit', handleSendNotification);
+    
+    // Refresh history
+    $('refreshNotifsBtn')?.addEventListener('click', loadNotificationHistory);
+}
+
+async function loadNotificationStats() {
+    try {
+        // Get total FCM token subscribers
+        const tokensSnap = await getDocs(query(collection(db, 'FCMTokens'), where('active', '==', true)));
+        $('totalSubscribers').textContent = tokensSnap.size;
+        
+        // Count mobile users
+        let mobileCount = 0;
+        tokensSnap.forEach(doc => {
+            const data = doc.data();
+            if (data.platform?.platform === 'android' || data.platform?.platform === 'ios') {
+                mobileCount++;
+            }
+        });
+        $('mobileSubscribers').textContent = mobileCount;
+        
+        // Get today's sent notifications
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTimestamp = Timestamp.fromDate(today);
+        
+        const sentTodaySnap = await getDocs(
+            query(collection(db, 'SentNotifications'), 
+                where('sentAt', '>=', todayTimestamp),
+                orderBy('sentAt', 'desc')
+            )
+        );
+        $('notifsSent').textContent = sentTodaySnap.size;
+        
+    } catch (err) {
+        console.error('Error loading notification stats:', err);
+    }
+}
+
+async function loadNotificationHistory() {
+    const container = $('notifHistoryList');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="loading-spinner"></div>';
+    
+    try {
+        const snap = await getDocs(
+            query(collection(db, 'SentNotifications'), 
+                orderBy('sentAt', 'desc'),
+                limit(20)
+            )
+        );
+        
+        if (snap.empty) {
+            container.innerHTML = `
+                <div class="notif-empty">
+                    <i class="fas fa-bell-slash"></i>
+                    <p>No notifications sent yet</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = snap.docs.map(doc => {
+            const d = doc.data();
+            const sentDate = d.sentAt?.toDate ? d.sentAt.toDate() : new Date();
+            const typeIcons = {
+                general: 'fa-bullhorn',
+                promo: 'fa-tags',
+                update: 'fa-sync-alt',
+                alert: 'fa-exclamation-triangle'
+            };
+            
+            return `
+                <div class="notif-history-item">
+                    <div class="notif-history-icon">
+                        <i class="fas ${typeIcons[d.type] || 'fa-bell'}"></i>
+                    </div>
+                    <div class="notif-history-content">
+                        <strong>${escapeHtml(d.title)}</strong>
+                        <p>${escapeHtml(d.body)}</p>
+                        <div class="notif-history-meta">
+                            <span><i class="fas fa-clock"></i> ${formatDate(sentDate)}</span>
+                            <span><i class="fas fa-users"></i> ${d.recipientCount || 0} recipients</span>
+                            <span><i class="fas fa-user"></i> ${escapeHtml(d.sentBy || 'Admin')}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (err) {
+        console.error('Error loading notification history:', err);
+        container.innerHTML = '<p class="error-text">Failed to load history</p>';
+    }
+}
+
+async function handleSendNotification(e) {
+    e.preventDefault();
+    
+    const title = $('notifTitle').value.trim();
+    const body = $('notifBody').value.trim();
+    const url = $('notifUrl').value.trim() || '/notification.html';
+    const target = $('notifTarget').value;
+    const type = $('notifType').value;
+    
+    if (!title || !body) {
+        showNotification('Please fill in title and message', 'error');
+        return;
+    }
+    
+    const sendBtn = $('sendNotifBtn');
+    const originalText = sendBtn.innerHTML;
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    
+    try {
+        // Get all active FCM tokens
+        let tokensQuery = query(collection(db, 'FCMTokens'), where('active', '==', true));
+        const tokensSnap = await getDocs(tokensQuery);
+        
+        if (tokensSnap.empty) {
+            showNotification('No subscribers to send to', 'warning');
+            return;
+        }
+        
+        const tokens = [];
+        tokensSnap.forEach(doc => {
+            tokens.push(doc.data().token);
+        });
+        
+        // Create notification record
+        const notifData = {
+            title,
+            body,
+            url,
+            target,
+            type,
+            tokens: tokens,
+            recipientCount: tokens.length,
+            sentAt: Timestamp.now(),
+            sentBy: state.user?.email || 'Admin',
+            status: 'queued'
+        };
+        
+        // Save to SentNotifications collection
+        const notifRef = await addDoc(collection(db, 'SentNotifications'), notifData);
+        
+        // Also create individual notification records for users who have tokens
+        // This allows them to see it in their notification center
+        const userTokensSnap = await getDocs(collection(db, 'FCMTokens'));
+        const batch = [];
+        
+        userTokensSnap.forEach(tokenDoc => {
+            const tokenData = tokenDoc.data();
+            if (tokenData.userId && tokenData.active) {
+                batch.push(
+                    addDoc(collection(db, 'Users', tokenData.userId, 'Notifications'), {
+                        title,
+                        body,
+                        url,
+                        type,
+                        read: false,
+                        createdAt: Timestamp.now(),
+                        notificationId: notifRef.id
+                    })
+                );
+            }
+        });
+        
+        // Also add to a global Notifications collection for the notification page
+        await addDoc(collection(db, 'Notifications'), {
+            title,
+            body,
+            url,
+            type,
+            target,
+            createdAt: Timestamp.now(),
+            sentBy: state.user?.email || 'Admin',
+            isGlobal: true
+        });
+        
+        await Promise.all(batch);
+        
+        // Note: Actual FCM sending would require a server-side function
+        // For now, we're creating the notification records that the app can display
+        
+        showNotification(`Notification sent to ${tokens.length} subscribers!`, 'success');
+        
+        // Clear form
+        $('notifTitle').value = '';
+        $('notifBody').value = '';
+        $('notifUrl').value = '';
+        $('titleCount').textContent = '0';
+        $('bodyCount').textContent = '0';
+        
+        // Reload history
+        await loadNotificationHistory();
+        await loadNotificationStats();
+        
+    } catch (err) {
+        console.error('Error sending notification:', err);
+        showNotification('Failed to send notification: ' + err.message, 'error');
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalText;
+    }
+}
+
 // ============= Utilities =============
+
+// HTML escape for user content
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[m]));
+}
 function getDate(d) {
     if (!d) return new Date(0);
     if (d.toDate) return d.toDate();

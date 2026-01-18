@@ -49,6 +49,9 @@
                 <i class="fas fa-shield-alt"></i><span>Verifications</span>
                 <span class="nav-badge" id="verifyBadge">0</span>
             </a>
+            <a href="#" class="nav-link" data-section="notifications">
+                <i class="fas fa-bell"></i><span>Notifications</span>
+            </a>
             <a href="#" class="nav-link" data-section="settings">
                 <i class="fas fa-cog"></i><span>Settings</span>
             </a>
@@ -442,6 +445,129 @@
             </div>
             <div class="verifications-list" id="verificationsList">
                 <div class="loading-spinner"></div>
+            </div>
+        </section>
+
+        <!-- Push Notifications Management -->
+        <section class="page" id="notifications-page">
+            <div class="page-header">
+                <h2>Push Notifications</h2>
+            </div>
+            
+            <!-- Notification Stats -->
+            <div class="notification-stats">
+                <div class="notif-stat-card">
+                    <div class="notif-stat-icon blue"><i class="fas fa-users"></i></div>
+                    <div class="notif-stat-info">
+                        <span class="notif-stat-value" id="totalSubscribers">0</span>
+                        <span class="notif-stat-label">Subscribers</span>
+                    </div>
+                </div>
+                <div class="notif-stat-card">
+                    <div class="notif-stat-icon green"><i class="fas fa-paper-plane"></i></div>
+                    <div class="notif-stat-info">
+                        <span class="notif-stat-value" id="notifsSent">0</span>
+                        <span class="notif-stat-label">Sent Today</span>
+                    </div>
+                </div>
+                <div class="notif-stat-card">
+                    <div class="notif-stat-icon orange"><i class="fas fa-mobile-alt"></i></div>
+                    <div class="notif-stat-info">
+                        <span class="notif-stat-value" id="mobileSubscribers">0</span>
+                        <span class="notif-stat-label">Mobile Users</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Send Notification Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-broadcast-tower"></i> Send Push Notification</h3>
+                </div>
+                <div class="card-body">
+                    <form id="pushNotificationForm">
+                        <div class="form-group">
+                            <label for="notifTitle"><i class="fas fa-heading"></i> Title *</label>
+                            <input type="text" id="notifTitle" placeholder="Notification title" required maxlength="65">
+                            <small class="char-count"><span id="titleCount">0</span>/65</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="notifBody"><i class="fas fa-comment"></i> Message *</label>
+                            <textarea id="notifBody" placeholder="Notification message" required maxlength="240" rows="3"></textarea>
+                            <small class="char-count"><span id="bodyCount">0</span>/240</small>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="notifUrl"><i class="fas fa-link"></i> Action URL (optional)</label>
+                                <input type="text" id="notifUrl" placeholder="/notification.html">
+                            </div>
+                            <div class="form-group half">
+                                <label for="notifTarget"><i class="fas fa-bullseye"></i> Target Audience</label>
+                                <select id="notifTarget">
+                                    <option value="all">All Users</option>
+                                    <option value="buyers">Buyers Only</option>
+                                    <option value="sellers">Sellers Only</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="notifType"><i class="fas fa-tag"></i> Notification Type</label>
+                            <select id="notifType">
+                                <option value="general">General Announcement</option>
+                                <option value="promo">Promotion / Sale</option>
+                                <option value="update">App Update</option>
+                                <option value="alert">Important Alert</option>
+                            </select>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-outline" id="previewNotifBtn">
+                                <i class="fas fa-eye"></i> Preview
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="sendNotifBtn">
+                                <i class="fas fa-paper-plane"></i> Send to All
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Notification Preview Modal -->
+            <div class="notif-preview-modal" id="notifPreviewModal">
+                <div class="notif-preview-overlay"></div>
+                <div class="notif-preview-content">
+                    <div class="notif-preview-phone">
+                        <div class="notif-preview-header">
+                            <span class="notif-preview-time">Now</span>
+                        </div>
+                        <div class="notif-preview-card">
+                            <img src="favicon_io/android-chrome-192x192.png" class="notif-preview-icon">
+                            <div class="notif-preview-text">
+                                <strong id="previewTitle">Notification Title</strong>
+                                <p id="previewBody">Notification message will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="document.getElementById('notifPreviewModal').classList.remove('show')">Close</button>
+                </div>
+            </div>
+
+            <!-- Recent Notifications History -->
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-history"></i> Recent Notifications</h3>
+                    <button class="btn btn-outline btn-sm" id="refreshNotifsBtn">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="notif-history-list" id="notifHistoryList">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
             </div>
         </section>
 
