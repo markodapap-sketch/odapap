@@ -1,3 +1,14 @@
+// Simple HTML escape for notification messages
+function escapeNotificationHtml(str) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 export function showNotification(message, type = 'info') {
     // Remove any existing notifications
     const existingNotifications = document.querySelectorAll('.notification-card');
@@ -20,6 +31,9 @@ export function showNotification(message, type = 'info') {
     const color = colors[type] || colors.info;
     const icon = icons[type] || icons.info;
     
+    // Escape message to prevent XSS
+    const safeMessage = escapeNotificationHtml(message);
+    
     const notification = document.createElement('div');
     notification.className = `notification-card notification-${type}`;
     notification.innerHTML = `
@@ -28,7 +42,7 @@ export function showNotification(message, type = 'info') {
                 <i class="fas ${icon}" style="color: ${color.icon};"></i>
             </div>
             <div class="notification-text">
-                <span class="notification-message">${message}</span>
+                <span class="notification-message">${safeMessage}</span>
             </div>
             <button class="notification-close-btn" aria-label="Close">
                 <i class="fas fa-times"></i>

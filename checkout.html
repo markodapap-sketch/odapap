@@ -176,6 +176,18 @@
                                 <i class="fas fa-check-circle option-check"></i>
                             </label>
 
+                            <label class="payment-option" data-method="wallet">
+                                <input type="radio" name="paymentMethod" value="wallet">
+                                <div class="option-icon wallet-icon">
+                                    <i class="fas fa-wallet"></i>
+                                </div>
+                                <div class="option-details">
+                                    <strong>Oda Pap Wallet</strong>
+                                    <span>Balance: <span id="walletBalanceDisplay">KES 0</span></span>
+                                </div>
+                                <i class="fas fa-check-circle option-check"></i>
+                            </label>
+
                             <label class="payment-option" data-method="pay_on_delivery">
                                 <input type="radio" name="paymentMethod" value="pay_on_delivery">
                                 <div class="option-icon cod-icon">
@@ -187,6 +199,17 @@
                                 </div>
                                 <i class="fas fa-check-circle option-check"></i>
                             </label>
+                        </div>
+
+                        <!-- Wallet Insufficient Balance Notice -->
+                        <div class="wallet-notice" id="walletNotice" style="display: none;">
+                            <div class="wallet-notice-content">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <div>
+                                    <strong>Insufficient wallet balance</strong>
+                                    <p>Your wallet balance is lower than the order total. <a href="deposit.html">Top up now</a></p>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- M-Pesa Phone Input -->
@@ -323,6 +346,14 @@
                             </button>
                         </div>
                         <small>Enter the 10-character M-Pesa transaction code from your SMS</small>
+                    </div>
+
+                    <!-- Check Status Button (for callback failures) -->
+                    <div id="checkStatusSection" class="check-status-section" style="display: none;">
+                        <button type="button" id="checkStatusBtn" class="btn-check-status">
+                            <i class="fas fa-sync-alt"></i> Check Payment Status
+                        </button>
+                        <small>Didn't receive confirmation? Click to check if your payment went through.</small>
                     </div>
 
                     <!-- Upload Receipt Section -->
@@ -532,7 +563,13 @@
                 navigator.share(shareData);
             } else {
                 navigator.clipboard.writeText(shareData.url);
-                alert('Order link copied to clipboard!');
+                // Show toast notification instead of alert
+                const toast = document.createElement('div');
+                toast.className = 'copy-toast';
+                toast.innerHTML = '<i class="fas fa-check-circle"></i> Order link copied!';
+                toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:12px 24px;border-radius:8px;z-index:9999;display:flex;align-items:center;gap:8px;animation:fadeIn 0.3s ease';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2500);
             }
         }
     </script>

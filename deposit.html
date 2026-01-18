@@ -45,6 +45,7 @@
             <div class="balance-info">
                 <span class="balance-label">Current Balance</span>
                 <span class="balance-amount" id="currentBalance">KES 0</span>
+                <small style="display: block; font-size: 0.7rem; opacity: 0.8; margin-top: 2px;">💡 This is money you can use to buy products</small>
             </div>
         </div>
 
@@ -52,6 +53,7 @@
         <div class="deposit-card">
             <div class="card-header">
                 <h2><i class="fas fa-plus-circle"></i> Deposit Funds</h2>
+                <p style="font-size: 0.75rem; color: #666; margin-top: 4px;">📲 Add money to your wallet using M-Pesa. You'll receive a prompt on your phone.</p>
             </div>
             <div class="card-body">
                 <!-- Quick Amount Buttons -->
@@ -171,6 +173,16 @@
                     </div>
 
                     <div id="paymentStatusArea" class="status-area"></div>
+
+                    <!-- Check Payment Status Button -->
+                    <div id="checkStatusSection" class="check-status-section" style="display: none; margin: 15px 0;">
+                        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">
+                            Already completed payment but not confirmed?
+                        </p>
+                        <button type="button" id="checkPaymentStatusBtn" class="btn-check-status" style="width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> Check Payment Status
+                        </button>
+                    </div>
 
                     <!-- Manual Code Entry -->
                     <div id="manualCodeSection" class="manual-code-section" style="display: none;">

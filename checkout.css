@@ -676,6 +676,66 @@ body {
     color: var(--primary);
 }
 
+/* Wallet Icon Style */
+.wallet-icon {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+/* Wallet Notice */
+.wallet-notice {
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: var(--radius-sm);
+}
+
+.wallet-notice-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.wallet-notice-content i {
+    color: #d97706;
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.wallet-notice-content strong {
+    display: block;
+    color: #92400e;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.wallet-notice-content p {
+    margin: 0;
+    color: #a16207;
+    font-size: 13px;
+}
+
+.wallet-notice-content a {
+    color: #d97706;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.wallet-notice-content a:hover {
+    color: #92400e;
+}
+
+.payment-option.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.payment-option.disabled:hover {
+    border-color: var(--border-color);
+    background: var(--bg-white);
+}
+
 /* M-Pesa Input Section */
 .mpesa-input-section {
     padding-top: 20px;
@@ -1124,6 +1184,62 @@ body {
     margin-top: 10px;
     font-size: 12px;
     color: var(--text-muted);
+}
+
+/* Check Status Section */
+.check-status-section {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+    border-radius: var(--radius-sm);
+    margin-bottom: 20px;
+    text-align: center;
+    border: 1px solid #bae6fd;
+}
+
+.btn-check-status {
+    background: #0284c7;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: var(--transition);
+}
+
+.btn-check-status:hover {
+    background: #0369a1;
+    transform: translateY(-1px);
+}
+
+.btn-check-status:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-check-status i {
+    transition: transform 0.3s ease;
+}
+
+.btn-check-status.checking i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.check-status-section small {
+    display: block;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #0369a1;
 }
 
 /* Upload Receipt Section */

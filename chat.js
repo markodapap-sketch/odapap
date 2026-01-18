@@ -3,7 +3,9 @@ import { app } from './js/firebase.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js';
 import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, getDoc, doc } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js';
-import { showNotification } from './notifications.js'; // Ensure this import is correct
+import { showNotification } from './notifications.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
+import authModal from './js/authModal.js';
 
 const auth = getAuth(app);
 const firestore = getFirestore(app);
@@ -26,7 +28,7 @@ async function sendMessage() {
 
     const user = auth.currentUser;
     if (!user) {
-        alert('You must be logged in to send a message.');
+        showNotification('You must be logged in to send a message.', 'warning');
         return;
     }
 
@@ -82,7 +84,7 @@ async function sendMessage() {
         sendButton.innerHTML = 'Send';
     } catch (error) {
         console.error("Error sending message:", error);
-        alert("Failed to send message. Please check your permissions.");
+        showNotification('Failed to send message. Please try again.', 'error');
         sendButton.innerHTML = 'Send';
     }
 }
@@ -91,7 +93,7 @@ async function sendMessage() {
 async function sendFile(file) {
     const user = auth.currentUser;
     if (!user) {
-        alert('You must be logged in to send a file.');
+        showNotification('You must be logged in to send a file.', 'warning');
         return;
     }
 
@@ -125,7 +127,7 @@ async function sendFile(file) {
         sendFileButton.innerHTML = '<i class="fas fa-paperclip"></i>';
     } catch (error) {
         console.error("Error sending file:", error);
-        alert("Failed to send file. Please check your permissions.");
+        showNotification('Failed to send file. Please try again.', 'error');
         sendFileButton.innerHTML = '<i class="fas fa-paperclip"></i>';
     }
 }
@@ -134,7 +136,7 @@ async function sendFile(file) {
 async function reportIssue(issue) {
     const user = auth.currentUser;
     if (!user) {
-        alert('You must be logged in to report an issue.');
+        showNotification('You must be logged in to report an issue.', 'warning');
         return;
     }
 
@@ -143,7 +145,7 @@ async function reportIssue(issue) {
     const sellerId = getSellerId();
 
     if (!chatId || !sellerId) {
-        alert('Chat ID or Seller ID is missing.');
+        showNotification('Chat ID or Seller ID is missing.', 'error');
         return;
     }
 
@@ -165,7 +167,7 @@ async function reportIssue(issue) {
         console.error("Error reporting issue:", error); // IMPORTANT: Log the full error object
         console.error("Error code:", error.code);        // Log the error code specifically
         console.error("Error message:", error.message);  // Log the error message specifically
-        alert("Failed to report issue. Please check your permissions.");
+        showNotification('Failed to report issue. Please try again.', 'error');
     }
 }
 
@@ -233,9 +235,14 @@ function displayChatHeader(userData) {
 
     const chatHeader = document.createElement('div');
     chatHeader.className = 'chat-header';
+    
+    const safeProfilePicUrl = sanitizeUrl(userData.profilePicUrl, 'images/profile-placeholder.png');
+    const safeName = escapeHtml(userData.name || 'User');
+    const safeUserId = encodeURIComponent(userData.userId || '');
+    
     chatHeader.innerHTML = `
-        <img src="${userData.profilePicUrl || 'images/profile-placeholder.png'}" alt="Profile Picture" class="profile-picture" onclick="window.location.href='user.html?userId=${userData.userId}'" style="cursor: pointer;">
-        <span class="profile-name">${userData.name}</span>
+        <img src="${safeProfilePicUrl}" alt="Profile Picture" class="profile-picture" onclick="window.location.href='user.html?userId=${safeUserId}'" style="cursor: pointer;">
+        <span class="profile-name">${safeName}</span>
     `;
     chatContainer.parentNode.insertBefore(chatHeader, chatContainer);
     chatHeaderDisplayed = true;
@@ -254,23 +261,30 @@ async function displayMessage(messageData) {
         const senderDoc = await getDoc(doc(firestore, "Users", messageData.senderId));
         senderName = senderDoc.exists() ? senderDoc.data().name : "Unknown User";
     }
+    
+    // Sanitize all user content
+    const safeSenderName = escapeHtml(isSender ? 'You' : senderName);
+    const safeMessage = escapeHtml(messageData.message || '');
+    const safeFileUrl = sanitizeUrl(messageData.fileUrl, '');
+    const safeListingId = encodeURIComponent(messageData.listingId || '');
+    const timestamp = messageData.timestamp?.seconds ? new Date(messageData.timestamp.seconds * 1000).toLocaleTimeString() : '';
 
-    if (messageData.fileUrl) {
-        const fileType = messageData.fileType.startsWith('image/') ? 'img' : 'video';
+    if (messageData.fileUrl && safeFileUrl) {
+        const fileType = messageData.fileType?.startsWith('image/') ? 'img' : 'video';
         messageElement.innerHTML = `
             <div class="message-bubble ${bubbleClass}">
-                <div class="sender-name">${isSender ? 'You' : senderName}</div>
-                <${fileType} src="${messageData.fileUrl}" controls onclick="window.location.href='product.html?id=${messageData.listingId}'" style="cursor: pointer; max-width: 200px; max-height: 200px;"></${fileType}>
-                <p>${messageData.message}</p>
-                <span class="timestamp">${new Date(messageData.timestamp?.seconds * 1000).toLocaleTimeString()}</span>
+                <div class="sender-name">${safeSenderName}</div>
+                <${fileType} src="${safeFileUrl}" controls onclick="window.location.href='product.html?id=${safeListingId}'" style="cursor: pointer; max-width: 200px; max-height: 200px;"></${fileType}>
+                <p>${safeMessage}</p>
+                <span class="timestamp">${timestamp}</span>
             </div>
         `;
     } else {
         messageElement.innerHTML = `
             <div class="message-bubble ${bubbleClass}">
-                <div class="sender-name">${isSender ? 'You' : senderName}</div>
-                <p>${messageData.message}</p>
-                <span class="timestamp">${new Date(messageData.timestamp?.seconds * 1000).toLocaleTimeString()}</span>
+                <div class="sender-name">${safeSenderName}</div>
+                <p>${safeMessage}</p>
+                <span class="timestamp">${timestamp}</span>
             </div>
         `;
     }
@@ -323,7 +337,14 @@ auth.onAuthStateChanged(async (user) => {
             displayChatHeader(otherUserData);
         }
     } else {
-        alert('Please log in to view your chats.');
-        window.location.href = 'login.html';
+        // Show login modal with cancel option
+        authModal.show({
+            title: 'Login to Chat',
+            message: 'Sign in to message sellers and negotiate deals',
+            icon: 'fa-comments',
+            feature: 'chat with sellers',
+            allowCancel: true,
+            cancelRedirect: 'index.html'
+        });
     }
 });

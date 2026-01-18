@@ -2,8 +2,11 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getFirestore, collection, doc, getDocs, deleteDoc, addDoc, updateDoc, getDoc, setDoc, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
-import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
+import { updateCartCounter, updateWishlistCounter, updateChatCounter, invalidateCartCache } from './js/utils.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
+import { OdaModal } from './js/odaModal.js';
+import authModal from './js/authModal.js';
 
 // Setup global image error handling
 setupGlobalImageErrorHandler();
@@ -114,27 +117,37 @@ class CartManager {
         this.cartItems.forEach((item, itemKey) => {
             const itemTotal = item.price * item.quantity;
             const variantName = item.selectedVariation?.attr_name || item.selectedVariation?.display || item.selectedVariation?.variationTitle || '';
+            const minQty = item.minOrderQuantity || 1;
+            const qtyBelowMin = item.quantity < minQty;
             
             const cartItemEl = document.createElement('div');
             cartItemEl.className = 'cart-item';
             cartItemEl.dataset.itemKey = itemKey;
             
+            // Sanitize user content
+            const safeName = escapeHtml(item.name || 'Product');
+            const safeVariantName = escapeHtml(variantName);
+            const safeImageUrl = sanitizeUrl(item.imageUrl, 'images/product-placeholder.png');
+            const safeListingId = encodeURIComponent(item.listingId || '');
+            const safeItemKey = escapeHtml(itemKey);
+            
             cartItemEl.innerHTML = `
-                <img src="${item.imageUrl}" alt="${item.name}" class="cart-item-image" onclick="window.location.href='product.html?id=${item.listingId}'">
+                <img src="${safeImageUrl}" alt="${safeName}" class="cart-item-image" onclick="window.location.href='product.html?id=${safeListingId}'">
                 <div class="cart-item-content">
                     <div class="cart-item-header">
-                        <h4 class="cart-item-name">${item.name}</h4>
+                        <h4 class="cart-item-name">${safeName}</h4>
                     </div>
-                    ${variantName ? `<span class="cart-item-variant">${variantName}</span>` : ''}
-                    <p class="cart-item-price">KES ${item.price.toLocaleString()}</p>
+                    ${safeVariantName ? `<span class="cart-item-variant">${safeVariantName}</span>` : ''}
+                    <p class="cart-item-price">KES ${(item.price || 0).toLocaleString()}</p>
                     ${item.retailPrice ? `<p class="cart-item-retail">Retail: KES ${item.retailPrice.toLocaleString()}</p>` : ''}
+                    ${minQty > 1 ? `<p class="min-order-note" style="font-size: 0.8rem; color: ${qtyBelowMin ? '#e74c3c' : 'var(--text-muted)'};">Min order: ${minQty} units</p>` : ''}
                     <div class="cart-item-actions">
                         <div class="quantity-controls">
-                            <button class="qty-btn" data-action="decrease" data-key="${itemKey}">−</button>
+                            <button class="qty-btn" data-action="decrease" data-key="${safeItemKey}">−</button>
                             <span>${item.quantity}</span>
-                            <button class="qty-btn" data-action="increase" data-key="${itemKey}">+</button>
+                            <button class="qty-btn" data-action="increase" data-key="${safeItemKey}">+</button>
                         </div>
-                        <button class="remove-btn" data-key="${itemKey}">
+                        <button class="remove-btn" data-key="${safeItemKey}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -173,14 +186,18 @@ class CartManager {
         const item = this.cartItems.get(itemKey);
         if (!item) return;
 
+        const minQty = item.minOrderQuantity || 1;
+
         if (action === 'increase') {
             item.quantity += 1;
-        } else if (action === 'decrease' && item.quantity > 1) {
-            item.quantity -= 1;
-        } else if (action === 'decrease' && item.quantity === 1) {
-            // If decreasing to 0, remove item instead
-            this.removeItem(itemKey);
-            return;
+        } else if (action === 'decrease') {
+            if (item.quantity > minQty) {
+                item.quantity -= 1;
+            } else {
+                // If at minimum, prompt to remove
+                this.removeItem(itemKey);
+                return;
+            }
         }
 
         // Update in Firestore
@@ -212,7 +229,14 @@ class CartManager {
     }
 
     async removeItem(itemKey) {
-        if (!confirm('Remove this item from cart?')) return;
+        const confirmed = await OdaModal.confirm({
+            title: 'Remove Item',
+            message: 'Remove this item from cart?',
+            icon: 'trash-alt',
+            confirmText: 'Remove',
+            dangerous: true
+        });
+        if (!confirmed) return;
 
         const item = this.cartItems.get(itemKey);
         if (!item) return;
@@ -227,6 +251,9 @@ class CartManager {
             this.displayCartItems();
             this.updateTotals();
             showNotification('Item removed from cart');
+            
+            // Invalidate cart cache so counter updates across pages
+            invalidateCartCache();
 
             // Check if cart is empty
             if (this.cartItems.size === 0) {
@@ -258,7 +285,14 @@ class CartManager {
     }
 
     async clearCart() {
-        if (!confirm('Are you sure you want to clear your entire cart?')) return;
+        const confirmed = await OdaModal.confirm({
+            title: 'Clear Cart',
+            message: 'Are you sure you want to clear your entire cart?',
+            icon: 'trash-alt',
+            confirmText: 'Clear All',
+            dangerous: true
+        });
+        if (!confirmed) return;
         
         try {
             for (const [itemKey, item] of this.cartItems) {
@@ -269,6 +303,9 @@ class CartManager {
             this.cartItems.clear();
             this.showEmptyState();
             showNotification('Cart cleared');
+            
+            // Invalidate cart cache
+            invalidateCartCache();
         } catch (error) {
             console.error('Error clearing cart:', error);
             showNotification('Error clearing cart');
@@ -312,6 +349,10 @@ class CartManager {
             }
 
             showNotification('Item added to cart!');
+            
+            // Invalidate cart cache so counter updates
+            invalidateCartCache();
+            
             await this.loadCartItems(this.user);
 
         } catch (error) {
@@ -334,10 +375,15 @@ onAuthStateChanged(auth, async (user) => {
         await updateWishlistCounter(firestore, user.uid);
         await updateChatCounter(firestore, user.uid);
     } else {
-        showNotification('Please log in to view your cart');
-        setTimeout(() => {
-            window.location.href = 'login.html';
-        }, 2000);
+        // Show login modal instead of just redirecting
+        authModal.show({
+            title: 'Login to View Cart',
+            message: 'Sign in to view your cart items and continue shopping',
+            icon: 'fa-shopping-cart',
+            feature: 'view your cart',
+            allowCancel: true,
+            cancelRedirect: 'index.html'
+        });
     }
 });
 

@@ -1973,4 +1973,290 @@ body {
     .sales-grid { grid-template-columns: repeat(2, 1fr); }
     .sales-value { font-size: 16px; }
     .sales-label { font-size: 10px; }
+    .notification-stats { grid-template-columns: 1fr; }
+}
+
+/* ========================================
+   PUSH NOTIFICATIONS MANAGEMENT
+   ======================================== */
+
+.notification-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.notif-stat-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+}
+
+.notif-stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.notif-stat-icon.blue { background: #dbeafe; color: var(--blue); }
+.notif-stat-icon.green { background: #d1fae5; color: var(--green); }
+.notif-stat-icon.orange { background: #fef3c7; color: var(--orange); }
+
+.notif-stat-info { display: flex; flex-direction: column; }
+.notif-stat-value { font-size: 24px; font-weight: 700; color: var(--dark); }
+.notif-stat-label { font-size: 13px; color: var(--gray-500); }
+
+/* Notification Form */
+#pushNotificationForm .form-group {
+    margin-bottom: 20px;
+}
+
+#pushNotificationForm label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--gray-700);
+}
+
+#pushNotificationForm label i {
+    color: var(--primary);
+}
+
+#pushNotificationForm input[type="text"],
+#pushNotificationForm textarea,
+#pushNotificationForm select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius);
+    font-size: 14px;
+    transition: var(--transition);
+}
+
+#pushNotificationForm input:focus,
+#pushNotificationForm textarea:focus,
+#pushNotificationForm select:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.1);
+}
+
+#pushNotificationForm textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.char-count {
+    display: block;
+    text-align: right;
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-top: 4px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-group.half {
+    margin-bottom: 20px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    padding-top: 16px;
+    border-top: 1px solid var(--gray-200);
+    margin-top: 8px;
+}
+
+/* Notification Preview Modal */
+.notif-preview-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+.notif-preview-modal.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.notif-preview-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.notif-preview-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.notif-preview-phone {
+    width: 320px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 30px;
+    padding: 40px 16px 30px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.notif-preview-header {
+    text-align: center;
+    color: white;
+    margin-bottom: 20px;
+}
+
+.notif-preview-time {
+    font-size: 48px;
+    font-weight: 200;
+}
+
+.notif-preview-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.notif-preview-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    flex-shrink: 0;
+}
+
+.notif-preview-text {
+    flex: 1;
+}
+
+.notif-preview-text strong {
+    display: block;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.notif-preview-text p {
+    font-size: 13px;
+    color: #666;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Notification History */
+.notif-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.notif-history-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px;
+    background: var(--gray-50);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--primary);
+}
+
+.notif-history-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    flex-shrink: 0;
+}
+
+.notif-history-content {
+    flex: 1;
+}
+
+.notif-history-content strong {
+    display: block;
+    font-size: 14px;
+    color: var(--dark);
+    margin-bottom: 4px;
+}
+
+.notif-history-content p {
+    font-size: 13px;
+    color: var(--gray-600);
+    margin: 0 0 8px;
+}
+
+.notif-history-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--gray-500);
+}
+
+.notif-history-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.notif-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--gray-500);
+}
+
+.notif-empty i {
+    font-size: 48px;
+    color: var(--gray-300);
+    margin-bottom: 16px;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .notification-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+    }
 }

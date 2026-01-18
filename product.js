@@ -7,12 +7,15 @@ import {
     query, 
     where, 
     getDocs, 
-    addDoc 
+    addDoc,
+    limit 
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
-import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
+import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter, invalidateCartCache, invalidateWishlistCache } from './js/utils.js';
 import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
+import authModal from './js/authModal.js';
 
 // Setup global image error handling on load
 setupGlobalImageErrorHandler();
@@ -113,10 +116,10 @@ class ProductPage {
         this.messageSellerBtn?.addEventListener('click', () => this.handleMessageSeller());
         this.copyLinkBtn?.addEventListener('click', () => this.handleCopyLink());
 
-        // Touch events for image gallery
-        this.mainImage?.addEventListener('touchstart', (e) => this.handleTouchStart(e));
-        this.mainImage?.addEventListener('touchmove', (e) => this.handleTouchMove(e));
-        this.mainImage?.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+        // Touch events for image gallery - using passive listeners for better scroll performance
+        this.mainImage?.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
+        this.mainImage?.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: true });
+        this.mainImage?.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: true });
     }
 
     async initialize() {
@@ -176,6 +179,63 @@ class ProductPage {
         this.setupImageGallery();
         this.displayVariations();
         this.displayBulkPricing();
+        
+        // Track product view for recently viewed
+        this.trackProductView();
+    }
+
+    // Track product view in localStorage for recently viewed page
+    trackProductView() {
+        try {
+            const history = JSON.parse(localStorage.getItem('productViewHistory') || '{}');
+            const now = new Date().toISOString();
+            
+            if (history[this.productId]) {
+                // Update existing entry
+                history[this.productId].views = (history[this.productId].views || 0) + 1;
+                history[this.productId].lastViewed = now;
+            } else {
+                // Create new entry
+                history[this.productId] = {
+                    views: 1,
+                    lastViewed: now,
+                    firstViewed: now,
+                    totalTime: 0
+                };
+            }
+            
+            localStorage.setItem('productViewHistory', JSON.stringify(history));
+            
+            // Track time spent on page
+            this.viewStartTime = Date.now();
+            window.addEventListener('beforeunload', () => this.updateTimeSpent());
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') {
+                    this.updateTimeSpent();
+                }
+            });
+        } catch (error) {
+            console.error('Error tracking product view:', error);
+        }
+    }
+
+    // Update time spent on product page
+    updateTimeSpent() {
+        try {
+            if (!this.viewStartTime) return;
+            
+            const timeSpent = Math.round((Date.now() - this.viewStartTime) / 1000); // seconds
+            const history = JSON.parse(localStorage.getItem('productViewHistory') || '{}');
+            
+            if (history[this.productId]) {
+                history[this.productId].totalTime = (history[this.productId].totalTime || 0) + timeSpent;
+                localStorage.setItem('productViewHistory', JSON.stringify(history));
+            }
+            
+            this.viewStartTime = null; // Prevent duplicate updates
+        } catch (error) {
+            console.error('Error updating time spent:', error);
+        }
     }
 
     async loadSellerInfo(sellerId) {
@@ -262,13 +322,16 @@ class ProductPage {
                     variationCard.dataset.price = attr.price;
                     variationCard.dataset.retailPrice = attr.retailPrice || '';
                     variationCard.dataset.photoUrl = attr.photoUrl || '';
-                    variationCard.title = `${attr.attr_name} • Stock: ${attr.stock} • KES ${attr.price.toLocaleString()}`;
+                    
+                    const safeAttrName = escapeHtml(attr.attr_name || 'Option');
+                    const safePhotoUrl = sanitizeUrl(attr.photoUrl, '');
+                    variationCard.title = `${safeAttrName} • Stock: ${attr.stock} • KES ${(attr.price || 0).toLocaleString()}`;
                     
                     variationCard.innerHTML = `
-                        ${attr.photoUrl ? `<img src="${attr.photoUrl}" class="variation-thumb" alt="${attr.attr_name}" loading="lazy">` : ''}
+                        ${safePhotoUrl ? `<img src="${safePhotoUrl}" class="variation-thumb" alt="${safeAttrName}" loading="lazy">` : ''}
                         <div class="variation-header">
-                            <h4>${attr.attr_name || 'Option'}</h4>
-                            <p class="variation-price">KES ${attr.price.toLocaleString()}</p>
+                            <h4>${safeAttrName}</h4>
+                            <p class="variation-price">KES ${(attr.price || 0).toLocaleString()}</p>
                             ${attr.retailPrice ? `<p class="variation-retail"><s>KES ${attr.retailPrice.toLocaleString()}</s></p>` : ''}
                         </div>
                     `;
@@ -288,13 +351,16 @@ class ProductPage {
                 variationCard.dataset.stock = stock;
                 variationCard.dataset.price = price;
                 variationCard.dataset.photoUrl = photoUrl || '';
-                variationCard.title = `${attrName} • Stock: ${stock} • KES ${price.toLocaleString()}`;
+                
+                const safeAttrName = escapeHtml(attrName);
+                const safePhotoUrl = sanitizeUrl(photoUrl, '');
+                variationCard.title = `${safeAttrName} • Stock: ${stock} • KES ${(price || 0).toLocaleString()}`;
                 
                 variationCard.innerHTML = `
-                    ${photoUrl ? `<img src="${photoUrl}" class="variation-thumb" alt="${attrName}" loading="lazy">` : ''}
+                    ${safePhotoUrl ? `<img src="${safePhotoUrl}" class="variation-thumb" alt="${safeAttrName}" loading="lazy">` : ''}
                     <div class="variation-header">
-                        <h4>${attrName}</h4>
-                        <p class="variation-price">KES ${price.toLocaleString()}</p>
+                        <h4>${safeAttrName}</h4>
+                        <p class="variation-price">KES ${(price || 0).toLocaleString()}</p>
                     </div>
                 `;
                 variationsListEl.appendChild(variationCard);
@@ -472,16 +538,37 @@ class ProductPage {
             const similarProductsContainer = document.getElementById('similarProductsContainer');
             similarProductsContainer.innerHTML = '';
 
-            // Get all listings
-            const allListingsQuery = query(collection(this.db, "Listings"));
-            const allListingsSnapshot = await getDocs(allListingsQuery);
-
             const allProducts = [];
-            allListingsSnapshot.forEach(doc => {
-                if (doc.id !== this.productId) {
-                    allProducts.push({ id: doc.id, ...doc.data() });
-                }
-            });
+            
+            // First, try to get products from the same subcategory (most similar)
+            if (this.product.subcategory) {
+                const subcategoryQuery = query(
+                    collection(this.db, "Listings"),
+                    where("subcategory", "==", this.product.subcategory),
+                    limit(20)
+                );
+                const subcatSnapshot = await getDocs(subcategoryQuery);
+                subcatSnapshot.forEach(doc => {
+                    if (doc.id !== this.productId) {
+                        allProducts.push({ id: doc.id, ...doc.data(), source: 'subcategory' });
+                    }
+                });
+            }
+            
+            // If not enough, also fetch from same category
+            if (allProducts.length < 12 && this.product.category) {
+                const categoryQuery = query(
+                    collection(this.db, "Listings"),
+                    where("category", "==", this.product.category),
+                    limit(20)
+                );
+                const catSnapshot = await getDocs(categoryQuery);
+                catSnapshot.forEach(doc => {
+                    if (doc.id !== this.productId && !allProducts.some(p => p.id === doc.id)) {
+                        allProducts.push({ id: doc.id, ...doc.data(), source: 'category' });
+                    }
+                });
+            }
 
             // Calculate similarity scores
             const scoredProducts = allProducts.map(product => {
@@ -500,15 +587,13 @@ class ProductPage {
                     score += 50;
                 }
 
-                // Subcategory match
-                if (product.subcategory && this.product.subcategory && 
-                    product.subcategory === this.product.subcategory) {
+                // Subcategory match bonus
+                if (product.source === 'subcategory') {
                     score += 30;
                 }
 
                 // Category match
-                if (product.category && this.product.category && 
-                    product.category === this.product.category) {
+                if (product.source === 'category') {
                     score += 20;
                 }
 
@@ -551,29 +636,33 @@ class ProductPage {
         const productCard = document.createElement('div');
         productCard.classList.add('similar-product-card');
         
-        const firstImage = getImageUrl(
+        const firstImage = sanitizeUrl(getImageUrl(
             product.photoTraceUrl || 
             (product.imageUrls && product.imageUrls[0]) || 
             null, 
             'product'
-        );
+        ));
+        
+        const safeName = escapeHtml(product.name);
+        const safeBrand = escapeHtml(product.brand || '');
+        const safeId = escapeHtml(productId);
 
         productCard.innerHTML = `
-            <div class="product-link" data-product-id="${productId}">
+            <div class="product-link" data-product-id="${safeId}">
                 <div class="product-image">
-                    <img src="${firstImage}" alt="${product.name}" loading="lazy" data-fallback="product">
+                    <img src="${firstImage}" alt="${safeName}" loading="lazy" data-fallback="product">
                 </div>
                 <div class="product-info">
-                    <h4 class="product-name">${product.name}</h4>
-                    <p class="product-brand">${product.brand || ''}</p>
-                    <p class="product-price">KES ${product.price.toLocaleString()}</p>
+                    <h4 class="product-name">${safeName}</h4>
+                    <p class="product-brand">${safeBrand}</p>
+                    <p class="product-price">KES ${(product.price || 0).toLocaleString()}</p>
                     ${product.initialPrice ? `<p class="initial-price">KES ${product.initialPrice.toLocaleString()}</p>` : ''}
                 </div>
             </div>
         `;
         
         productCard.querySelector('.product-link').addEventListener('click', () => {
-            window.location.href = `product.html?id=${productId}`;
+            window.location.href = `product.html?id=${encodeURIComponent(productId)}`;
         });
         
         return productCard;
@@ -645,7 +734,7 @@ class ProductPage {
 
     async handleBuyNow() {
         if (!this.auth.currentUser) {
-            showNotification("Please login to purchase items", "warning");
+            this.showLoginPrompt('purchase');
             return;
         }
 
@@ -656,6 +745,20 @@ class ProductPage {
 
         // Show quantity modal
         this.showQuantityModal();
+    }
+
+    // Show login prompt modal using authModal
+    showLoginPrompt(action = 'add') {
+        const actionText = action === 'purchase' ? 'complete your purchase' : 'add items to cart';
+        
+        authModal.show({
+            title: action === 'purchase' ? 'Login to Purchase' : 'Login to Add to Cart',
+            message: `Sign in or create an account to ${actionText}. It only takes a minute!`,
+            icon: action === 'purchase' ? 'fa-credit-card' : 'fa-shopping-cart',
+            feature: actionText,
+            allowCancel: true,
+            cancelRedirect: null // Stay on page
+        });
     }
 
     // Cookie helper functions
@@ -771,7 +874,7 @@ class ProductPage {
 
     async handleAddToCart() {
         if (!this.auth.currentUser) {
-            showNotification("Please login to add items to cart", "warning");
+            this.showLoginPrompt('add');
             return;
         }
 
@@ -794,7 +897,8 @@ class ProductPage {
             showNotification("Item added to cart!");
             animateButton(this.addToCartBtn, 'sounds/pop-39222.mp3');
             animateIconToCart(this.addToCartBtn, 'cart-icon');
-            await updateCartCounter(this.db, this.auth.currentUser.uid);
+            invalidateCartCache(); // Invalidate cache for counter updates
+            await updateCartCounter(this.db, this.auth.currentUser.uid, true); // Force refresh
         } catch (error) {
             console.error("Error adding item to cart:", error);
             showNotification("Failed to add item to cart. Please try again.");
@@ -819,7 +923,8 @@ class ProductPage {
             showNotification("Item added to wishlist!");
             animateButton(this.wishlistBtn, 'sounds/pop-268648.mp3');
             animateIconToCart(this.wishlistBtn, 'wishlist-icon');
-            await updateWishlistCounter(this.db, this.auth.currentUser.uid);
+            invalidateWishlistCache(); // Invalidate cache for counter updates
+            await updateWishlistCounter(this.db, this.auth.currentUser.uid, true); // Force refresh
         } catch (error) {
             console.error("Error adding item to wishlist:", error);
             showNotification("Failed to add item to wishlist. Please try again.");

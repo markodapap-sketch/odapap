@@ -55,22 +55,37 @@ class DepositManager {
     
     async loadUserData() {
         try {
-            const userDoc = await getDoc(doc(db, 'users', this.user.uid));
+            const userDoc = await getDoc(doc(db, 'Users', this.user.uid));
             if (userDoc.exists()) {
                 this.userData = userDoc.data();
                 this.updateBalanceDisplay();
                 this.prefillPhone();
+            } else {
+                // Initialize userData if document doesn't exist
+                this.userData = { walletBalance: 0 };
             }
         } catch (error) {
             console.error('Error loading user data:', error);
+            this.userData = { walletBalance: 0 };
         }
     }
     
     updateBalanceDisplay() {
+        const balance = this.userData?.walletBalance || 0;
+        
+        // Update deposit page balance
         const balanceEl = document.getElementById('currentBalance');
-        if (balanceEl && this.userData) {
-            const balance = this.userData.walletBalance || 0;
+        if (balanceEl) {
             balanceEl.textContent = `KES ${balance.toLocaleString()}`;
+            // Add animation for visual feedback
+            balanceEl.classList.add('balance-updated');
+            setTimeout(() => balanceEl.classList.remove('balance-updated'), 500);
+        }
+        
+        // Also update header wallet balance if exists
+        const headerBalance = document.querySelector('.wallet-balance, #walletBalance, .header-balance');
+        if (headerBalance) {
+            headerBalance.textContent = `KES ${balance.toLocaleString()}`;
         }
     }
     
@@ -156,6 +171,11 @@ class DepositManager {
             this.verifyManualCode();
         });
         
+        // Check payment status button
+        document.getElementById('checkPaymentStatusBtn')?.addEventListener('click', () => {
+            this.checkPaymentStatusManual();
+        });
+        
         // M-Pesa code input
         const mpesaCodeInput = document.getElementById('mpesaCode');
         if (mpesaCodeInput) {
@@ -223,31 +243,145 @@ class DepositManager {
         depositBtn.querySelector('.btn-loading').style.display = 'inline-flex';
         
         try {
-            // Initialize M-Pesa manager
-            this.mpesaManager = new MpesaPaymentManager(
-                db,
-                this.user.uid,
-                amount,
-                'deposit'
-            );
+            // Initialize M-Pesa manager with new API
+            this.mpesaManager = new MpesaPaymentManager({
+                userId: this.user.uid,
+                onStatusChange: (status, message) => this.handlePaymentStatusChange(status, message),
+                onPaymentComplete: (data) => this.handlePaymentComplete(data),
+                onPaymentFailed: (data) => this.handlePaymentFailed(data),
+                onError: (error) => console.error('M-Pesa Error:', error)
+            });
             
-            // Initiate STK Push
-            const result = await this.mpesaManager.initiateSTKPush(phone);
+            // Initiate payment using new API
+            const result = await this.mpesaManager.initiatePayment({
+                phoneNumber: phone,
+                amount: amount,
+                accountReference: `DEP-${Date.now()}`,
+                description: 'Oda Pap Wallet Deposit',
+                metadata: {
+                    type: 'deposit',
+                    userId: this.user.uid
+                }
+            });
             
             if (result.success) {
                 this.currentTransactionId = result.transactionId;
                 this.openPaymentModal(amount, phone);
-                this.startPolling(result.transactionId);
             } else {
                 this.showToast(result.message || 'Failed to initiate payment', 'error');
             }
         } catch (error) {
             console.error('Deposit error:', error);
-            this.showToast('Failed to process deposit. Please try again.', 'error');
+            this.showToast(error.message || 'Failed to process deposit. Please try again.', 'error');
         } finally {
             depositBtn.disabled = false;
             depositBtn.querySelector('.btn-text').style.display = 'inline-flex';
             depositBtn.querySelector('.btn-loading').style.display = 'none';
+        }
+    }
+    
+    // Handle M-Pesa status change
+    handlePaymentStatusChange(status, message) {
+        console.log('Payment status:', status, message);
+        const statusTitle = document.getElementById('statusTitle');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        if (statusTitle) statusTitle.textContent = message;
+        
+        // Update UI based on status
+        const statusIcon = document.getElementById('statusIcon');
+        if (statusIcon) {
+            statusIcon.className = 'status-icon';
+            if (status === 'completed') {
+                statusIcon.classList.add('success');
+            } else if (status === 'failed' || status === 'error') {
+                statusIcon.classList.add('error');
+            }
+        }
+    }
+    
+    // Handle successful payment
+    handlePaymentComplete(data) {
+        console.log('Payment complete:', data);
+        this.stopTimer();
+        this.stopPolling();
+        
+        this.updatePaymentStatus('success', 'Payment Successful!', 'Your deposit is being processed...');
+        
+        // Use mpesaReceiptNumber or mpesaCode (aliases), fallback to transactionId
+        const mpesaCode = data.mpesaReceiptNumber || data.mpesaCode || null;
+        const amount = data.amount || parseInt(document.getElementById('depositAmount')?.value) || 0;
+        
+        console.log('📝 Crediting wallet with M-Pesa Code:', mpesaCode);
+        
+        // Credit wallet with amount and code
+        this.creditWallet(amount, mpesaCode, data.transactionId)
+            .then(() => {
+                setTimeout(() => {
+                    this.closePaymentModal();
+                    this.openSuccessModal(amount);
+                }, 1500);
+            })
+            .catch(error => {
+                console.error('Error crediting wallet:', error);
+                this.showToast('Payment received but wallet update failed. Please contact support.', 'error');
+            });
+    }
+    
+    // Handle failed payment
+    handlePaymentFailed(data) {
+        console.log('Payment failed:', data);
+        
+        // Show manual code section
+        const manualSection = document.getElementById('manualCodeSection');
+        if (manualSection) {
+            manualSection.style.display = 'block';
+        }
+        
+        // Show check status section
+        const checkStatusSection = document.getElementById('checkStatusSection');
+        if (checkStatusSection) {
+            checkStatusSection.style.display = 'block';
+        }
+        
+        this.showToast(data.reason || 'Payment was not completed', 'error');
+    }
+    
+    // Manual check payment status
+    async checkPaymentStatusManual() {
+        if (!this.mpesaManager) {
+            this.showToast('No active payment to check', 'error');
+            return;
+        }
+        
+        const btn = document.getElementById('checkPaymentStatusBtn');
+        if (!btn) return;
+        
+        // Show loading
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+        
+        try {
+            const result = await this.mpesaManager.checkPaymentStatus();
+            
+            if (result.success && result.status === 'completed') {
+                this.handlePaymentComplete({
+                    amount: result.data?.amount || parseInt(document.getElementById('depositAmount').value),
+                    mpesaCode: result.data?.mpesaReceiptNumber,
+                    transactionId: this.currentTransactionId
+                });
+            } else if (result.status === 'pending') {
+                this.showToast('Payment is still pending. Please complete on your phone.', 'info');
+            } else {
+                this.showToast(result.message || 'Payment not yet completed', 'warning');
+            }
+        } catch (error) {
+            console.error('Check status error:', error);
+            this.showToast(error.message || 'Failed to check payment status', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
     }
     
@@ -298,9 +432,10 @@ class DepositManager {
                 timerEl.parentElement.classList.add('warning');
             }
             
-            // Show manual code section after 30 seconds
+            // Show manual code section and check status after 30 seconds
             if (this.timerSeconds <= 270) {
                 document.getElementById('manualCodeSection').style.display = 'block';
+                document.getElementById('checkStatusSection').style.display = 'block';
             }
             
             if (this.timerSeconds <= 0) {
@@ -390,8 +525,11 @@ class DepositManager {
         }
     }
     
-    async creditWallet(amount, mpesaCode) {
-        const userRef = doc(db, 'users', this.user.uid);
+    async creditWallet(amount, mpesaCode, firestoreTransactionId = null) {
+        const userRef = doc(db, 'Users', this.user.uid);
+        let previousBalance = 0;
+        let newBalance = 0;
+        const depositTransactionId = `DEP-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
         
         await runTransaction(db, async (transaction) => {
             const userDoc = await transaction.get(userRef);
@@ -399,31 +537,62 @@ class DepositManager {
                 throw new Error('User document not found');
             }
             
-            const currentBalance = userDoc.data().walletBalance || 0;
-            const newBalance = currentBalance + amount;
+            previousBalance = userDoc.data().walletBalance || 0;
+            newBalance = previousBalance + amount;
             
             // Update wallet balance
             transaction.update(userRef, {
                 walletBalance: newBalance,
-                lastDepositAt: serverTimestamp()
+                lastDepositAt: serverTimestamp(),
+                lastTransactionAt: serverTimestamp()
             });
-            
-            // Add to wallet transactions
-            const txRef = doc(collection(db, 'users', this.user.uid, 'walletTransactions'));
-            transaction.set(txRef, {
-                type: 'deposit',
-                amount: amount,
-                mpesaCode: mpesaCode,
-                balanceAfter: newBalance,
-                status: 'completed',
-                createdAt: serverTimestamp()
-            });
-            
-            // Update local userData
-            this.userData.walletBalance = newBalance;
         });
         
+        // Add to wallet transactions with full audit trail (blockchain-like)
+        await addDoc(collection(db, 'users', this.user.uid, 'walletTransactions'), {
+            type: 'deposit',
+            transactionId: depositTransactionId,
+            amount: amount,
+            balanceBefore: previousBalance,
+            balanceAfter: newBalance,
+            description: 'M-Pesa Wallet Deposit',
+            // M-Pesa linkage - CRITICAL for tracking
+            mpesaCode: mpesaCode || null,
+            mpesaReceiptNumber: mpesaCode || null, // Alias
+            firestoreTransactionId: firestoreTransactionId || this.currentTransactionId || null,
+            // Audit trail - blockchain-like tracking
+            audit: {
+                source: 'mpesa_payment',
+                sourceReference: mpesaCode || 'pending',
+                destination: 'wallet_balance',
+                userId: this.user.uid,
+                amount: amount,
+                currency: 'KES',
+                balanceBefore: previousBalance,
+                balanceAfter: newBalance,
+                timestamp: new Date().toISOString(),
+                verified: !!mpesaCode,
+                verificationMethod: mpesaCode ? 'mpesa_receipt' : 'firestore_transaction',
+                // Hash-like reference for traceability
+                traceId: `${this.user.uid}-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`
+            },
+            status: 'completed',
+            createdAt: serverTimestamp()
+        });
+        
+        // Update local userData (handle null case)
+        if (!this.userData) {
+            this.userData = {};
+        }
+        this.userData.walletBalance = newBalance;
+        
+        // Immediately update balance display
         this.updateBalanceDisplay();
+        
+        // Dispatch custom event for other components to listen
+        window.dispatchEvent(new CustomEvent('walletBalanceUpdated', { 
+            detail: { balance: newBalance, previousBalance, amount } 
+        }));
     }
     
     async verifyManualCode() {

@@ -9,6 +9,7 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObjec
 import { app } from "./js/firebase.js";
 import { categoryHierarchy, brandsByCategory } from './js/categoryData.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeText, validatePrice, validateQuantity, validateListing } from './js/sanitize.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -20,6 +21,9 @@ setupGlobalImageErrorHandler();
 // ═══════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════
+const ADMIN_EMAIL = 'admin@odapap.com';
+const ADMIN_MARKUP_RATE = 0.12; // 12% markup for admin listings
+
 const state = {
     step: 1,
     maxSteps: 4,
@@ -34,7 +38,8 @@ const state = {
     touchEndX: 0,
     profileComplete: false,
     uploadQueue: [],
-    isUploading: false
+    isUploading: false,
+    isAdminUser: false
 };
 
 const $ = id => document.getElementById(id);
@@ -986,7 +991,10 @@ function generateReview() {
     
     if (minPrice === Infinity) minPrice = 0;
     
-    const fee = minPrice < 10000 ? minPrice * 0.05 : minPrice * 0.025;
+    // Admin gets flat 12% markup, others get tiered fee
+    const fee = state.isAdminUser 
+        ? minPrice * ADMIN_MARKUP_RATE 
+        : (minPrice < 10000 ? minPrice * 0.05 : minPrice * 0.025);
     const buyerPrice = minPrice + fee;
     
     $('review-box').innerHTML = `
@@ -1160,7 +1168,10 @@ async function processUploadQueue() {
             
             for (const o of v.options) {
                 const price = Number(o.price);
-                const fee = price < 10000 ? price * 0.05 : price * 0.025;
+                // Admin gets flat 12% markup, others get tiered fee
+                const fee = state.isAdminUser 
+                    ? price * ADMIN_MARKUP_RATE 
+                    : (price < 10000 ? price * 0.05 : price * 0.025);
                 
                 let imageUrl = null;
                 
@@ -1199,25 +1210,52 @@ async function processUploadQueue() {
             });
         });
         
-        const brand = job.formData.brand === 'Other' ? job.formData.customBrand.trim() : job.formData.brand;
-        const finalType = job.formData.productType === 'custom' ? job.formData.customType : job.formData.productType;
+        const brand = job.formData.brand === 'Other' ? sanitizeText(job.formData.customBrand, 100) : job.formData.brand;
+        const finalType = job.formData.productType === 'custom' ? sanitizeText(job.formData.customType, 100) : job.formData.productType;
+        
+        // Validate all inputs
+        const validatedPrice = validatePrice(lowestPrice);
+        const validatedStock = validateQuantity(totalStock);
+        
+        if (validatedPrice === null || validatedPrice <= 0) {
+            throw new Error('Invalid price. Prices must be between 0 and 10,000,000.');
+        }
+        
+        if (validatedStock === null) {
+            throw new Error('Invalid stock quantity.');
+        }
         
         const data = {
             uploaderId: user.uid,
-            category: job.formData.category,
-            subcategory: job.formData.subcategory,
-            subsubcategory: finalType,
-            name: job.productName,
-            brand,
-            description: job.formData.description,
+            category: sanitizeText(job.formData.category, 100),
+            subcategory: sanitizeText(job.formData.subcategory, 100),
+            subsubcategory: sanitizeText(finalType, 100),
+            name: sanitizeText(job.productName, 200),
+            brand: sanitizeText(brand, 100),
+            description: sanitizeText(job.formData.description, 5000),
             imageUrls,
             variations,
-            bulkPricing: job.bulkTiers.length > 0 ? job.bulkTiers.map(t => ({ minQuantity: t.qty, discountPercent: t.discount })) : null,
-            totalStock,
-            price: lowestPrice,
-            originalPrice: lowestPrice,
+            bulkPricing: job.bulkTiers.length > 0 ? job.bulkTiers.map(t => ({ 
+                minQuantity: validateQuantity(t.qty) || 1, 
+                discountPercent: Math.min(100, Math.max(0, parseFloat(t.discount) || 0)) 
+            })) : null,
+            totalStock: validatedStock,
+            price: validatedPrice,
+            originalPrice: validatedPrice,
             updatedAt: new Date().toISOString()
         };
+        
+        // Validate listing data
+        const validation = validateListing(data);
+        if (!validation.valid) {
+            throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+        }
+        
+        // Check document size before upload (Firestore limit is ~1MB)
+        const docSize = new Blob([JSON.stringify(data)]).size;
+        if (docSize > 900000) { // 900KB safety margin
+            throw new Error(`Listing data too large (${Math.round(docSize/1024)}KB). Try reducing the number of variations or using shorter descriptions.`);
+        }
         
         updateUploadProgress(job.id, 'uploading', 90, 'Publishing...');
         
@@ -1663,10 +1701,7 @@ function getTotalStock(l) {
     return total;
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+// escapeHtml is imported from ./js/sanitize.js
 
 function truncate(str, len) {
     if (!str) return '';
@@ -1735,7 +1770,10 @@ window.endCellEdit = async function(input, id) {
         if (numVal !== getLowestPrice(listing)) {
             if (listing.variations?.[0]?.attributes?.[0]) {
                 listing.variations[0].attributes[0].originalPrice = numVal;
-                const fee = numVal < 10000 ? numVal * 0.05 : numVal * 0.025;
+                // Admin gets flat 12% markup, others get tiered fee
+                const fee = state.isAdminUser 
+                    ? numVal * ADMIN_MARKUP_RATE 
+                    : (numVal < 10000 ? numVal * 0.05 : numVal * 0.025);
                 listing.variations[0].attributes[0].price = numVal + fee;
             }
             updates.variations = listing.variations;
@@ -1783,7 +1821,10 @@ window.updateVariantField = async function(input) {
                     if (field === 'varPrice') {
                         if (a.originalPrice !== value) {
                             a.originalPrice = value;
-                            const fee = value < 10000 ? value * 0.05 : value * 0.025;
+                            // Admin gets flat 12% markup, others get tiered fee
+                            const fee = state.isAdminUser 
+                                ? value * ADMIN_MARKUP_RATE 
+                                : (value < 10000 ? value * 0.05 : value * 0.025);
                             a.price = value + fee;
                             changed = true;
                         }
@@ -1926,7 +1967,10 @@ window.updateVarOption = function(vi, ai, field, value) {
     else if (field === 'price') {
         const price = parseFloat(value) || 0;
         attr.originalPrice = price;
-        const fee = price < 10000 ? price * 0.05 : price * 0.025;
+        // Admin gets flat 12% markup, others get tiered fee
+        const fee = state.isAdminUser 
+            ? price * ADMIN_MARKUP_RATE 
+            : (price < 10000 ? price * 0.05 : price * 0.025);
         attr.price = price + fee;
     }
     else if (field === 'stock') attr.stock = parseInt(value) || 0;
@@ -2145,6 +2189,16 @@ async function saveQuickEdit(id, updates) {
 const DRAFT_KEY = 'oda_listing_draft';
 
 const saveDraft = debounce(() => {
+    // Clone variants without base64 image data to avoid localStorage quota issues
+    const cleanVariants = state.variants.map(v => ({
+        ...v,
+        options: v.options.map(o => ({
+            ...o,
+            image: o.image?.startsWith('http') ? o.image : null, // Only keep URLs, not base64
+            imageFile: undefined // Remove File objects (not serializable anyway)
+        }))
+    }));
+    
     const draft = {
         category: $('category').value,
         subcategory: $('subcategory').value,
@@ -2154,12 +2208,14 @@ const saveDraft = debounce(() => {
         customBrand: $('custom-brand').value,
         productName: $('product-name').value,
         description: $('description').value,
-        variants: state.variants,
+        variants: cleanVariants,
         bulkTiers: state.bulkTiers,
         step: state.step,
         ts: Date.now()
     };
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) {}
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch (e) {
+        console.warn('Draft save failed (storage full):', e);
+    }
 }, 1500);
 
 function loadDraft() {
@@ -2256,6 +2312,9 @@ function initAuth() {
 async function loadProfile(user) {
     try {
         const snap = await getDoc(doc(db, "Users", user.uid));
+        
+        // Check if current user is admin
+        state.isAdminUser = user.email === ADMIN_EMAIL;
         
         if (snap.exists()) {
             const d = snap.data();

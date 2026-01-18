@@ -35,7 +35,7 @@ header {
   position: sticky;
   top: 0;
   z-index: 1000;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease;
 }
 
 header.header-hidden {
@@ -44,19 +44,32 @@ header.header-hidden {
 
 /* Compact Header (Shown on Scroll) */
 .compact-header {
-  display: none;
+  display: flex;
   align-items: center;
   padding: 8px 12px;
   gap: 10px;
   background: var(--white);
+  opacity: 0;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  padding: 0 12px;
+  transition: opacity 0.2s ease, visibility 0.2s ease, height 0.2s ease, padding 0.2s ease;
 }
 
 header.header-compact .compact-header {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  height: auto;
+  padding: 8px 12px;
 }
 
 header.header-compact .full-header {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .compact-logo {
@@ -127,7 +140,9 @@ header.header-compact .full-header {
 
 /* Full Header */
 .full-header {
-  transition: all 0.3s ease;
+  transition: opacity 0.2s ease, visibility 0.2s ease, height 0.2s ease, padding 0.2s ease;
+  opacity: 1;
+  visibility: visible;
 }
 
 .top-bar {

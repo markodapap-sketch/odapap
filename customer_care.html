@@ -33,6 +33,7 @@
         <div class="page-header">
             <h1><i class="fas fa-headset"></i> Customer Care</h1>
             <p>We're here to help</p>
+            <p style="font-size: 0.75rem; color: #666; margin-top: 6px;">📞 Need help? Chat with us, call, or check the FAQs below for quick answers!</p>
         </div>
 
         <div class="customer-care-container">
@@ -51,20 +52,33 @@
                     <div class="contact-card">
                         <i class="fas fa-envelope"></i>
                         <h3>Email Us</h3>
-                        <p>support@odapap.com</p>
-                        <a href="mailto:support@odapap.com" class="btn-contact">
+                        <p class="copyable-text" onclick="copyToClipboard('admin@odapap.com', this)">
+                            admin@odapap.com
+                            <i class="fas fa-copy copy-icon"></i>
+                        </p>
+                        <a href="mailto:admin@odapap.com" class="btn-contact">
                             <i class="fas fa-envelope"></i> Send Email
                         </a>
                     </div>
                     <div class="contact-card">
                         <i class="fas fa-phone"></i>
                         <h3>Call Us</h3>
-                        <p>+254 7XX XXX XXX</p>
-                        <a href="tel:+254700000000" class="btn-contact">
+                        <p class="copyable-text" onclick="copyToClipboard('0751400299', this)">
+                            0751400299
+                            <i class="fas fa-copy copy-icon"></i>
+                        </p>
+                        <a href="tel:+254751400299" class="btn-contact">
                             <i class="fas fa-phone"></i> Call Now
                         </a>
                     </div>
                 </div>
+            </section>
+
+            <!-- WhatsApp Quick Contact -->
+            <section class="whatsapp-section">
+                <a href="https://wa.me/254751400299" target="_blank" class="whatsapp-btn">
+                    <i class="fab fa-whatsapp"></i> Chat on WhatsApp
+                </a>
             </section>
 
             <!-- FAQs Section -->
@@ -83,51 +97,99 @@
 
     <script type="module">
         import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, getDocs, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
         import { app } from "./js/firebase.js";
 
         const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Admin support email - used to find admin user ID
+        const ADMIN_EMAIL = 'admin@odapap.com';
+        let adminUserId = null;
 
-        // FAQs Data
+        // Fetch admin user ID by email
+        async function getAdminUserId() {
+            try {
+                const usersRef = collection(db, 'Users');
+                const q = query(usersRef, where('email', '==', ADMIN_EMAIL), limit(1));
+                const snapshot = await getDocs(q);
+                
+                if (!snapshot.empty) {
+                    adminUserId = snapshot.docs[0].id;
+                    return adminUserId;
+                }
+            } catch (error) {
+                console.error('Error fetching admin user:', error);
+            }
+            return null;
+        }
+
+        // Copy to clipboard function
+        window.copyToClipboard = function(text, element) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show copied feedback
+                const originalHTML = element.innerHTML;
+                element.innerHTML = `<i class="fas fa-check"></i> Copied!`;
+                element.style.color = '#4caf50';
+                
+                setTimeout(() => {
+                    element.innerHTML = originalHTML;
+                    element.style.color = '';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        };
+
+        // FAQs Data - Updated with accurate information
         const faqs = [
             {
                 question: "How do I place an order?",
-                answer: "Browse our products, select an item, choose your quantity, and proceed to checkout. You can pay using various payment methods available on our platform."
+                answer: "Browse our products, select an item, choose your quantity, and proceed to checkout. You can pay using M-Pesa (instant payment via STK Push), pay on delivery, or use your Oda Pap wallet balance."
             },
             {
                 question: "What is your return policy?",
-                answer: "We offer returns within 7 days of purchase for items in original condition. Please contact our support team to initiate a return."
+                answer: "We offer returns within 7 days of purchase for items in original condition. Contact us at admin@odapap.com or call 0751400299 to initiate a return."
             },
             {
                 question: "How long does shipping take?",
-                answer: "Standard shipping takes 2-5 business days. Express options may be available in some areas for faster delivery."
+                answer: "We currently deliver within Mombasa County. Standard delivery takes 1-2 business days. Delivery to other areas is coming soon!"
             },
             {
                 question: "Can I cancel my order?",
-                answer: "Orders can be cancelled within 2 hours of placement. Please contact support immediately if you wish to cancel."
+                answer: "Orders can be cancelled within 2 hours of placement before dispatch. Contact us immediately at 0751400299 or email admin@odapap.com to cancel."
             },
             {
                 question: "What payment methods do you accept?",
-                answer: "We accept Mpesa, credit cards, debit cards, and bank transfers. Choose your preferred method at checkout."
+                answer: "We accept M-Pesa (recommended - instant payment via STK Push), Oda Pap Wallet balance, and Pay on Delivery for orders within Mombasa."
             },
             {
                 question: "How do I track my order?",
-                answer: "Go to Order Tracking in your account to monitor your delivery status in real-time."
+                answer: "Go to Order Tracking in your profile to monitor your delivery status in real-time. You'll also receive notifications for each status update."
             },
             {
                 question: "Are there any delivery charges?",
-                answer: "Delivery charges depend on your location and order value. Free delivery is available for orders above KES 5000 in selected areas."
+                answer: "Delivery charges depend on your location within Mombasa. Fees typically range from KES 100-300 based on your subcounty and ward."
             },
             {
                 question: "What should I do if I receive a damaged item?",
-                answer: "Contact our support team immediately with photos of the damaged item. We'll arrange a replacement or refund."
+                answer: "Contact us immediately at admin@odapap.com or call 0751400299 with photos of the damaged item. We'll arrange a replacement or full refund within 24 hours."
             },
             {
-                question: "Can I modify my order after placing it?",
-                answer: "Orders can be modified within 1 hour of placement. Please reach out to support to make changes."
+                question: "How do I deposit money to my wallet?",
+                answer: "Go to Deposit in your profile. Enter the amount and your M-Pesa number, then complete the payment. Funds are credited instantly after successful payment."
             },
             {
                 question: "How do I become a seller on Oda Pap?",
-                answer: "Visit our Seller Registration page to apply. Complete the verification process and start selling. We support B2B and retail sellers."
+                answer: "Visit the Seller Registration page or contact us at admin@odapap.com to apply. Complete verification and start listing your products. We support both B2B wholesale and retail sellers."
+            },
+            {
+                question: "What is the minimum order quantity?",
+                answer: "Minimum order quantities vary by product. Each product page displays the minimum order requirement. This is especially important for wholesale/B2B orders."
+            },
+            {
+                question: "How do I contact customer support?",
+                answer: "You can reach us via: Email: admin@odapap.com, Phone: 0751400299, WhatsApp: +254751400299, or use the in-app chat feature to message us directly."
             }
         ];
 
@@ -170,20 +232,43 @@
         };
 
         // Chat with support button
-        document.getElementById('chatWithSupportBtn').addEventListener('click', () => {
+        document.getElementById('chatWithSupportBtn').addEventListener('click', async () => {
             const user = auth.currentUser;
             if (user) {
-                // Support team ID
-                const supportId = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+                // Get admin user ID by email lookup
+                let supportId = adminUserId || await getAdminUserId();
+                
+                // Fallback to hardcoded ID if lookup fails
+                if (!supportId) {
+                    supportId = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2'; // Fallback support ID
+                }
+                
                 window.location.href = `chat.html?sellerId=${supportId}`;
             } else {
-                alert('Please log in to chat with support');
-                window.location.href = 'login.html';
+                // Show login modal instead of confirm
+                const modal = document.createElement('div');
+                modal.innerHTML = `
+                    <div style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
+                        <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
+                            <i class=\"fas fa-user-lock\" style=\"font-size:48px;color:#ff5722;margin-bottom:16px;\"></i>
+                            <h3 style=\"margin:0 0 8px;color:#333;\">Login Required</h3>
+                            <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Please log in to chat with support</p>
+                            <div style=\"display:flex;gap:12px;\">
+                                <button onclick=\"this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;\">Cancel</button>
+                                <button onclick=\"window.location.href='login.html?redirect=customer_care.html'\" style=\"flex:1;padding:12px;border:none;background:#ff5722;color:white;border-radius:8px;cursor:pointer;\">Login</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal.firstElementChild);
             }
         });
 
-        // Load FAQs on page load
-        window.addEventListener('load', displayFAQs);
+        // Load FAQs on page load and pre-fetch admin ID
+        window.addEventListener('load', async () => {
+            displayFAQs();
+            await getAdminUserId();
+        });
     </script>
 
     <style>
@@ -241,7 +326,7 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.12);
         }
 
-        .contact-card i {
+        .contact-card > i:first-child {
             font-size: 48px;
             color: #ff5722;
             margin-bottom: 16px;
@@ -258,6 +343,96 @@
             color: #757575;
             margin: 0 0 20px 0;
             font-size: 14px;
+        }
+
+        .copyable-text {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #212121 !important;
+            transition: all 0.3s ease;
+            font-size: 16px !important;
+        }
+
+        .copyable-text:hover {
+            background: #e8e8e8;
+        }
+
+        .copyable-text .copy-icon {
+            font-size: 14px;
+            color: #757575;
+        }
+
+        .whatsapp-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .whatsapp-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #25D366;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .whatsapp-btn:hover {
+            background: #128C7E;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+        }
+
+        .whatsapp-btn i {
+            font-size: 24px;
+        }
+
+        .whatsapp-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .whatsapp-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: #25D366;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .whatsapp-btn:hover {
+            background: #128C7E;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+        }
+
+        .whatsapp-btn i {
+            font-size: 24px;
+        }
+
+        .contact-card > i {
+            font-size: 48px;
+            color: #ff5722;
+            margin-bottom: 16px;
+            display: block;
         }
 
         .btn-contact {

@@ -521,16 +521,28 @@ app.post('/api/mpesa/verify', async (req, res) => {
             });
         }
 
-        // Check if code already used in Firebase
+        // Check if code already used in Firebase (check both collections)
         if (db) {
-            const transactionsRef = collection(db, 'mpesa_transactions');
-            const q = query(
+            // Try MpesaTransactions collection first (main collection)
+            let transactionsRef = collection(db, 'MpesaTransactions');
+            let q = query(
                 transactionsRef,
                 where('mpesaReceiptNumber', '==', mpesaCode.trim().toUpperCase()),
                 limit(1)
             );
             
-            const snapshot = await getDocs(q);
+            let snapshot = await getDocs(q);
+            
+            // If not found in main collection, check legacy lowercase collection
+            if (snapshot.empty) {
+                transactionsRef = collection(db, 'mpesa_transactions');
+                q = query(
+                    transactionsRef,
+                    where('mpesaReceiptNumber', '==', mpesaCode.trim().toUpperCase()),
+                    limit(1)
+                );
+                snapshot = await getDocs(q);
+            }
             
             if (!snapshot.empty) {
                 const existingTx = snapshot.docs[0].data();

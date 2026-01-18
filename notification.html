@@ -376,6 +376,22 @@
       background: #ffebee;
       color: #f44336;
     }
+    .order-notif-icon.announcement {
+      background: #fff3e0;
+      color: #ff5722;
+    }
+    .order-notif-icon.promo {
+      background: #fce4ec;
+      color: #e91e63;
+    }
+    .order-notif-icon.update {
+      background: #e8eaf6;
+      color: #3f51b5;
+    }
+    .order-notif-icon.alert {
+      background: #fff8e1;
+      color: #ffa000;
+    }
     .order-notif-content {
       flex: 1;
       min-width: 0;
@@ -514,6 +530,7 @@
     import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, or, limit, getDocs, orderBy, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
     import { app } from "./js/firebase.js";
     import { showNotification } from './notifications.js';
+    import authModal from './js/authModal.js';
 
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -522,6 +539,12 @@
     let allChats = [];
     let allOrderNotifications = [];
     let currentFilter = 'all';
+    
+    // Store unsubscribe functions for cleanup
+    let unsubscribeChats = null;
+    let unsubscribeOrders = null;
+    let unsubscribeGlobal = null;
+    let unsubscribeUserNotifs = null;
 
     // Check if notice was dismissed
     if (localStorage.getItem('chatNoticeRead')) {
@@ -568,17 +591,135 @@
 
     // Auth
     onAuthStateChanged(auth, async (user) => {
+      // Cleanup existing listeners before setting new ones
+      if (unsubscribeChats) unsubscribeChats();
+      if (unsubscribeOrders) unsubscribeOrders();
+      if (unsubscribeGlobal) unsubscribeGlobal();
+      if (unsubscribeUserNotifs) unsubscribeUserNotifs();
+      
       if (!user) {
-        window.location.href = 'login.html';
+        // Clear data
+        allChats = [];
+        allOrderNotifications = [];
+        currentUser = null;
+        
+        // Show login modal with cancel option
+        authModal.show({
+            title: 'Login to View Messages',
+            message: 'Sign in to see your messages and notifications',
+            icon: 'fa-bell',
+            feature: 'view notifications',
+            allowCancel: true,
+            cancelRedirect: 'index.html'
+        });
         return;
       }
       currentUser = user;
       loadChats();
       loadOrderNotifications();
+      loadGlobalNotifications();
     });
+
+    // Load global/admin notifications
+    async function loadGlobalNotifications() {
+      if (!currentUser) return;
+      
+      try {
+        const globalNotifsRef = collection(db, 'Notifications');
+        const q = query(
+          globalNotifsRef,
+          where('isGlobal', '==', true),
+          orderBy('createdAt', 'desc'),
+          limit(20)
+        );
+
+        unsubscribeGlobal = onSnapshot(q, (snapshot) => {
+          snapshot.forEach(docSnap => {
+            const data = docSnap.data();
+            // Check if we already have this notification
+            const exists = allOrderNotifications.some(n => n.id === docSnap.id);
+            if (!exists) {
+              allOrderNotifications.unshift({
+                id: docSnap.id,
+                ...data,
+                title: data.title || 'Announcement',
+                message: data.body || data.message || '',
+                type: 'announcement',
+                isGlobal: true
+              });
+            }
+          });
+
+          // Also load user-specific notifications from subcollection
+          loadUserNotifications();
+        });
+      } catch (error) {
+        console.error('Error loading global notifications:', error);
+      }
+    }
+
+    // Load user-specific notifications (from admin broadcasts)
+    async function loadUserNotifications() {
+      if (!currentUser) return;
+      
+      try {
+        const userNotifsRef = collection(db, 'Users', currentUser.uid, 'Notifications');
+        const q = query(
+          userNotifsRef,
+          orderBy('createdAt', 'desc'),
+          limit(30)
+        );
+
+        const snapshot = await getDocs(q);
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          const exists = allOrderNotifications.some(n => n.id === docSnap.id);
+          if (!exists) {
+            allOrderNotifications.push({
+              id: docSnap.id,
+              ...data,
+              title: data.title || 'Notification',
+              message: data.body || data.message || '',
+              type: data.type || 'announcement',
+              isUserNotif: true
+            });
+          }
+        });
+
+        // Sort by date
+        allOrderNotifications.sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+          return dateB - dateA;
+        });
+
+        // Update badge count
+        updateNotificationBadge();
+
+        // Render if orders tab is active
+        if (currentFilter === 'orders') {
+          renderOrderNotifications();
+        }
+      } catch (error) {
+        console.error('Error loading user notifications:', error);
+      }
+    }
+
+    function updateNotificationBadge() {
+      const unreadCount = allOrderNotifications.filter(n => !n.read).length;
+      const orderBadge = document.getElementById('orderNotifCount');
+      if (unreadCount > 0) {
+        orderBadge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+        orderBadge.style.display = 'inline';
+      } else {
+        orderBadge.style.display = 'none';
+      }
+    }
 
     // Load order notifications
     async function loadOrderNotifications() {
+      if (!currentUser) return;
+      
       try {
         const notificationsRef = collection(db, 'Notifications');
         const q = query(
@@ -588,14 +729,23 @@
           limit(50)
         );
 
-        onSnapshot(q, (snapshot) => {
-          allOrderNotifications = [];
-          
+        unsubscribeOrders = onSnapshot(q, (snapshot) => {
+          // Don't clear - merge with global notifications
           snapshot.forEach(docSnap => {
-            allOrderNotifications.push({
-              id: docSnap.id,
-              ...docSnap.data()
-            });
+            const exists = allOrderNotifications.some(n => n.id === docSnap.id);
+            if (!exists) {
+              allOrderNotifications.push({
+                id: docSnap.id,
+                ...docSnap.data()
+              });
+            }
+          });
+
+          // Sort by date
+          allOrderNotifications.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+            return dateB - dateA;
           });
 
           // Update unread count
@@ -635,8 +785,8 @@
         container.innerHTML = `
           <div class="empty-state">
             <i class="fas fa-bell-slash"></i>
-            <h3>No order notifications</h3>
-            <p>You'll receive notifications when orders are placed or updated</p>
+            <h3>No notifications</h3>
+            <p>You'll receive notifications for orders and announcements</p>
           </div>
         `;
         return;
@@ -648,18 +798,21 @@
         const typeClass = getNotifTypeClass(notif.type);
         const icon = getNotifIcon(notif.type);
         const amount = notif.amount ? `KSh ${Number(notif.amount).toLocaleString()}` : '';
+        const isGlobal = notif.isGlobal || notif.isUserNotif;
+        const url = notif.url || '';
         
         html += `
-          <div class="order-notif-item ${notif.read ? '' : 'unread'}" onclick="viewOrderNotification('${notif.id}', '${notif.orderId || ''}')">
+          <div class="order-notif-item ${notif.read ? '' : 'unread'}" onclick="viewOrderNotification('${notif.id}', '${notif.orderId || ''}', ${isGlobal}, '${url}')">
             <div class="order-notif-icon ${typeClass}">
               <i class="fas ${icon}"></i>
             </div>
             <div class="order-notif-content">
-              <div class="order-notif-title">${escapeHtml(notif.title || 'Order Update')}</div>
-              <div class="order-notif-message">${escapeHtml(notif.message || '')}</div>
+              <div class="order-notif-title">${escapeHtml(notif.title || 'Notification')}</div>
+              <div class="order-notif-message">${escapeHtml(notif.message || notif.body || '')}</div>
               <div class="order-notif-meta">
                 <span>${time}</span>
                 ${amount ? `<span class="order-notif-amount">${amount}</span>` : ''}
+                ${isGlobal ? '<span style="color:#ff5722;"><i class="fas fa-bullhorn"></i></span>' : ''}
               </div>
             </div>
           </div>
@@ -676,6 +829,11 @@
         case 'order_shipped': return 'order-shipped';
         case 'order_delivered': return 'order-delivered';
         case 'order_cancelled': return 'order-cancelled';
+        case 'announcement': return 'announcement';
+        case 'general': return 'announcement';
+        case 'promo': return 'promo';
+        case 'update': return 'update';
+        case 'alert': return 'alert';
         default: return 'new-order';
       }
     }
@@ -687,31 +845,56 @@
         case 'order_shipped': return 'fa-truck';
         case 'order_delivered': return 'fa-box-open';
         case 'order_cancelled': return 'fa-times-circle';
+        case 'announcement': return 'fa-bullhorn';
+        case 'general': return 'fa-bullhorn';
+        case 'promo': return 'fa-tags';
+        case 'update': return 'fa-sync-alt';
+        case 'alert': return 'fa-exclamation-triangle';
         default: return 'fa-bell';
       }
     }
 
-    window.viewOrderNotification = async (notifId, orderId) => {
+    window.viewOrderNotification = async (notifId, orderId, isGlobal, url) => {
       // Mark as read
       if (notifId) {
         try {
+          // Try to mark in main Notifications collection
           await updateDoc(doc(db, 'Notifications', notifId), {
             read: true
           });
         } catch (e) {
-          console.error('Error marking notification as read:', e);
+          // Try user-specific notification
+          try {
+            await updateDoc(doc(db, 'Users', currentUser.uid, 'Notifications', notifId), {
+              read: true
+            });
+          } catch (e2) {
+            console.error('Error marking notification as read:', e2);
+          }
         }
       }
       
-      // Navigate to order tracking
-      if (orderId) {
-        window.location.href = `orderTracking.html?orderId=${orderId}`;
-      } else {
-        window.location.href = 'orderTracking.html';
+      // Update local state
+      const notif = allOrderNotifications.find(n => n.id === notifId);
+      if (notif) {
+        notif.read = true;
+        renderOrderNotifications();
+        updateNotificationBadge();
       }
+      
+      // Handle navigation based on notification type
+      if (url) {
+        // Admin notifications might have a custom URL
+        window.location.href = url;
+      } else if (orderId) {
+        window.location.href = `orderTracking.html?orderId=${orderId}`;
+      }
+      // For announcements without URL, just mark as read (don't navigate)
     };
 
     async function loadChats() {
+      if (!currentUser) return;
+      
       try {
         const messagesRef = collection(db, 'Messages');
         // Use or() without orderBy to avoid index requirement - sort locally
@@ -723,7 +906,7 @@
           )
         );
 
-        onSnapshot(q, async (snapshot) => {
+        unsubscribeChats = onSnapshot(q, async (snapshot) => {
           const chatGroups = {};
 
           snapshot.forEach(doc => {

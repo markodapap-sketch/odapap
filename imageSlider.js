@@ -26,12 +26,12 @@ export function initializeImageSliders() {
     let startX;
     let isDragging = false;
 
-    // Touch events
+    // Touch events - using passive listeners for better scroll performance
     slider.addEventListener('touchstart', (e) => {
       startX = e.touches[0].clientX;
       isDragging = true;
       pauseAutoSlide();
-    });
+    }, { passive: true });
 
     slider.addEventListener('touchmove', (e) => {
       if (!isDragging) return;
@@ -47,7 +47,7 @@ export function initializeImageSliders() {
       }
       
       imageSlider.style.transform = `translateX(${-currentIndex * 100 - (diff / sliderWidth) * 100}%)`;
-    });
+    }, { passive: true });
 
     slider.addEventListener('touchend', (e) => {
       if (!isDragging) return;

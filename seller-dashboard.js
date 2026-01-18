@@ -21,6 +21,7 @@ import {
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from "./js/firebase.js";
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
 
 // Initialize Firebase
 const auth = getAuth(app);
@@ -46,7 +47,9 @@ const state = {
     },
     dispatchOrderId: null,
     dispatchPhoto: null,
-    unsubscribers: []
+    unsubscribers: [],
+    notifications: [],
+    unreadCount: 0
 };
 
 const $ = id => document.getElementById(id);
@@ -58,7 +61,8 @@ function toast(msg, type = 'info', duration = 3500) {
     const container = $('toastContainer');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle'}"></i><span>${msg}</span>`;
+    const safeMsg = escapeHtml(msg);
+    el.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle'}"></i><span>${safeMsg}</span>`;
     container.appendChild(el);
     setTimeout(() => el.remove(), duration);
 }
@@ -175,6 +179,19 @@ document.addEventListener('DOMContentLoaded', () => {
     $('withdrawBtn')?.addEventListener('click', () => {
         window.location.href = 'withdraw.html';
     });
+    
+    // Notification bell
+    $('notifBtn')?.addEventListener('click', toggleNotifications);
+    document.addEventListener('click', (e) => {
+        const dropdown = $('notificationDropdown');
+        const bell = $('notifBtn');
+        if (dropdown && bell && !dropdown.contains(e.target) && !bell.contains(e.target)) {
+            dropdown.classList.remove('active');
+        }
+    });
+    
+    // Load notifications
+    loadNotifications();
 });
 
 function switchSection(section) {
@@ -267,7 +284,7 @@ function setupRealtimeListeners() {
         // Check for new orders
         const newOrders = sellerOrders.filter(o => 
             !state.orders.find(existing => existing.id === o.id) && 
-            o.orderStatus === 'pending'
+            (o.status || o.orderStatus) === 'pending'
         );
         
         if (newOrders.length > 0) {
@@ -309,14 +326,17 @@ function updateDashboard() {
 }
 
 function updateStats() {
-    const pendingOrders = state.orders.filter(o => o.orderStatus === 'pending' || o.orderStatus === 'confirmed').length;
-    const completedOrders = state.orders.filter(o => o.orderStatus === 'delivered');
+    const pendingOrders = state.orders.filter(o => {
+        const status = o.status || o.orderStatus;
+        return status === 'pending' || status === 'confirmed';
+    }).length;
+    const completedOrders = state.orders.filter(o => (o.status || o.orderStatus) === 'delivered');
     
     let totalEarnings = 0;
     completedOrders.forEach(order => {
         order.items?.forEach(item => {
             if (item.sellerId === state.user.uid) {
-                totalEarnings += (item.price || 0) * (item.quantity || 1);
+                totalEarnings += (item.pricePerUnit || item.price || 0) * (item.quantity || 1);
             }
         });
     });
@@ -340,7 +360,7 @@ function updateStats() {
 
 function updateSalesStats() {
     // All completed orders (delivered)
-    const completedOrders = state.orders.filter(o => o.orderStatus === 'delivered');
+    const completedOrders = state.orders.filter(o => (o.status || o.orderStatus) === 'delivered');
     
     let totalSales = 0;
     let totalRevenue = 0;
@@ -357,7 +377,7 @@ function updateSalesStats() {
         
         order.items?.forEach(item => {
             if (item.sellerId === state.user.uid) {
-                orderTotal += (item.price || 0) * (item.quantity || 1);
+                orderTotal += (item.pricePerUnit || item.price || 0) * (item.quantity || 1);
                 sellerItemCount += item.quantity || 1;
             }
         });
@@ -367,7 +387,7 @@ function updateSalesStats() {
             totalRevenue += orderTotal;
             
             // Check if order is from this month
-            const orderDate = order.orderDate?.toDate?.() || new Date(order.orderDate);
+            const orderDate = (order.orderDate || order.createdAt)?.toDate?.() || new Date(order.orderDate || order.createdAt);
             if (orderDate.getMonth() === thisMonth && orderDate.getFullYear() === thisYear) {
                 monthSales++;
                 monthRevenue += orderTotal;
@@ -382,7 +402,7 @@ function updateSalesStats() {
 }
 
 function updateOrdersBadge() {
-    const pending = state.orders.filter(o => o.orderStatus === 'pending').length;
+    const pending = state.orders.filter(o => (o.status || o.orderStatus) === 'pending').length;
     $('ordersBadge').textContent = pending;
     $('ordersBadge').style.display = pending > 0 ? '' : 'none';
 }
@@ -409,22 +429,65 @@ function renderRecentOrders() {
     
     container.innerHTML = recent.map(order => {
         const sellerItems = order.items?.filter(i => i.sellerId === state.user.uid) || [];
-        const firstItem = sellerItems[0];
-        const itemCount = sellerItems.length;
-        const total = sellerItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+        const total = sellerItems.reduce((sum, i) => sum + (i.pricePerUnit || i.price || 0) * (i.quantity || 1), 0);
+        const totalQty = sellerItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+        const orderStatus = order.status || order.orderStatus || 'pending';
+        
+        const safeOrderId = escapeHtml(order.orderId || order.id?.slice(0, 8) || '');
+        const safeBuyerName = escapeHtml(order.buyerDetails?.name || 'Customer');
+        const safeId = escapeHtml(order.id || '');
+        
+        // Build items preview (show up to 2 items in recent orders)
+        const itemsHtml = sellerItems.slice(0, 2).map(item => {
+            const name = item.productName || item.name || 'Product';
+            const qty = item.quantity || 1;
+            const price = item.pricePerUnit || item.price || 0;
+            const variation = item.selectedVariation || item.variant;
+            let variantText = '';
+            if (variation) {
+                if (typeof variation === 'object') {
+                    variantText = `${variation.title || ''}: ${variation.attr_name || variation.value || ''}`;
+                } else {
+                    variantText = variation;
+                }
+            }
+            return `
+                <div class="order-preview-row">
+                    <img src="${getImageUrl(item.imageUrl, 'product')}" alt="" data-fallback="product">
+                    <div class="order-preview-info">
+                        <div class="order-preview-name">${escapeHtml(name)}</div>
+                        ${variantText ? `<span class="order-preview-variant">${escapeHtml(variantText)}</span>` : ''}
+                        <div class="order-preview-qty">Qty: ${qty}</div>
+                    </div>
+                    <div class="order-preview-price">KES ${(price * qty).toLocaleString()}</div>
+                </div>
+            `;
+        }).join('');
+        
+        const moreItems = sellerItems.length > 2 ? `<div class="order-more-items">+${sellerItems.length - 2} more item(s)</div>` : '';
+        
+        // Generate quick action buttons for recent orders too
+        const quickActions = getQuickActionButtons(order, safeId, orderStatus);
         
         return `
-            <div class="order-item" onclick="viewOrder('${order.id}')">
-                <img src="${getImageUrl(firstItem?.imageUrl, 'product')}" alt="" class="order-img" data-fallback="product">
-                <div class="order-info">
-                    <span class="order-id">#${order.orderId || order.id.slice(0, 8)}</span>
-                    <span class="order-buyer">${order.buyerDetails?.name || 'Customer'} • ${itemCount} item${itemCount > 1 ? 's' : ''}</span>
+            <div class="order-item">
+                <div class="order-item-header" onclick="viewOrder('${safeId}')" style="cursor:pointer;">
+                    <div class="order-info">
+                        <span class="order-id">#${safeOrderId}</span>
+                        <span class="order-buyer">${safeBuyerName}</span>
+                    </div>
+                    <span class="status-badge ${escapeHtml(orderStatus)}">${formatStatus(orderStatus)}</span>
                 </div>
-                <div class="order-meta">
-                    <span class="order-amount">KES ${total.toLocaleString()}</span>
-                    <span class="order-time">${timeAgo(order.orderDate)}</span>
+                <div class="order-items-preview" onclick="viewOrder('${safeId}')" style="cursor:pointer;">
+                    ${itemsHtml}
+                    ${moreItems}
                 </div>
-                <span class="status-badge ${order.orderStatus}">${formatStatus(order.orderStatus)}</span>
+                <div class="order-item-footer">
+                    <span class="order-time">${timeAgo(order.orderDate || order.createdAt)}</span>
+                    <div class="order-quick-actions">
+                        ${quickActions}
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
@@ -451,7 +514,7 @@ function renderLowStock() {
         <div class="low-stock-item">
             <img src="${getImageUrl(p.imageUrls?.[0], 'product')}" alt="" data-fallback="product">
             <div class="info">
-                <h5>${p.name}</h5>
+                <h5>${escapeHtml(p.name || 'Product')}</h5>
                 <span class="stock-warning">
                     <i class="fas fa-exclamation-triangle"></i>
                     ${p.totalStock === 0 ? 'Out of stock' : `Only ${p.totalStock} left`}
@@ -474,7 +537,7 @@ function renderOrders() {
     
     // Filter by status
     if (statusFilter !== 'all') {
-        filtered = filtered.filter(o => o.orderStatus === statusFilter);
+        filtered = filtered.filter(o => (o.status || o.orderStatus) === statusFilter);
     }
     
     // Filter by search
@@ -487,8 +550,8 @@ function renderOrders() {
     
     // Sort by date
     filtered.sort((a, b) => {
-        const dateA = a.orderDate?.toDate?.() || new Date(a.orderDate);
-        const dateB = b.orderDate?.toDate?.() || new Date(b.orderDate);
+        const dateA = (a.orderDate || a.createdAt)?.toDate?.() || new Date(a.orderDate || a.createdAt);
+        const dateB = (b.orderDate || b.createdAt)?.toDate?.() || new Date(b.orderDate || b.createdAt);
         return dateB - dateA;
     });
     
@@ -504,67 +567,164 @@ function renderOrders() {
     
     container.innerHTML = filtered.map(order => {
         const sellerItems = order.items?.filter(i => i.sellerId === state.user.uid) || [];
-        const total = sellerItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+        const total = sellerItems.reduce((sum, i) => sum + (i.pricePerUnit || i.price || 0) * (i.quantity || 1), 0);
+        const totalQty = sellerItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+        const orderStatus = order.status || order.orderStatus || 'pending';
+        
+        const safeOrderId = escapeHtml(order.orderId || order.id?.slice(0, 8) || '');
+        const safeBuyerName = escapeHtml(order.buyerDetails?.name || 'Customer');
+        const safeId = escapeHtml(order.id || '');
+        
+        // Build items preview (show up to 3 items)
+        const itemsHtml = sellerItems.slice(0, 3).map(item => {
+            const name = item.productName || item.name || 'Product';
+            const qty = item.quantity || 1;
+            const price = item.pricePerUnit || item.price || 0;
+            const variation = item.selectedVariation || item.variant;
+            let variantText = '';
+            if (variation) {
+                if (typeof variation === 'object') {
+                    variantText = `${variation.title || ''}: ${variation.attr_name || variation.value || ''}`;
+                } else {
+                    variantText = variation;
+                }
+            }
+            return `
+                <div class="order-preview-row">
+                    <img src="${getImageUrl(item.imageUrl, 'product')}" alt="" data-fallback="product">
+                    <div class="order-preview-info">
+                        <div class="order-preview-name">${escapeHtml(name)}</div>
+                        ${variantText ? `<span class="order-preview-variant">${escapeHtml(variantText)}</span>` : ''}
+                        <div class="order-preview-qty">Qty: ${qty} × KES ${price.toLocaleString()}</div>
+                    </div>
+                    <div class="order-preview-price">KES ${(price * qty).toLocaleString()}</div>
+                </div>
+            `;
+        }).join('');
+        
+        const moreItems = sellerItems.length > 3 ? `<div class="order-more-items">+${sellerItems.length - 3} more item(s)</div>` : '';
+        
+        // Generate quick action buttons based on status
+        const quickActions = getQuickActionButtons(order, safeId, orderStatus);
         
         return `
-            <div class="order-item" onclick="viewOrder('${order.id}')">
-                <img src="${getImageUrl(sellerItems[0]?.imageUrl, 'product')}" alt="" class="order-img" data-fallback="product">
-                <div class="order-info">
-                    <span class="order-id">#${order.orderId || order.id.slice(0, 8)}</span>
-                    <span class="order-buyer">${order.buyerDetails?.name || 'Customer'} • ${sellerItems.length} item${sellerItems.length > 1 ? 's' : ''}</span>
+            <div class="order-item">
+                <div class="order-item-header" onclick="viewOrder('${safeId}')" style="cursor:pointer;">
+                    <div class="order-info">
+                        <span class="order-id">#${safeOrderId}</span>
+                        <span class="order-buyer">${safeBuyerName} • ${formatDate(order.orderDate || order.createdAt)}</span>
+                    </div>
+                    <span class="status-badge ${escapeHtml(orderStatus)}">${formatStatus(orderStatus)}</span>
                 </div>
-                <div class="order-meta">
-                    <span class="order-amount">KES ${total.toLocaleString()}</span>
-                    <span class="order-time">${formatDate(order.orderDate)}</span>
+                <div class="order-items-preview" onclick="viewOrder('${safeId}')" style="cursor:pointer;">
+                    ${itemsHtml}
+                    ${moreItems}
                 </div>
-                <span class="status-badge ${order.orderStatus}">${formatStatus(order.orderStatus)}</span>
+                <div class="order-item-footer">
+                    <span style="font-size:12px;color:var(--gray-500);"><i class="fas fa-box"></i> ${totalQty} item(s) • KES ${total.toLocaleString()}</span>
+                    <div class="order-quick-actions">
+                        ${quickActions}
+                    </div>
+                </div>
             </div>
         `;
     }).join('');
+}
+
+// Generate quick action buttons for order cards
+function getQuickActionButtons(order, orderId, status) {
+    switch (status) {
+        case 'pending':
+            return `
+                <button class="btn-quick btn-accept" onclick="event.stopPropagation(); confirmUpdateOrderStatus('${orderId}', 'confirmed')" title="Accept Order">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button class="btn-quick btn-reject" onclick="event.stopPropagation(); confirmUpdateOrderStatus('${orderId}', 'cancelled')" title="Cancel">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+        case 'confirmed':
+            return `
+                <button class="btn-quick btn-dispatch" onclick="event.stopPropagation(); openDispatchModal('${orderId}')" title="Mark Ready for Dispatch">
+                    <i class="fas fa-truck"></i>
+                </button>
+            `;
+        case 'out_for_delivery':
+            return `
+                <button class="btn-quick btn-deliver" onclick="event.stopPropagation(); confirmUpdateOrderStatus('${orderId}', 'delivered')" title="Mark Delivered">
+                    <i class="fas fa-check-double"></i>
+                </button>
+            `;
+        default:
+            return `
+                <button class="btn-quick btn-view" onclick="event.stopPropagation(); viewOrder('${orderId}')" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+            `;
+    }
 }
 
 window.viewOrder = function(orderId) {
     const order = state.orders.find(o => o.id === orderId);
     if (!order) return;
     
+    // Get status (checkout saves as 'status', some legacy as 'orderStatus')
+    const orderStatus = order.status || order.orderStatus || 'pending';
+    
     const sellerItems = order.items?.filter(i => i.sellerId === state.user.uid) || [];
-    const total = sellerItems.reduce((sum, i) => sum + (i.price || 0) * (i.quantity || 1), 0);
+    // Handle both price field names: pricePerUnit (new) and price (legacy)
+    const total = sellerItems.reduce((sum, i) => sum + (i.pricePerUnit || i.price || 0) * (i.quantity || 1), 0);
     
     const body = $('orderModalBody');
     body.innerHTML = `
         <div class="order-detail-row">
             <span>Order ID</span>
-            <strong>#${order.orderId || order.id.slice(0, 8)}</strong>
+            <strong>#${escapeHtml(order.orderId || order.id.slice(0, 8))}</strong>
         </div>
         <div class="order-detail-row">
             <span>Status</span>
-            <span class="status-badge ${order.orderStatus}">${formatStatus(order.orderStatus)}</span>
+            <span class="status-badge ${escapeHtml(orderStatus)}">${formatStatus(orderStatus)}</span>
         </div>
         <div class="order-detail-row">
             <span>Order Date</span>
-            <span>${formatDate(order.orderDate)} ${formatTime(order.orderDate)}</span>
+            <span>${formatDate(order.orderDate || order.createdAt)} ${formatTime(order.orderDate || order.createdAt)}</span>
         </div>
         <div class="order-detail-row">
             <span>Customer</span>
-            <span>${order.buyerDetails?.name || 'N/A'}</span>
+            <span>${escapeHtml(order.buyerDetails?.name || 'N/A')}</span>
         </div>
         <div class="order-detail-row">
             <span>Shipping Address</span>
-            <span>${order.shippingAddress?.address || order.buyerDetails?.address || 'N/A'}</span>
+            <span>${escapeHtml(order.buyerDetails?.deliveryAddress || order.buyerDetails?.address || order.shippingAddress?.address || 'N/A')}</span>
         </div>
         
-        <h4 style="margin: 20px 0 12px; font-size: 15px;">Your Items</h4>
+        <h4 style="margin: 20px 0 12px; font-size: 15px;">Your Items (${sellerItems.length})</h4>
         <div class="order-items-list">
-            ${sellerItems.map(item => `
+            ${sellerItems.map(item => {
+                const itemName = item.productName || item.name || 'Product';
+                const itemPrice = item.pricePerUnit || item.price || 0;
+                const qty = item.quantity || 1;
+                const variation = item.selectedVariation || item.variant;
+                let variantHtml = '';
+                if (variation) {
+                    if (typeof variation === 'object') {
+                        variantHtml = `<span class="order-item-variant-badge"><i class="fas fa-tag"></i> ${escapeHtml(variation.title || 'Variant')}: ${escapeHtml(variation.attr_name || variation.value || '')}</span>`;
+                    } else {
+                        variantHtml = `<span class="order-item-variant-badge"><i class="fas fa-tag"></i> ${escapeHtml(variation)}</span>`;
+                    }
+                }
+                return `
                 <div class="order-item-row">
                     <img src="${getImageUrl(item.imageUrl, 'product')}" alt="" data-fallback="product">
                     <div class="order-item-details">
-                        <h5>${item.name}</h5>
-                        <small>${item.variant || ''} × ${item.quantity}</small>
+                        <h5>${escapeHtml(itemName)}</h5>
+                        ${variantHtml}
+                        <small><i class="fas fa-box"></i> Qty: <strong>${qty}</strong> × KES ${itemPrice.toLocaleString()}</small>
                     </div>
-                    <strong>KES ${((item.price || 0) * (item.quantity || 1)).toLocaleString()}</strong>
+                    <strong>KES ${(itemPrice * qty).toLocaleString()}</strong>
                 </div>
-            `).join('')}
+            `;
+            }).join('')}
         </div>
         
         <div class="order-detail-row" style="font-size: 16px; font-weight: 600;">
@@ -576,7 +736,7 @@ window.viewOrder = function(orderId) {
             <div style="margin-top: 16px;">
                 <h4 style="font-size: 14px; margin-bottom: 8px;">Dispatch Proof</h4>
                 <img src="${order.dispatchPhoto}" alt="Dispatch" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px;">
-                ${order.dispatchNote ? `<p style="font-size: 13px; color: var(--gray-500); margin-top: 8px;">${order.dispatchNote}</p>` : ''}
+                ${order.dispatchNote ? `<p style="font-size: 13px; color: var(--gray-500); margin-top: 8px;">${escapeHtml(order.dispatchNote)}</p>` : ''}
             </div>
         ` : ''}
         
@@ -589,13 +749,16 @@ window.viewOrder = function(orderId) {
 };
 
 function getOrderActions(order) {
-    switch (order.orderStatus) {
+    // Get status (checkout saves as 'status', some legacy as 'orderStatus')
+    const orderStatus = order.status || order.orderStatus || 'pending';
+    
+    switch (orderStatus) {
         case 'pending':
             return `
-                <button class="btn btn-primary" onclick="updateOrderStatus('${order.id}', 'confirmed')">
+                <button class="btn btn-primary" onclick="confirmUpdateOrderStatus('${order.id}', 'confirmed')">
                     <i class="fas fa-check"></i> Accept Order
                 </button>
-                <button class="btn btn-secondary" onclick="updateOrderStatus('${order.id}', 'cancelled')">
+                <button class="btn btn-secondary" onclick="confirmUpdateOrderStatus('${order.id}', 'cancelled')">
                     Cancel
                 </button>
             `;
@@ -607,7 +770,7 @@ function getOrderActions(order) {
             `;
         case 'out_for_delivery':
             return `
-                <button class="btn btn-success" onclick="updateOrderStatus('${order.id}', 'delivered')">
+                <button class="btn btn-success" onclick="confirmUpdateOrderStatus('${order.id}', 'delivered')">
                     <i class="fas fa-check-double"></i> Mark as Delivered
                 </button>
             `;
@@ -616,23 +779,89 @@ function getOrderActions(order) {
     }
 }
 
+// Confirmation dialog before updating order status
+window.confirmUpdateOrderStatus = function(orderId, newStatus) {
+    const order = state.orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const orderNum = order.orderId || order.id.slice(0, 8);
+    const messages = {
+        'confirmed': {
+            title: 'Accept Order?',
+            message: `Are you sure you want to accept order #${orderNum}?`,
+            confirmText: 'Yes, Accept',
+            confirmClass: 'btn-primary'
+        },
+        'cancelled': {
+            title: 'Cancel Order?',
+            message: `Are you sure you want to cancel order #${orderNum}? This action cannot be undone.`,
+            confirmText: 'Yes, Cancel',
+            confirmClass: 'btn-danger'
+        },
+        'delivered': {
+            title: 'Mark as Delivered?',
+            message: `Confirm that order #${orderNum} has been delivered to the customer?`,
+            confirmText: 'Yes, Mark Delivered',
+            confirmClass: 'btn-success'
+        }
+    };
+    
+    const config = messages[newStatus] || {
+        title: 'Update Order Status?',
+        message: `Update order #${orderNum} status to ${newStatus}?`,
+        confirmText: 'Confirm',
+        confirmClass: 'btn-primary'
+    };
+    
+    // Create confirmation modal
+    const modal = document.createElement('div');
+    modal.className = 'confirm-modal-overlay';
+    modal.innerHTML = `
+        <div class="confirm-modal">
+            <div class="confirm-modal-header">
+                <h3><i class="fas fa-exclamation-circle"></i> ${config.title}</h3>
+            </div>
+            <div class="confirm-modal-body">
+                <p>${config.message}</p>
+            </div>
+            <div class="confirm-modal-actions">
+                <button class="btn btn-secondary" onclick="this.closest('.confirm-modal-overlay').remove()">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button class="btn ${config.confirmClass}" onclick="updateOrderStatus('${orderId}', '${newStatus}'); this.closest('.confirm-modal-overlay').remove();">
+                    <i class="fas fa-check"></i> ${config.confirmText}
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+};
+
 window.updateOrderStatus = async function(orderId, newStatus) {
     try {
         // Get order details first
         const order = state.orders.find(o => o.id === orderId);
         
+        // Update status field (checkout.js saves as 'status')
         await updateDoc(doc(db, "Orders", orderId), {
-            orderStatus: newStatus,
+            status: newStatus,
             [`${newStatus}At`]: Timestamp.now()
         });
         
-        // Notify buyer of order status change
-        if (order && order.buyerInfo && order.buyerInfo.userId) {
-            await notifyBuyerOfStatusChange(order, newStatus);
+        // Notify buyer of order status change (checkout saves userId directly, not in buyerInfo)
+        const buyerId = order?.userId || order?.buyerInfo?.userId;
+        if (buyerId) {
+            await notifyBuyerOfStatusChange(order, newStatus, buyerId);
         }
         
         // Update local state
-        if (order) order.orderStatus = newStatus;
+        if (order) order.status = newStatus;
         
         closeOrderModal();
         renderOrders();
@@ -647,13 +876,13 @@ window.updateOrderStatus = async function(orderId, newStatus) {
 };
 
 // Notify buyer when order status changes
-async function notifyBuyerOfStatusChange(order, newStatus) {
+async function notifyBuyerOfStatusChange(order, newStatus, buyerId) {
     try {
         const notificationData = getNotificationData(order, newStatus);
         if (!notificationData) return;
         
         await addDoc(collection(db, "Notifications"), {
-            userId: order.buyerInfo.userId,
+            userId: buyerId,
             orderId: order.id,
             type: notificationData.type,
             title: notificationData.title,
@@ -668,7 +897,8 @@ async function notifyBuyerOfStatusChange(order, newStatus) {
 }
 
 function getNotificationData(order, status) {
-    const productName = order.productName || (order.items && order.items[0]?.name) || 'Your order';
+    // Get product name - checkout saves items with productName field
+    const productName = order.productName || (order.items && (order.items[0]?.productName || order.items[0]?.name)) || 'Your order';
     
     const notifications = {
         confirmed: {
@@ -770,9 +1000,9 @@ async function confirmDispatch() {
         await uploadBytes(fileRef, state.dispatchPhoto);
         const photoUrl = await getDownloadURL(fileRef);
         
-        // Update order
+        // Update order (checkout.js saves status as 'status' not 'orderStatus')
         await updateDoc(doc(db, "Orders", state.dispatchOrderId), {
-            orderStatus: 'out_for_delivery',
+            status: 'out_for_delivery',
             dispatchPhoto: photoUrl,
             dispatchNote: $('dispatchNote').value.trim(),
             dispatchedAt: Timestamp.now(),
@@ -782,7 +1012,7 @@ async function confirmDispatch() {
         // Update local state
         const order = state.orders.find(o => o.id === state.dispatchOrderId);
         if (order) {
-            order.orderStatus = 'out_for_delivery';
+            order.status = 'out_for_delivery';
             order.dispatchPhoto = photoUrl;
         }
         
@@ -970,3 +1200,132 @@ async function handleStoreSettingsSave(e) {
 window.addEventListener('beforeunload', () => {
     state.unsubscribers.forEach(unsub => unsub());
 });
+
+// ═══════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════
+
+function loadNotifications() {
+    if (!state.user) return;
+    
+    const notificationsRef = collection(db, "Notifications");
+    const q = query(
+        notificationsRef,
+        where("userId", "==", state.user.uid),
+        orderBy("createdAt", "desc")
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        state.notifications = [];
+        state.unreadCount = 0;
+        
+        snapshot.forEach(docSnap => {
+            const notif = { id: docSnap.id, ...docSnap.data() };
+            state.notifications.push(notif);
+            if (!notif.read) state.unreadCount++;
+        });
+        
+        updateNotificationBadge();
+        renderNotifications();
+    }, (error) => {
+        console.error("Error loading notifications:", error);
+    });
+    
+    state.unsubscribers.push(unsubscribe);
+}
+
+function updateNotificationBadge() {
+    const badge = $('notifBadge');
+    if (!badge) return;
+    
+    if (state.unreadCount > 0) {
+        badge.textContent = state.unreadCount > 99 ? '99+' : state.unreadCount;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+function toggleNotifications() {
+    const dropdown = $('notificationDropdown');
+    if (!dropdown) return;
+    
+    dropdown.classList.toggle('active');
+}
+
+function renderNotifications() {
+    const list = $('notificationList');
+    if (!list) return;
+    
+    if (state.notifications.length === 0) {
+        list.innerHTML = `
+            <div style="text-align: center; padding: 32px 16px; color: var(--gray-500);">
+                <div style="font-size: 48px; margin-bottom: 8px;">🔔</div>
+                <p style="margin: 0; font-size: 14px;">No notifications yet</p>
+            </div>
+        `;
+        return;
+    }
+    
+    list.innerHTML = state.notifications.map(notif => `
+        <div class="notification-item ${!notif.read ? 'unread' : ''}" 
+             data-id="${notif.id}" 
+             data-order-id="${notif.orderId || ''}"
+             onclick="handleNotificationClick('${notif.id}', '${notif.orderId || ''}')">
+            <div class="notification-content">
+                <div class="notification-title">${escapeHtml(notif.title || '')}</div>
+                <div class="notification-message">${escapeHtml(notif.message || '')}</div>
+                <div class="notification-time">${formatTimeAgo(notif.createdAt)}</div>
+            </div>
+            ${!notif.read ? '<div class="notification-indicator"></div>' : ''}
+        </div>
+    `).join('');
+}
+
+async function handleNotificationClick(notifId, orderId) {
+    // Mark as read
+    try {
+        const notifRef = doc(db, "Notifications", notifId);
+        await updateDoc(notifRef, { read: true });
+    } catch (err) {
+        console.error("Error marking notification as read:", err);
+    }
+    
+    // Close dropdown
+    $('notificationDropdown')?.classList.remove('active');
+    
+    // Navigate to orders if order notification
+    if (orderId) {
+        switchSection('orders');
+        // Highlight the order briefly
+        setTimeout(() => {
+            const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
+            if (orderCard) {
+                orderCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                orderCard.style.animation = 'highlight 1s ease-out';
+            }
+        }, 300);
+    }
+}
+
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return '';
+    
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const now = new Date();
+    const seconds = Math.floor((now - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return `${weeks}w ago`;
+    return date.toLocaleDateString();
+}
+
+// Make function global for onclick handler
+window.handleNotificationClick = handleNotificationClick;

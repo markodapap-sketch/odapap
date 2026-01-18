@@ -13,6 +13,7 @@ import {
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -164,17 +165,19 @@ function displayUserItems() {
     userItems.forEach(item => {
         const card = document.createElement('div');
         card.className = 'item-card';
-        card.onclick = () => window.location.href = `product.html?id=${item.id}`;
+        card.onclick = () => window.location.href = `product.html?id=${encodeURIComponent(item.id)}`;
         
         const imageUrl = item.photoTraceUrl || (item.imageUrls && item.imageUrls[0]) || 'images/product-placeholder.png';
+        const safeImageUrl = sanitizeUrl(imageUrl, 'images/product-placeholder.png');
+        const safeName = escapeHtml(item.name || 'Product');
 
         card.innerHTML = `
             <div class="item-image">
-                <img src="${imageUrl}" alt="${item.name}">
+                <img src="${safeImageUrl}" alt="${safeName}">
             </div>
             <div class="item-info">
-                <div class="item-name">${item.name}</div>
-                <div class="item-price">KES ${item.price.toLocaleString()}</div>
+                <div class="item-name">${safeName}</div>
+                <div class="item-price">KES ${(item.price || 0).toLocaleString()}</div>
                 <div class="item-stock">${item.totalStock || 0} in stock</div>
             </div>
         `;
@@ -207,24 +210,29 @@ function displayManageItems() {
         
         const imageUrl = item.photoTraceUrl || (item.imageUrls && item.imageUrls[0]) || 'images/product-placeholder.png';
         const status = item.totalStock > 0 ? 'active' : 'sold';
+        
+        const safeImageUrl = sanitizeUrl(imageUrl, 'images/product-placeholder.png');
+        const safeName = escapeHtml(item.name || 'Product');
+        const safeBrand = escapeHtml(item.brand || 'No brand');
+        const safeId = escapeHtml(item.id || '');
 
         card.innerHTML = `
             <div class="manage-item-image">
-                <img src="${imageUrl}" alt="${item.name}">
+                <img src="${safeImageUrl}" alt="${safeName}">
                 <span class="item-status-badge ${status}">${status === 'active' ? 'Active' : 'Sold Out'}</span>
             </div>
             <div class="manage-item-body">
-                <div class="manage-item-name">${item.name}</div>
+                <div class="manage-item-name">${safeName}</div>
                 <div class="manage-item-meta">
-                    <span>${item.brand || 'No brand'}</span>
+                    <span>${safeBrand}</span>
                     <span>${item.totalStock || 0} in stock</span>
                 </div>
-                <div class="manage-item-price">KES ${item.price.toLocaleString()}</div>
+                <div class="manage-item-price">KES ${(item.price || 0).toLocaleString()}</div>
                 <div class="manage-item-actions">
-                    <button class="manage-btn edit-item-btn" onclick="editItem('${item.id}')">
+                    <button class="manage-btn edit-item-btn" onclick="editItem('${safeId}')">
                         <i class="fas fa-edit"></i> Edit
                     </button>
-                    <button class="manage-btn delete-item-btn" onclick="deleteItem('${item.id}')">
+                    <button class="manage-btn delete-item-btn" onclick="deleteItem('${safeId}')">
                         <i class="fas fa-trash"></i> Delete
                     </button>
                 </div>
@@ -242,16 +250,118 @@ window.editItem = function(itemId) {
 
 // Delete item
 window.deleteItem = async function(itemId) {
-    if (!confirm('Are you sure you want to delete this item?')) return;
-
-    try {
-        await deleteDoc(doc(db, 'Listings', itemId));
-        showNotification('Item deleted successfully');
-        await loadUserItems();
-    } catch (error) {
-        console.error('Error deleting item:', error);
-        showNotification('Failed to delete item', 'error');
+    // Create confirmation modal
+    const modal = document.createElement('div');
+    modal.className = 'confirmation-modal';
+    modal.innerHTML = `
+        <div class="confirmation-content">
+            <i class="fas fa-trash-alt" style="font-size: 48px; color: #dc3545; margin-bottom: 16px;"></i>
+            <h3>Delete Item?</h3>
+            <p>Are you sure you want to delete this item? This action cannot be undone.</p>
+            <div class="confirmation-buttons">
+                <button class="cancel-btn">Cancel</button>
+                <button class="confirm-btn danger">Delete</button>
+            </div>
+        </div>
+    `;
+    
+    // Add modal styles if not already present
+    if (!document.getElementById('confirmModalStyles')) {
+        const style = document.createElement('style');
+        style.id = 'confirmModalStyles';
+        style.textContent = `
+            .confirmation-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                animation: fadeIn 0.2s ease;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .confirmation-content {
+                background: white;
+                padding: 32px;
+                border-radius: 16px;
+                text-align: center;
+                max-width: 400px;
+                width: 90%;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            }
+            .confirmation-content h3 {
+                margin: 0 0 8px;
+                color: #333;
+            }
+            .confirmation-content p {
+                color: #666;
+                margin: 0 0 24px;
+            }
+            .confirmation-buttons {
+                display: flex;
+                gap: 12px;
+                justify-content: center;
+            }
+            .confirmation-buttons button {
+                padding: 12px 24px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .confirmation-buttons .cancel-btn {
+                background: #f0f0f0;
+                color: #333;
+            }
+            .confirmation-buttons .cancel-btn:hover {
+                background: #e0e0e0;
+            }
+            .confirmation-buttons .confirm-btn.danger {
+                background: #dc3545;
+                color: white;
+            }
+            .confirmation-buttons .confirm-btn.danger:hover {
+                background: #c82333;
+            }
+        `;
+        document.head.appendChild(style);
     }
+    
+    document.body.appendChild(modal);
+    
+    return new Promise((resolve) => {
+        modal.querySelector('.cancel-btn').onclick = () => {
+            modal.remove();
+            resolve();
+        };
+        modal.querySelector('.confirm-btn').onclick = async () => {
+            modal.remove();
+            try {
+                await deleteDoc(doc(db, 'Listings', itemId));
+                showNotification('Item deleted successfully');
+                await loadUserItems();
+            } catch (error) {
+                console.error('Error deleting item:', error);
+                showNotification('Failed to delete item', 'error');
+            }
+            resolve();
+        };
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                resolve();
+            }
+        };
+    });
 };
 
 // Load user reviews

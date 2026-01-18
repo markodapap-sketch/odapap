@@ -3,6 +3,9 @@ import { getFirestore, collection, doc, getDocs, deleteDoc, addDoc, getDoc, quer
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
+import authModal from './js/authModal.js';
+import { invalidateWishlistCache, invalidateCartCache } from './js/utils.js';
 
 // Setup global image error handling
 setupGlobalImageErrorHandler();
@@ -85,22 +88,29 @@ const loadWishlistItems = async (user) => {
             const price = item.price || 0;
             const originalPrice = item.originalPrice || item.retailPrice;
             
+            // Sanitize user content
+            const safeImageUrl = sanitizeUrl(imageUrl, 'images/product-placeholder.png');
+            const safeName = escapeHtml(item.name || 'Product');
+            const safeBrand = escapeHtml(item.brand || '');
+            const safeListingId = encodeURIComponent(item.listingId || '');
+            const safeDocId = escapeHtml(docSnap.id || '');
+            
             const wishlistItemElement = document.createElement('div');
             wishlistItemElement.className = 'wishlist-item';
             wishlistItemElement.innerHTML = `
-                <img src="${imageUrl}" alt="${item.name}" class="wishlist-item-image" 
-                     onclick="window.location.href='product.html?id=${item.listingId}'"
+                <img src="${safeImageUrl}" alt="${safeName}" class="wishlist-item-image" 
+                     onclick="window.location.href='product.html?id=${safeListingId}'"
                      onerror="this.src='images/product-placeholder.png'">
                 <div class="wishlist-item-details">
-                    <h3 onclick="window.location.href='product.html?id=${item.listingId}'">${item.name || 'Product'}</h3>
-                    <p class="brand">${item.brand || ''}</p>
+                    <h3 onclick="window.location.href='product.html?id=${safeListingId}'">${safeName}</h3>
+                    <p class="brand">${safeBrand}</p>
                     <p class="price">KES ${price.toLocaleString()}</p>
                     ${originalPrice ? `<p class="original-price">KES ${originalPrice.toLocaleString()}</p>` : ''}
                     <div class="wishlist-actions">
-                        <button class="add-to-cart-btn" onclick="addToCart('${docSnap.id}', '${item.listingId}')">
+                        <button class="add-to-cart-btn" onclick="addToCart('${safeDocId}', '${safeListingId}')">
                             <i class="fas fa-shopping-cart"></i> Add to Cart
                         </button>
-                        <button class="remove-button" data-id="${docSnap.id}">
+                        <button class="remove-button" data-id="${safeDocId}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -146,6 +156,7 @@ window.addToCart = async function(wishlistItemId, listingId) {
         });
         
         showNotification('Added to cart!');
+        invalidateCartCache(); // Invalidate cart cache
         updateNavCounters(user.uid);
     } catch (error) {
         console.error('Error adding to cart:', error);
@@ -159,8 +170,15 @@ onAuthStateChanged(auth, (user) => {
         loadWishlistItems(user);
         updateNavCounters(user.uid);
     } else {
-        showNotification('You must be logged in to view your wishlist.');
-        window.location.href = 'login.html';
+        // Show login modal with cancel option
+        authModal.show({
+            title: 'Login to View Wishlist',
+            message: 'Sign in to save your favorite items and access them anytime',
+            icon: 'fa-heart',
+            feature: 'view your wishlist',
+            allowCancel: true,
+            cancelRedirect: 'index.html'
+        });
     }
 });
 
@@ -174,6 +192,7 @@ wishlistItemsContainer.addEventListener('click', async (event) => {
             try {
                 await deleteDoc(doc(firestore, `users/${user.uid}/wishlist/${itemId}`));
                 showNotification('Removed from wishlist');
+                invalidateWishlistCache(); // Invalidate wishlist cache
                 loadWishlistItems(user);
                 updateNavCounters(user.uid);
             } catch (error) {

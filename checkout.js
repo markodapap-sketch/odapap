@@ -5,13 +5,15 @@
  */
 
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, getDoc, addDoc, deleteDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDocs, getDoc, addDoc, deleteDoc, serverTimestamp, updateDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
 import { MpesaPaymentManager, normalizePhoneNumber, isValidPhoneNumber, formatPhoneForDisplay, getShippingFee, checkFreeShipping } from './js/mpesa.js';
 import { OdaModal } from './js/odaModal.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, validatePrice, validateQuantity, validateOrder } from './js/sanitize.js';
+import authModal from './js/authModal.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -120,6 +122,8 @@ class CheckoutManager {
         this.manualCodeSection = document.getElementById('manualCodeSection');
         this.mpesaCodeInput = document.getElementById('mpesaCode');
         this.verifyCodeBtn = document.getElementById('verifyCodeBtn');
+        this.checkStatusSection = document.getElementById('checkStatusSection');
+        this.checkStatusBtn = document.getElementById('checkStatusBtn');
         this.uploadReceiptSection = document.getElementById('uploadReceiptSection');
         this.receiptUpload = document.getElementById('receiptUpload');
         this.uploadPreview = document.getElementById('uploadPreview');
@@ -140,6 +144,9 @@ class CheckoutManager {
         // Payment method selection
         this.paymentOptions.forEach(option => {
             option.addEventListener('click', () => {
+                // Check if option is disabled
+                if (option.classList.contains('disabled')) return;
+                
                 this.paymentOptions.forEach(opt => opt.classList.remove('selected'));
                 option.classList.add('selected');
                 const radio = option.querySelector('input[type="radio"]');
@@ -150,6 +157,9 @@ class CheckoutManager {
                 if (this.mpesaSection) {
                     this.mpesaSection.style.display = this.paymentMethod === 'mpesa' ? 'block' : 'none';
                 }
+                
+                // Toggle wallet notice
+                this.updateWalletNotice();
             });
         });
 
@@ -177,6 +187,11 @@ class CheckoutManager {
         // Verify manual code
         if (this.verifyCodeBtn) {
             this.verifyCodeBtn.addEventListener('click', () => this.verifyManualCode());
+        }
+
+        // Check payment status button
+        if (this.checkStatusBtn) {
+            this.checkStatusBtn.addEventListener('click', () => this.checkPaymentStatusManual());
         }
 
         // M-Pesa code input - auto uppercase
@@ -220,8 +235,15 @@ class CheckoutManager {
             
             onAuthStateChanged(auth, async (user) => {
                 if (!user) {
-                    showNotification('Please login to checkout', 'warning');
-                    window.location.href = 'login.html';
+                    // Show login modal with cart as fallback
+                    authModal.show({
+                        title: 'Login to Checkout',
+                        message: 'Please sign in to complete your purchase',
+                        icon: 'fa-credit-card',
+                        feature: 'checkout',
+                        allowCancel: true,
+                        cancelRedirect: 'cart.html'
+                    });
                     return;
                 }
 
@@ -251,6 +273,15 @@ class CheckoutManager {
             const userDoc = await getDoc(doc(db, "Users", this.user.uid));
             if (userDoc.exists()) {
                 this.userData = userDoc.data();
+                
+                // Store wallet balance
+                this.walletBalance = this.userData.walletBalance || 0;
+                
+                // Update wallet balance display
+                const walletBalanceDisplay = document.getElementById('walletBalanceDisplay');
+                if (walletBalanceDisplay) {
+                    walletBalanceDisplay.textContent = `KES ${this.walletBalance.toLocaleString()}`;
+                }
                 
                 this.buyerNameEl.textContent = this.userData.name || 'Not set';
                 // Support both 'phone' and 'phoneNumber' field names
@@ -365,26 +396,48 @@ class CheckoutManager {
                     return;
                 }
 
-                // Fetch seller info from listing
-                let sellerId = buyNowData.uploaderId || buyNowData.sellerId || null;
-                if (!sellerId && buyNowData.listingId) {
-                    try {
-                        const listingDoc = await getDoc(doc(db, 'Listings', buyNowData.listingId));
-                        if (listingDoc.exists()) {
-                            sellerId = listingDoc.data().uploaderId;
-                        }
-                    } catch (e) { console.log('Could not fetch seller:', e); }
+                // SECURITY: Verify price from Firebase to prevent manipulation
+                const listingDoc = await getDoc(doc(db, 'Listings', buyNowData.listingId));
+                if (!listingDoc.exists()) {
+                    showNotification('Product not found', 'error');
+                    window.location.href = 'index.html';
+                    return;
+                }
+                
+                const listingData = listingDoc.data();
+                const sellerId = listingData.uploaderId;
+                
+                // Get verified price from listing/variation
+                let verifiedPrice = listingData.price;
+                if (buyNowData.selectedVariation) {
+                    // Find the matching variation and get its price
+                    const variation = listingData.variations?.find(v => 
+                        v.name === buyNowData.selectedVariation?.name || 
+                        v.id === buyNowData.selectedVariation?.id
+                    );
+                    if (variation) {
+                        verifiedPrice = variation.price || 
+                            (variation.attributes?.[0]?.price) || 
+                            listingData.price;
+                    }
+                }
+                
+                // Validate price
+                if (!validatePrice(verifiedPrice)) {
+                    showNotification('Invalid product price', 'error');
+                    return;
                 }
 
                 const itemData = {
                     listingId: buyNowData.listingId,
-                    name: buyNowData.name,
-                    price: buyNowData.price,
-                    quantity: buyNowData.quantity || 1,
+                    name: listingData.name, // Use name from Firebase
+                    price: verifiedPrice, // Use verified price from Firebase
+                    quantity: validateQuantity(buyNowData.quantity) || 1,
                     selectedVariation: buyNowData.selectedVariation || null,
-                    imageUrl: buyNowData.photoTraceUrl || buyNowData.imageUrls?.[0] || 'images/placeholder.png',
-                    totalPrice: buyNowData.price * (buyNowData.quantity || 1),
-                    sellerId: sellerId
+                    imageUrl: listingData.photoTraceUrl || listingData.imageUrls?.[0] || 'images/placeholder.png',
+                    totalPrice: verifiedPrice * (validateQuantity(buyNowData.quantity) || 1),
+                    sellerId: sellerId,
+                    minOrderQuantity: listingData.minOrderQuantity || 1
                 };
                 
                 this.orderItems.push(itemData);
@@ -402,26 +455,54 @@ class CheckoutManager {
                 for (const docSnap of cartSnapshot.docs) {
                     const item = docSnap.data();
                     
-                    let sellerId = item.uploaderId || item.sellerId || null;
-                    if (!sellerId && item.listingId) {
-                        try {
-                            const listingDoc = await getDoc(doc(db, 'Listings', item.listingId));
-                            if (listingDoc.exists()) {
-                                sellerId = listingDoc.data().uploaderId;
-                            }
-                        } catch (e) { console.log('Could not fetch seller:', e); }
+                    // SECURITY: Verify price from Firebase to prevent manipulation
+                    const listingDoc = await getDoc(doc(db, 'Listings', item.listingId));
+                    if (!listingDoc.exists()) {
+                        // Product no longer exists - skip it
+                        console.log(`Product ${item.listingId} not found - skipping`);
+                        continue;
                     }
+                    
+                    const listingData = listingDoc.data();
+                    const sellerId = listingData.uploaderId;
+                    
+                    // Get verified price from listing/variation
+                    let verifiedPrice = listingData.price;
+                    if (item.selectedVariation) {
+                        const variation = listingData.variations?.find(v => 
+                            v.name === item.selectedVariation?.name || 
+                            v.id === item.selectedVariation?.id
+                        );
+                        if (variation) {
+                            verifiedPrice = variation.price || 
+                                (variation.attributes?.[0]?.price) || 
+                                listingData.price;
+                        }
+                    }
+                    
+                    // Check if product is out of stock
+                    const availableStock = listingData.totalStock || 0;
+                    if (availableStock < 1) {
+                        showNotification(`${listingData.name} is out of stock`, 'warning');
+                        continue;
+                    }
+                    
+                    const quantity = Math.min(
+                        validateQuantity(item.quantity) || 1,
+                        availableStock // Don't exceed available stock
+                    );
                     
                     const itemData = {
                         docId: docSnap.id,
                         listingId: item.listingId,
-                        name: item.name,
-                        price: item.price,
-                        quantity: item.quantity || 1,
+                        name: listingData.name, // Use name from Firebase
+                        price: verifiedPrice, // Use verified price from Firebase
+                        quantity: quantity,
                         selectedVariation: item.selectedVariation || null,
-                        imageUrl: item.photoTraceUrl || item.imageUrls?.[0] || 'images/placeholder.png',
-                        totalPrice: item.price * (item.quantity || 1),
-                        sellerId: sellerId
+                        imageUrl: listingData.photoTraceUrl || listingData.imageUrls?.[0] || 'images/placeholder.png',
+                        totalPrice: verifiedPrice * quantity,
+                        sellerId: sellerId,
+                        minOrderQuantity: listingData.minOrderQuantity || 1
                     };
                     
                     this.orderItems.push(itemData);
@@ -459,13 +540,19 @@ class CheckoutManager {
         this.orderItemsEl.innerHTML = '';
 
         this.orderItems.forEach(item => {
+            const minQty = item.minOrderQuantity || 1;
+            const qtyBelowMin = item.quantity < minQty;
+            
             const itemEl = document.createElement('div');
             itemEl.className = 'order-item';
+            if (qtyBelowMin) itemEl.classList.add('qty-warning');
+            
             itemEl.innerHTML = `
                 <img src="${item.imageUrl}" alt="${item.name}" class="order-item-image" onerror="this.src='images/placeholder.png'">
                 <div class="order-item-details">
                     <h4>${item.name}</h4>
                     <p class="item-meta">Qty: ${item.quantity}</p>
+                    ${minQty > 1 ? `<p class="min-order-note" style="font-size: 0.75rem; color: ${qtyBelowMin ? '#e74c3c' : 'var(--text-muted)'};">Min order: ${minQty} units</p>` : ''}
                     ${item.selectedVariation ? `
                         <span class="item-variation">
                             ${item.selectedVariation.title}: ${item.selectedVariation.attr_name}
@@ -499,6 +586,38 @@ class CheckoutManager {
             this.discountRow.style.display = 'flex';
             if (this.discountEl) this.discountEl.textContent = `- KES ${this.discount.toLocaleString()}`;
         }
+        
+        // Update wallet notice after total is calculated
+        this.updateWalletNotice();
+    }
+
+    // Check and display wallet notice if balance insufficient
+    updateWalletNotice() {
+        const walletNotice = document.getElementById('walletNotice');
+        const walletOption = document.querySelector('[data-method="wallet"]');
+        
+        if (!walletNotice || !walletOption) return;
+        
+        const walletBalance = this.walletBalance || 0;
+        const insufficientBalance = walletBalance < this.total;
+        
+        if (this.paymentMethod === 'wallet' && insufficientBalance) {
+            walletNotice.style.display = 'block';
+        } else {
+            walletNotice.style.display = 'none';
+        }
+        
+        // Update wallet option disabled state
+        if (insufficientBalance && walletBalance === 0) {
+            walletOption.classList.add('disabled');
+            walletOption.querySelector('.option-details span').textContent = 'Balance: KES 0 - Top up required';
+        } else if (insufficientBalance) {
+            walletOption.querySelector('.option-details span').innerHTML = 
+                `Balance: <span style="color: #d97706;">KES ${walletBalance.toLocaleString()}</span> <small>(insufficient)</small>`;
+        } else {
+            walletOption.classList.remove('disabled');
+            walletOption.querySelector('.option-details span').textContent = `Balance: KES ${walletBalance.toLocaleString()}`;
+        }
     }
 
     updateProgressStep(step) {
@@ -517,12 +636,29 @@ class CheckoutManager {
 
     async handlePlaceOrder() {
         try {
+            // Validate minimum order quantities
+            const invalidItems = this.orderItems.filter(item => {
+                const minQty = item.minOrderQuantity || 1;
+                return item.quantity < minQty;
+            });
+
+            if (invalidItems.length > 0) {
+                const itemNames = invalidItems.map(item => 
+                    `${item.name} (min: ${item.minOrderQuantity})`
+                ).join(', ');
+                showNotification(`Minimum order quantity not met for: ${itemNames}`, 'warning');
+                return;
+            }
+
             // Validate inputs
             if (!this.deliveryAddressEl.value.trim()) {
                 showNotification('Please enter your delivery address', 'warning');
                 this.deliveryAddressEl.focus();
                 return;
             }
+
+            // Store delivery address before async payment (in case element value is lost)
+            this.savedDeliveryAddress = this.deliveryAddressEl.value.trim();
 
             this.updateProgressStep(2);
 
@@ -540,6 +676,15 @@ class CheckoutManager {
                 this.updateProgressStep(3);
                 this.showPaymentModal(normalizedPhone);
                 await this.initiateMpesaPayment(normalizedPhone);
+            } else if (this.paymentMethod === 'wallet') {
+                // Wallet payment - deduct from balance
+                if (this.walletBalance < this.total) {
+                    showNotification('Insufficient wallet balance. Please top up or choose another payment method.', 'warning');
+                    return;
+                }
+                
+                this.setButtonLoading(true);
+                await this.processWalletPayment();
             } else {
                 // Pay on delivery - create order directly
                 await this.createOrder('pay_on_delivery', null);
@@ -568,6 +713,11 @@ class CheckoutManager {
         this.paymentTimer = setInterval(() => {
             this.paymentTimeRemaining--;
             this.updateTimerDisplay();
+
+            // Show check status button after 30 seconds
+            if (this.paymentTimeRemaining === 270 && this.checkStatusSection) {
+                this.checkStatusSection.style.display = 'block';
+            }
 
             // Show manual code entry after 1 minute
             if (this.paymentTimeRemaining === 240 && this.manualCodeSection) {
@@ -679,9 +829,18 @@ class CheckoutManager {
     async handlePaymentComplete(data) {
         try {
             this.clearPaymentTimer();
-            await this.createOrder('mpesa', data.mpesaReceiptNumber, {
-                transactionId: data.transactionId,
-                paymentStatus: 'completed'
+            
+            // Ensure we have valid transaction identifiers (fallback chain)
+            const mpesaReceiptNumber = data.mpesaReceiptNumber || data.mpesaCode || null;
+            const firestoreTransactionId = data.transactionId || null;
+            
+            await this.createOrder('mpesa', mpesaReceiptNumber, {
+                firestoreTransactionId: firestoreTransactionId,
+                mpesaReceiptNumber: mpesaReceiptNumber,
+                mpesaAmount: data.amount || this.total,
+                mpesaPhone: data.phoneNumber || null,
+                paymentStatus: 'completed',
+                paymentCompletedAt: new Date().toISOString()
             });
         } catch (error) {
             console.error('Error after payment complete:', error);
@@ -693,8 +852,129 @@ class CheckoutManager {
         this.setPaymentStatus('failed', data.reason || 'Payment was not completed');
         
         // Show manual options
+        if (this.checkStatusSection) this.checkStatusSection.style.display = 'block';
         if (this.manualCodeSection) this.manualCodeSection.style.display = 'block';
         if (this.uploadReceiptSection) this.uploadReceiptSection.style.display = 'block';
+    }
+
+    // Process wallet payment
+    async processWalletPayment() {
+        const transactionId = `WALLET-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        let previousBalance = 0;
+        let newBalance = 0;
+        let walletDeducted = false;
+        
+        try {
+            // Step 1: Validate order BEFORE deducting wallet
+            const deliveryAddress = this.savedDeliveryAddress || this.deliveryAddressEl?.value?.trim() || '';
+            const orderValidation = validateOrder({
+                userId: this.user?.uid,
+                items: this.orderItems,
+                deliveryAddress: deliveryAddress,
+                totalAmount: this.total
+            });
+            
+            if (!orderValidation.valid) {
+                throw new Error('Order validation failed: ' + orderValidation.errors.join(', '));
+            }
+            
+            // Step 2: Deduct from wallet using transaction
+            await runTransaction(db, async (transaction) => {
+                const userRef = doc(db, "Users", this.user.uid);
+                const userDoc = await transaction.get(userRef);
+                
+                if (!userDoc.exists()) {
+                    throw new Error('User not found');
+                }
+                
+                previousBalance = userDoc.data().walletBalance || 0;
+                
+                if (previousBalance < this.total) {
+                    throw new Error('Insufficient wallet balance');
+                }
+                
+                newBalance = previousBalance - this.total;
+                transaction.update(userRef, {
+                    walletBalance: newBalance,
+                    lastTransactionAt: serverTimestamp()
+                });
+            });
+            
+            walletDeducted = true;
+            
+            // Step 3: Create the order IMMEDIATELY after wallet deduction
+            await this.createOrder('wallet', transactionId, {
+                paymentStatus: 'completed',
+                walletPayment: true,
+                walletTransactionId: transactionId,
+                walletBalanceBefore: previousBalance,
+                walletBalanceAfter: newBalance,
+                paymentCompletedAt: new Date().toISOString()
+            });
+            
+            // Step 4: Add wallet transaction record AFTER order is confirmed
+            await addDoc(collection(db, "users", this.user.uid, "walletTransactions"), {
+                type: 'payment',
+                amount: -this.total,
+                balanceBefore: previousBalance,
+                balanceAfter: newBalance,
+                description: `Order payment - ${this.orderItems.length} item(s)`,
+                transactionId: transactionId,
+                audit: {
+                    source: 'wallet_balance',
+                    destination: 'order_payment',
+                    userId: this.user.uid,
+                    amount: this.total,
+                    currency: 'KES',
+                    balanceBefore: previousBalance,
+                    balanceAfter: newBalance,
+                    timestamp: new Date().toISOString(),
+                    verified: true,
+                    verificationMethod: 'firestore_transaction'
+                },
+                status: 'completed',
+                createdAt: serverTimestamp()
+            });
+            
+        } catch (error) {
+            console.error('Wallet payment error:', error);
+            
+            // CRITICAL: Refund wallet if deducted but order creation failed
+            if (walletDeducted) {
+                try {
+                    console.log('Refunding wallet due to order creation failure...');
+                    const userRef = doc(db, "Users", this.user.uid);
+                    await updateDoc(userRef, {
+                        walletBalance: previousBalance,
+                        lastTransactionAt: serverTimestamp()
+                    });
+                    
+                    // Record the refund transaction
+                    await addDoc(collection(db, "users", this.user.uid, "walletTransactions"), {
+                        type: 'refund',
+                        amount: this.total,
+                        balanceBefore: newBalance,
+                        balanceAfter: previousBalance,
+                        description: 'Auto-refund: Order creation failed',
+                        transactionId: `REFUND-${transactionId}`,
+                        originalTransactionId: transactionId,
+                        reason: error.message,
+                        status: 'completed',
+                        createdAt: serverTimestamp()
+                    });
+                    
+                    showNotification('Payment failed - your wallet has been refunded', 'warning');
+                } catch (refundError) {
+                    console.error('CRITICAL: Failed to refund wallet:', refundError);
+                    showNotification('Payment error - please contact support for refund', 'error');
+                    // TODO: Alert admin about failed refund
+                }
+            } else {
+                showNotification(error.message || 'Failed to process wallet payment', 'error');
+            }
+            
+            this.setButtonLoading(false);
+        }
     }
 
     async verifyManualCode() {
@@ -731,6 +1011,42 @@ class CheckoutManager {
         } finally {
             this.verifyCodeBtn.disabled = false;
             this.verifyCodeBtn.innerHTML = '<i class="fas fa-check"></i> Verify';
+        }
+    }
+
+    // Check payment status manually (user-initiated)
+    async checkPaymentStatusManual() {
+        if (!this.mpesaManager) {
+            showNotification('Payment session not active', 'warning');
+            return;
+        }
+        
+        this.checkStatusBtn.disabled = true;
+        this.checkStatusBtn.classList.add('checking');
+        this.checkStatusBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Checking...';
+        
+        try {
+            const result = await this.mpesaManager.checkPaymentStatus();
+            
+            if (result.success && result.status === 'completed') {
+                // Payment found! Process the order
+                showNotification('Payment confirmed!', 'success');
+                
+                await this.createOrder('mpesa', result.data.mpesaReceiptNumber || 'CONFIRMED', {
+                    paymentStatus: 'completed',
+                    verificationMethod: 'api_query'
+                });
+            } else if (result.status === 'pending') {
+                showNotification('Payment is still being processed. Please wait or enter M-Pesa code manually.', 'info');
+            } else {
+                showNotification(result.message || 'Payment not completed yet', 'warning');
+            }
+        } catch (error) {
+            showNotification(error.message || 'Could not check status. Please enter M-Pesa code manually.', 'warning');
+        } finally {
+            this.checkStatusBtn.disabled = false;
+            this.checkStatusBtn.classList.remove('checking');
+            this.checkStatusBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Check Payment Status';
         }
     }
 
@@ -799,6 +1115,21 @@ class CheckoutManager {
 
     async createOrder(paymentMethod, transactionId, paymentData = {}) {
         try {
+            // Validate order data before creation
+            // Use saved address first (for async callbacks), fall back to element value
+            const deliveryAddress = this.savedDeliveryAddress || this.deliveryAddressEl?.value?.trim() || '';
+            const orderValidation = validateOrder({
+                userId: this.user?.uid,
+                items: this.orderItems,
+                deliveryAddress: deliveryAddress,
+                totalAmount: this.total
+            });
+            
+            if (!orderValidation.valid) {
+                showNotification(orderValidation.errors.join('. '), 'error');
+                throw new Error('Order validation failed: ' + orderValidation.errors.join(', '));
+            }
+            
             // Generate order ID
             const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 
@@ -810,39 +1141,60 @@ class CheckoutManager {
                 await this.updateProductStock();
             }
 
-            // Prepare order data
+            // Prepare order data with sanitized inputs
+            // Include both field names for backward compatibility with different pages
             const orderData = {
                 orderId,
                 userId: this.user.uid,
                 sellerId: primarySellerId,
                 items: this.orderItems.map(item => ({
                     listingId: item.listingId,
-                    productName: item.name,
+                    // Include both name fields for compatibility
+                    productName: escapeHtml(item.name),
+                    name: escapeHtml(item.name),
                     selectedVariation: item.selectedVariation,
-                    quantity: item.quantity,
-                    pricePerUnit: item.price,
-                    totalPrice: item.totalPrice,
+                    quantity: validateQuantity(item.quantity) || 1,
+                    // Include both price fields for compatibility
+                    pricePerUnit: validatePrice(item.price) || 0,
+                    price: validatePrice(item.price) || 0,
+                    totalPrice: validatePrice(item.totalPrice) || 0,
                     imageUrl: item.imageUrl,
                     sellerId: item.sellerId
                 })),
                 buyerDetails: {
-                    name: this.buyerNameEl.textContent,
-                    phone: this.buyerPhoneEl.textContent,
-                    location: this.buyerLocationEl.textContent,
-                    deliveryAddress: this.deliveryAddressEl.value.trim()
+                    name: escapeHtml(this.buyerNameEl?.textContent || ''),
+                    phone: this.buyerPhoneEl?.textContent || '',
+                    location: escapeHtml(this.buyerLocationEl?.textContent || ''),
+                    deliveryAddress: escapeHtml(deliveryAddress)
                 },
                 paymentMethod,
                 paymentStatus: paymentData.paymentStatus || (paymentMethod === 'mpesa' ? 'completed' : 'pending'),
-                mpesaTransactionId: transactionId,
-                mpesaPhone: this.mpesaPhoneInput ? normalizePhoneNumber(this.mpesaPhoneInput.value) : null,
-                ...paymentData,
-                shippingFee: this.shippingFee,
-                discount: this.discount,
-                subtotal: this.subtotal,
-                totalAmount: this.total,
-                orderNotes: this.orderNotesEl?.value?.trim() || '',
+                // M-Pesa transaction identifiers (only include if defined)
+                ...(transactionId && { mpesaTransactionId: transactionId }),
+                ...(paymentData.firestoreTransactionId && { firestoreTransactionId: paymentData.firestoreTransactionId }),
+                ...(paymentData.mpesaReceiptNumber && { mpesaReceiptNumber: paymentData.mpesaReceiptNumber }),
+                mpesaPhone: paymentData.mpesaPhone || (this.mpesaPhoneInput ? normalizePhoneNumber(this.mpesaPhoneInput.value) : null),
+                // Payment audit trail
+                paymentAudit: {
+                    method: paymentMethod,
+                    initiatedAt: new Date().toISOString(),
+                    completedAt: paymentData.paymentCompletedAt || null,
+                    amount: validatePrice(this.total) || 0,
+                    currency: 'KES',
+                    source: paymentMethod === 'mpesa' ? 'mpesa_stk_push' : paymentMethod === 'wallet' ? 'wallet_balance' : 'cash_on_delivery',
+                    verificationStatus: paymentData.paymentStatus === 'completed' ? 'verified' : 'pending'
+                },
+                shippingFee: validatePrice(this.shippingFee) || 0,
+                discount: validatePrice(this.discount) || 0,
+                subtotal: validatePrice(this.subtotal) || 0,
+                // Include both total fields for compatibility
+                totalAmount: validatePrice(this.total) || 0,
+                total: validatePrice(this.total) || 0,
+                orderNotes: escapeHtml((this.orderNotesEl?.value || '').trim().substring(0, 500)),
                 orderDate: serverTimestamp(),
+                // Include both status fields for compatibility
                 status: paymentData.paymentStatus === 'pending_verification' ? 'pending_payment' : 'pending',
+                orderStatus: paymentData.paymentStatus === 'pending_verification' ? 'pending_payment' : 'pending',
                 orderSource: this.orderSource,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
@@ -885,31 +1237,54 @@ class CheckoutManager {
     }
 
     async updateProductStock() {
+        const stockErrors = [];
+        
         try {
             for (const item of this.orderItems) {
                 if (!item.listingId) continue;
                 
                 const listingRef = doc(db, 'Listings', item.listingId);
-                const listingDoc = await getDoc(listingRef);
                 
-                if (listingDoc.exists()) {
-                    const currentData = listingDoc.data();
-                    const currentStock = currentData.totalStock || 0;
-                    const newStock = Math.max(0, currentStock - item.quantity);
-                    
-                    // Update the stock
-                    await updateDoc(listingRef, {
-                        totalStock: newStock,
-                        soldCount: (currentData.soldCount || 0) + item.quantity,
-                        updatedAt: serverTimestamp()
+                // Use transaction to prevent race conditions
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const listingDoc = await transaction.get(listingRef);
+                        
+                        if (!listingDoc.exists()) {
+                            throw new Error(`Product ${item.name} no longer exists`);
+                        }
+                        
+                        const currentData = listingDoc.data();
+                        const currentStock = currentData.totalStock || 0;
+                        
+                        // Verify stock is sufficient
+                        if (currentStock < item.quantity) {
+                            throw new Error(`Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${item.quantity}`);
+                        }
+                        
+                        const newStock = currentStock - item.quantity;
+                        
+                        // Update atomically within transaction
+                        transaction.update(listingRef, {
+                            totalStock: newStock,
+                            soldCount: (currentData.soldCount || 0) + item.quantity,
+                            updatedAt: serverTimestamp()
+                        });
+                        
+                        console.log(`Updated stock for ${item.name}: ${currentStock} -> ${newStock}`);
                     });
-                    
-                    console.log(`Updated stock for ${item.name}: ${currentStock} -> ${newStock}`);
+                } catch (txError) {
+                    stockErrors.push(txError.message);
+                    console.error(`Stock update failed for ${item.name}:`, txError);
                 }
             }
+            
+            if (stockErrors.length > 0) {
+                console.warn('Some stock updates failed:', stockErrors);
+                // Notify admin of stock discrepancies
+            }
         } catch (error) {
-            console.error('Error updating product stock:', error);
-            // Don't throw - stock update failure shouldn't prevent order completion
+            console.error('Error in updateProductStock:', error);
         }
     }
 
@@ -984,7 +1359,8 @@ class CheckoutManager {
             // Set payment status with appropriate styling
             const paymentBadge = document.getElementById('paymentStatusBadge');
             if (this.paymentMethodDisplay && paymentBadge) {
-                let methodText = paymentMethod === 'mpesa' ? 'M-Pesa' : 'Pay on Delivery';
+                let methodText = paymentMethod === 'mpesa' ? 'M-Pesa' : 
+                                 paymentMethod === 'wallet' ? 'Wallet' : 'Pay on Delivery';
                 let statusIcon = 'fa-check-circle';
                 let badgeClass = 'success';
                 
@@ -994,6 +1370,8 @@ class CheckoutManager {
                     badgeClass = 'warning';
                 } else if (paymentMethod === 'mpesa') {
                     methodText += ' - Confirmed';
+                } else if (paymentMethod === 'wallet') {
+                    methodText += ' - Paid';
                 } else {
                     methodText += ' - Pay when delivered';
                     statusIcon = 'fa-hand-holding-usd';

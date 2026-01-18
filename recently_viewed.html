@@ -35,6 +35,7 @@
         <div class="page-header">
             <h1><i class="fas fa-history"></i> Recently Viewed Products</h1>
             <p>Your browsing history</p>
+            <p style="font-size: 0.75rem; color: #666; margin-top: 6px;">🔄 Products you've looked at appear here. Tap to view again or add to cart!</p>
         </div>
 
         <div class="recently-viewed-container">
@@ -208,11 +209,28 @@
 
         // Clear entire history with confirmation
         document.getElementById('clearHistoryBtn').addEventListener('click', () => {
-            if (confirm('Are you sure you want to clear your entire browsing history?')) {
+            // Show confirmation modal
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
+                    <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
+                        <i class=\"fas fa-trash-alt\" style=\"font-size:48px;color:#f44336;margin-bottom:16px;\"></i>
+                        <h3 style=\"margin:0 0 8px;color:#333;\">Clear History</h3>
+                        <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Are you sure you want to clear your entire browsing history?</p>
+                        <div style=\"display:flex;gap:12px;\">
+                            <button onclick=\"this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;\">Cancel</button>
+                            <button id=\"confirmClearBtn\" style=\"flex:1;padding:12px;border:none;background:#f44336;color:white;border-radius:8px;cursor:pointer;\">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal.firstElementChild);
+            document.getElementById('confirmClearBtn').addEventListener('click', function() {
                 localStorage.removeItem('productViewHistory');
                 loadRecentlyViewed();
                 showNotification('History cleared');
-            }
+                this.closest('div[style]').parentElement.remove();
+            });
         });
 
         // Load on page load

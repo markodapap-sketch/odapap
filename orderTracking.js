@@ -4,6 +4,7 @@ import { app } from './js/firebase.js';
 import { showLoader, hideLoader } from './loader.js';
 import { showNotification } from './notifications.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
 
 // Initialize Firebase services
 const auth = getAuth(app);
@@ -35,19 +36,29 @@ const displayOrderDetails = (orderData) => {
   
   const statusLabels = {
     pending: 'Pending',
-    confirmed: 'Confirmed',
+    seller_confirmed: 'Seller Confirmed',
+    confirmed: 'Admin Confirmed',
     out_for_delivery: 'Out for Delivery',
     delivered: 'Delivered',
-    cancelled: 'Cancelled'
+    cancelled: 'Cancelled',
+    refund_requested: 'Refund Requested',
+    refunded: 'Refunded'
   };
   
   const statusIcons = {
     pending: 'clock',
+    seller_confirmed: 'store',
     confirmed: 'check',
     out_for_delivery: 'truck',
     delivered: 'check-double',
-    cancelled: 'times'
+    cancelled: 'times',
+    refund_requested: 'undo',
+    refunded: 'money-bill-wave'
   };
+  
+  // Determine which statuses are completed based on current status
+  const statusOrder = ['pending', 'seller_confirmed', 'confirmed', 'out_for_delivery', 'delivered'];
+  const currentIndex = statusOrder.indexOf(statusClass);
   
   orderDetailsContainer.innerHTML = `
     <div class="order-header">
@@ -59,29 +70,36 @@ const displayOrderDetails = (orderData) => {
     </div>
     
     <div class="order-timeline">
-      <div class="timeline-item ${['pending', 'confirmed', 'out_for_delivery', 'delivered'].includes(statusClass) ? 'completed' : ''}">
+      <div class="timeline-item ${currentIndex >= 0 ? 'completed' : ''}">
         <div class="timeline-dot"></div>
         <div class="timeline-content">
           <h4>Order Placed</h4>
           <p>${orderData.orderDate ? formatDate(orderData.orderDate) : 'N/A'}</p>
         </div>
       </div>
-      <div class="timeline-item ${['confirmed', 'out_for_delivery', 'delivered'].includes(statusClass) ? 'completed' : ''}">
+      <div class="timeline-item ${currentIndex >= 1 ? 'completed' : ''}">
         <div class="timeline-dot"></div>
         <div class="timeline-content">
-          <h4>Confirmed</h4>
+          <h4>Seller Confirmed</h4>
+          <p>${orderData.sellerConfirmedAt ? formatDate(orderData.sellerConfirmedAt) : 'Pending'}</p>
+        </div>
+      </div>
+      <div class="timeline-item ${currentIndex >= 2 ? 'completed' : ''}">
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <h4>Admin Confirmed</h4>
           <p>${orderData.confirmedAt ? formatDate(orderData.confirmedAt) : 'Pending'}</p>
         </div>
       </div>
-      <div class="timeline-item ${['out_for_delivery', 'delivered'].includes(statusClass) ? 'completed' : ''}">
+      <div class="timeline-item ${currentIndex >= 3 ? 'completed' : ''}">
         <div class="timeline-dot"></div>
         <div class="timeline-content">
-          <h4>Dispatched</h4>
+          <h4>Out for Delivery</h4>
           <p>${orderData.dispatchedAt ? formatDate(orderData.dispatchedAt) : 'Pending'}</p>
           ${orderData.dispatchPhoto ? `<img src="${orderData.dispatchPhoto}" alt="Dispatch proof" class="dispatch-photo">` : ''}
         </div>
       </div>
-      <div class="timeline-item ${statusClass === 'delivered' ? 'completed' : ''}">
+      <div class="timeline-item ${currentIndex >= 4 ? 'completed' : ''}">
         <div class="timeline-dot"></div>
         <div class="timeline-content">
           <h4>Delivered</h4>
@@ -93,17 +111,20 @@ const displayOrderDetails = (orderData) => {
     <div class="order-items">
       <h3>Items</h3>
       <ul>
-        ${(orderData.items || []).map(item => `
+        ${(orderData.items || []).map(item => {
+          const safeName = escapeHtml(item.name || 'Product');
+          const safeVariant = escapeHtml(item.variant || '');
+          return `
           <li class="order-item">
-            <img src="${getImageUrl(item.imageUrl, 'product')}" alt="${item.name}" data-fallback="product">
+            <img src="${getImageUrl(item.imageUrl, 'product')}" alt="${safeName}" data-fallback="product">
             <div class="item-info">
-              <p class="item-name">${item.name}</p>
-              ${item.variant ? `<p class="item-variant">${item.variant}</p>` : ''}
+              <p class="item-name">${safeName}</p>
+              ${safeVariant ? `<p class="item-variant">${safeVariant}</p>` : ''}
             </div>
             <div class="item-qty">×${item.quantity || 1}</div>
             <div class="item-price">KES ${((item.price || 0) * (item.quantity || 1)).toLocaleString()}</div>
           </li>
-        `).join('')}
+        `}).join('')}
       </ul>
     </div>
     
@@ -116,9 +137,9 @@ const displayOrderDetails = (orderData) => {
     ${orderData.shippingAddress || orderData.buyerDetails ? `
       <div class="delivery-info">
         <h3>Delivery Info</h3>
-        <p><strong>${orderData.buyerDetails?.name || 'Customer'}</strong></p>
-        <p>${orderData.shippingAddress?.address || orderData.buyerDetails?.address || 'N/A'}</p>
-        <p>${orderData.buyerDetails?.phone || ''}</p>
+        <p><strong>${escapeHtml(orderData.buyerDetails?.name || 'Customer')}</strong></p>
+        <p>${escapeHtml(orderData.shippingAddress?.address || orderData.buyerDetails?.address || 'N/A')}</p>
+        <p>${escapeHtml(orderData.buyerDetails?.phone || '')}</p>
       </div>
     ` : ''}
   `;

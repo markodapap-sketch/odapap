@@ -13,6 +13,8 @@ import {
   query,
   where,
   orderBy,
+  limit,
+  startAfter,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { initializeImageSliders } from './imageSlider.js';
@@ -20,6 +22,7 @@ import { showLoader, hideLoader } from './loader.js';
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
 
 // Initialize Firebase services
 const auth = getAuth(app);
@@ -482,13 +485,23 @@ function renderBreadcrumb() {
 // Store all listings for filter calculations
 let allCategoryListings = [];
 
-// Function to load all listings for the current category (for filter calculation)
+// Pagination state
+const PAGE_SIZE = 24;
+let lastVisibleDoc = null;
+let hasMoreProducts = true;
+let isLoadingMore = false;
+
+// Function to load listings for the current category using Firestore query
 async function loadCategoryListings() {
   try {
-    const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
+    // Use Firestore query to filter server-side instead of client-side
+    const listingsQuery = query(
+      collection(firestore, "Listings"),
+      where("category", "==", currentCategory)
+    );
+    const listingsSnapshot = await getDocs(listingsQuery);
     allCategoryListings = listingsSnapshot.docs
-      .map(doc => ({ id: doc.id, ...doc.data() }))
-      .filter(listing => listing.category === currentCategory);
+      .map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.error("Error loading category listings:", error);
     allCategoryListings = [];
@@ -722,11 +735,14 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
       categoryTitle.textContent = primeTitles[primeCategory] || primeCategory;
       categoryDescription.textContent = primeDescs[primeCategory] || '';
       
-      // Load all listings for prime filter
-      const listingsSnapshot = await getDocs(collection(firestore, "Listings"));
+      // Load listings for prime category using Firestore query
+      const primeQuery = query(
+        collection(firestore, "Listings"),
+        where(`primeCategories.${primeCategory}`, "==", true)
+      );
+      const listingsSnapshot = await getDocs(primeQuery);
       allCategoryListings = listingsSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter(listing => listing.primeCategories?.[primeCategory] === true);
+        .map(doc => ({ id: doc.id, ...doc.data() }));
     } else {
       categoryTitle.textContent = (categoryHierarchy[category]?.label || category.replace(/-/g, ' ')).toUpperCase();
       categoryDescription.textContent = `Browse the best deals and offers in the ${categoryHierarchy[category]?.label || category.replace(/-/g, ' ')} category.`;
@@ -781,43 +797,51 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
       const uploaderId = listing.uploaderId || listing.userId;
       const userData = userDataMap[uploaderId] || {};
 
-      const displayName = userData.name || userData.username || "Unknown User";
+      const displayName = escapeHtml(userData.name || userData.username || "Unknown User");
       const isVerified = userData.isVerified === true || userData.verified === true;
       const imageUrls = listing.imageUrls || [];
-      const firstImageUrl = getImageUrl(imageUrls[0], 'product');
-      const sellerPic = getImageUrl(userData.profilePicUrl, 'profile');
-      const sellerId = listing.uploaderId || listing.userId;
+      const firstImageUrl = sanitizeUrl(getImageUrl(imageUrls[0], 'product'));
+      const sellerPic = sanitizeUrl(getImageUrl(userData.profilePicUrl, 'profile'));
+      const sellerId = escapeHtml(listing.uploaderId || listing.userId);
+      
+      // Escape all user-provided content
+      const safeName = escapeHtml(listing.name);
+      const safeDescription = escapeHtml((listing.description || '').substring(0, 100));
+      const safeId = escapeHtml(listing.id);
+      const safeSubcategory = escapeHtml(listing.subcategory || '');
+      const safeBrand = escapeHtml(listing.brand || '');
+      const safePackInfo = escapeHtml(listing.packInfo || '');
 
       const listingElement = document.createElement("div");
       listingElement.className = "listing-item";
       listingElement.innerHTML = `
         <div class="product-item">
           <div class="profile">
-            <img src="${sellerPic}" alt="${displayName}" onclick="goToUserProfile('${uploaderId}')" loading="lazy" data-fallback="profile">
+            <img src="${sellerPic}" alt="${displayName}" onclick="goToUserProfile('${escapeHtml(uploaderId)}')" loading="lazy" data-fallback="profile">
             <div class="uploader-info">
               <p class="uploader-name"><strong>${displayName}</strong>${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
-              <p class="product-name">${listing.name}</p>
-              ${listing.packInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${listing.packInfo}</p>` : ''}
+              <p class="product-name">${safeName}</p>
+              ${safePackInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${safePackInfo}</p>` : ''}
             </div>
             <div class="product-actions profile-actions">
               <div>
-                <i class="fas fa-comments" onclick="goToChat('${sellerId}', '${listing.id}')"></i>
+                <i class="fas fa-comments" onclick="goToChat('${sellerId}', '${safeId}')"></i>
                 <small>Message</small>
               </div>
               <div>
-                <i class="fas fa-share" onclick="shareProduct('${listing.id}', '${listing.name}', '${listing.description || ''}', '${firstImageUrl}')"></i>
+                <i class="fas fa-share" onclick="shareProduct('${safeId}', '${safeName}', '${safeDescription}', '${firstImageUrl}')"></i>
                 <small>Share</small>
               </div>
             </div>
           </div>
-          <div class="product-image-container" onclick="goToProduct('${listing.id}')">
+          <div class="product-image-container" onclick="goToProduct('${safeId}')">
             <div class="image-slider">
               ${imageUrls.map((url, index) => `
-                <img src="${getImageUrl(url, 'product')}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}" data-fallback="product">
+                <img src="${sanitizeUrl(getImageUrl(url, 'product'))}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}" data-fallback="product">
               `).join('')}
               <div class="product-tags">
-                ${listing.subcategory ? `<span class="product-condition">${listing.subcategory}</span>` : ''}
-                ${listing.brand ? `<span class="product-brand">${listing.brand}</span>` : ''}
+                ${safeSubcategory ? `<span class="product-condition">${safeSubcategory}</span>` : ''}
+                ${safeBrand ? `<span class="product-brand">${safeBrand}</span>` : ''}
               </div>
             </div>
           </div>
@@ -835,22 +859,22 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
               <div class="price-row retail-row">
                 <span class="price-label">Retail:</span>
                 <span class="retail-amount">KES ${retailPrice.toLocaleString()}</span>
-                <span class="profit-badge">+${Math.round(((retailPrice - minPrice) / minPrice) * 100)}%</span>
+                <span class="profit-badge">+${Math.round(((retailPrice - minPrice) / retailPrice) * 100)}%</span>
               </div>` : ''}`;
             })()}
           </div>
-          <p class="product-description">${listing.description || 'No description available'}</p>
+          <p class="product-description">${escapeHtml(listing.description || 'No description available')}</p>
           <div class="product-actions">
             <div>
-              <i class="fas fa-cart-plus add-to-cart-btn" data-listing-id="${listing.id}"></i>
+              <i class="fas fa-cart-plus add-to-cart-btn" data-listing-id="${safeId}"></i>
               <p>Cart</p>
             </div>
             <div>
-              <i class="fas fa-bolt buy-now-btn" data-listing-id="${listing.id}"></i>
+              <i class="fas fa-bolt buy-now-btn" data-listing-id="${safeId}"></i>
               <p>Buy Now</p>
             </div>
             <div>
-              <i class="fas fa-heart wishlist-btn" data-listing-id="${listing.id}"></i>
+              <i class="fas fa-heart wishlist-btn" data-listing-id="${safeId}"></i>
               <p>Wishlist</p>
             </div>
           </div>
@@ -1109,8 +1133,8 @@ async function loadMegaMenuCategories() {
   if (!megaMenuGrid) return;
   
   try {
-    // Fetch all listings to get unique categories
-    const listingsQuery = query(collection(firestore, 'listings'));
+    // Fetch all listings to get unique categories (using 'Listings' collection with capital L)
+    const listingsQuery = query(collection(firestore, 'Listings'));
     const listingsSnapshot = await getDocs(listingsQuery);
     
     // Get unique categories and their counts

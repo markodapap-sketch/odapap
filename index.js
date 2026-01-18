@@ -7,6 +7,8 @@ import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './j
 import { categoryHierarchy } from './js/categoryData.js';
 import { initializeImageSliders } from './imageSlider.js';
 import { setupGlobalImageErrorHandler, getImageUrl, PLACEHOLDERS, initLazyLoading } from './js/imageCache.js';
+import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
+import { initializePWA, requestNotificationPermission } from './js/pwa.js';
 
 // Firebase
 const auth = getAuth(app);
@@ -571,25 +573,29 @@ async function loadFeaturedItems() {
       const seller = sellers[sellerId] || {};
       const priceData = getMinPriceFromVariations(data);
       const imageUrls = data.imageUrls || [];
-      const mainImg = getImageUrl(imageUrls[0], 'product');
-      const sellerImg = getImageUrl(seller.profilePicUrl, 'profile');
+      const mainImg = sanitizeUrl(getImageUrl(imageUrls[0], 'product'));
+      const sellerImg = sanitizeUrl(getImageUrl(seller.profilePicUrl, 'profile'));
       const isVerified = seller.isVerified === true;
       
       const margin = priceData.retailPrice && priceData.retailPrice > priceData.price 
-        ? Math.round(((priceData.retailPrice - priceData.price) / priceData.price) * 100) 
+        ? Math.round(((priceData.retailPrice - priceData.price) / priceData.retailPrice) * 100) 
         : 0;
       
+      const safeName = escapeHtml(data.name);
+      const safeSellerName = escapeHtml(seller.name || 'Seller');
+      const safeId = escapeHtml(data.id);
+      
       return `
-        <article class="featured-card" onclick="location.href='product.html?id=${data.id}'">
+        <article class="featured-card" onclick="location.href='product.html?id=${safeId}'">
           <div class="featured-badge"><i class="fas fa-star"></i> Featured</div>
           <div class="featured-img">
-            <img src="${mainImg}" alt="${data.name}" loading="lazy" data-fallback="product">
+            <img src="${mainImg}" alt="${safeName}" loading="lazy" data-fallback="product">
           </div>
           <div class="featured-info">
-            <h3>${data.name}</h3>
+            <h3>${safeName}</h3>
             <div class="featured-seller">
               <img src="${sellerImg}" alt="" data-fallback="profile">
-              <span>${seller.name || 'Seller'}${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</span>
+              <span>${safeSellerName}${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</span>
             </div>
             <div class="featured-price">
               <span class="price">Ksh ${priceData.price?.toLocaleString() || '0'}</span>
@@ -621,6 +627,178 @@ function calculatePopularity(listing) {
   const score = ((orderCount * 10) + (wishlistCount * 3) + (viewCount * 0.1)) * recencyBoost;
   
   return score;
+}
+
+// ===== PERSONALIZED RECOMMENDATION ALGORITHM =====
+function getUserPreferences() {
+  try {
+    const history = JSON.parse(localStorage.getItem('productViewHistory') || '{}');
+    if (Object.keys(history).length === 0) return null;
+    
+    // Analyze viewing patterns
+    const preferences = {
+      categories: {},      // category -> interest score
+      subcategories: {},   // subcategory -> interest score
+      brands: {},          // brand -> interest score
+      priceRanges: [],     // price points the user views
+      viewedIds: new Set(),// IDs they've seen
+      recentIds: [],       // Most recent views
+      engagedIds: []       // High engagement (time spent + views)
+    };
+    
+    // Sort by last viewed for recency
+    const sortedHistory = Object.entries(history)
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => new Date(b.lastViewed) - new Date(a.lastViewed));
+    
+    // Take most recent 50 for recency list
+    preferences.recentIds = sortedHistory.slice(0, 50).map(h => h.id);
+    
+    // Find high engagement products (multiple views or long time spent)
+    preferences.engagedIds = sortedHistory
+      .filter(h => h.views >= 2 || h.totalTime >= 60) // Viewed twice or 60+ seconds
+      .slice(0, 20)
+      .map(h => h.id);
+    
+    // All viewed IDs
+    sortedHistory.forEach(h => preferences.viewedIds.add(h.id));
+    
+    return preferences;
+  } catch (e) {
+    console.error('Error getting user preferences:', e);
+    return null;
+  }
+}
+
+function calculateRecommendationScore(listing, preferences, allListings) {
+  if (!preferences) return listing.popularity || 0;
+  
+  let score = 0;
+  const weights = {
+    sameCategory: 15,
+    sameSubcategory: 25,
+    sameBrand: 20,
+    similarPrice: 10,
+    sameSeller: 8,
+    notViewed: 30,     // Boost unseen products
+    popular: 5,
+    hasMargin: 10,
+    recentInterest: 40  // Products similar to recently viewed
+  };
+  
+  // Get categories/brands from viewed products
+  const viewedListings = allListings.filter(l => preferences.viewedIds.has(l.id));
+  const engagedListings = allListings.filter(l => preferences.engagedIds.includes(l.id));
+  
+  // Build preference maps from actual viewed listings
+  const categoryInterest = {};
+  const subcategoryInterest = {};
+  const brandInterest = {};
+  const sellerInterest = {};
+  const pricePoints = [];
+  
+  viewedListings.forEach((l, idx) => {
+    const recencyWeight = Math.max(0.3, 1 - (idx / viewedListings.length)); // More recent = higher weight
+    const isEngaged = preferences.engagedIds.includes(l.id);
+    const engagementBoost = isEngaged ? 2 : 1;
+    
+    if (l.category) {
+      categoryInterest[l.category] = (categoryInterest[l.category] || 0) + recencyWeight * engagementBoost;
+    }
+    if (l.subcategory) {
+      subcategoryInterest[l.subcategory] = (subcategoryInterest[l.subcategory] || 0) + recencyWeight * engagementBoost;
+    }
+    if (l.brand) {
+      brandInterest[l.brand] = (brandInterest[l.brand] || 0) + recencyWeight * engagementBoost;
+    }
+    if (l.sellerId) {
+      sellerInterest[l.sellerId] = (sellerInterest[l.sellerId] || 0) + recencyWeight * engagementBoost * 0.5;
+    }
+    if (l.minPrice) {
+      pricePoints.push(l.minPrice);
+    }
+  });
+  
+  // Calculate average price range
+  const avgPrice = pricePoints.length > 0 
+    ? pricePoints.reduce((a, b) => a + b, 0) / pricePoints.length 
+    : 1000;
+  const priceRange = { min: avgPrice * 0.5, max: avgPrice * 2 };
+  
+  // === Score this listing ===
+  
+  // Category match
+  if (listing.category && categoryInterest[listing.category]) {
+    score += weights.sameCategory * categoryInterest[listing.category];
+  }
+  
+  // Subcategory match (stronger signal)
+  if (listing.subcategory && subcategoryInterest[listing.subcategory]) {
+    score += weights.sameSubcategory * subcategoryInterest[listing.subcategory];
+  }
+  
+  // Brand match
+  if (listing.brand && brandInterest[listing.brand]) {
+    score += weights.sameBrand * brandInterest[listing.brand];
+  }
+  
+  // Same seller as viewed products (they might like their other products)
+  if (listing.sellerId && sellerInterest[listing.sellerId]) {
+    score += weights.sameSeller * sellerInterest[listing.sellerId];
+  }
+  
+  // Price similarity (within user's typical range)
+  if (listing.minPrice >= priceRange.min && listing.minPrice <= priceRange.max) {
+    score += weights.similarPrice;
+  }
+  
+  // Boost products NOT yet viewed (discovery)
+  if (!preferences.viewedIds.has(listing.id)) {
+    score += weights.notViewed;
+  }
+  
+  // Popular products (social proof)
+  score += Math.min(weights.popular, (listing.popularity || 0) * 0.1);
+  
+  // Good margin products (business value)
+  if (listing.margin >= 20) {
+    score += weights.hasMargin;
+  }
+  
+  // Extra boost if very similar to recently engaged products
+  if (engagedListings.length > 0) {
+    engagedListings.forEach(engaged => {
+      let similarity = 0;
+      if (engaged.category === listing.category) similarity += 2;
+      if (engaged.subcategory === listing.subcategory) similarity += 3;
+      if (engaged.brand === listing.brand) similarity += 2;
+      if (engaged.sellerId === listing.sellerId && listing.id !== engaged.id) similarity += 1;
+      
+      score += similarity * weights.recentInterest / engagedListings.length;
+    });
+  }
+  
+  // Add some randomness to prevent staleness (±10%)
+  score = score * (0.9 + Math.random() * 0.2);
+  
+  return score;
+}
+
+function sortByRecommendation(listings) {
+  const preferences = getUserPreferences();
+  
+  if (!preferences || preferences.viewedIds.size < 3) {
+    // Not enough data - use default sort (margin)
+    return listings.sort((a, b) => b.margin - a.margin);
+  }
+  
+  // Calculate recommendation score for each listing
+  listings.forEach(listing => {
+    listing.recommendationScore = calculateRecommendationScore(listing, preferences, listings);
+  });
+  
+  // Sort by recommendation score
+  return listings.sort((a, b) => b.recommendationScore - a.recommendationScore);
 }
 
 // ===== PRODUCTS - Match Category Page Gallery Style =====
@@ -658,14 +836,15 @@ async function loadProducts() {
         retailPrice: priceData.retailPrice,
         packInfo: packInfo,
         margin: priceData.retailPrice && priceData.retailPrice > priceData.price 
-          ? Math.round(((priceData.retailPrice - priceData.price) / priceData.price) * 100) 
+          ? Math.round(((priceData.retailPrice - priceData.price) / priceData.retailPrice) * 100) 
           : 0,
         popularity: calculatePopularity(data)
       };
     });
     
-    // Default sort by best margin
-    allListings.sort((a, b) => b.margin - a.margin);
+    // Use personalized recommendation algorithm if user has browsing history
+    // Falls back to margin-based sorting if not enough data
+    sortByRecommendation(allListings);
     
     renderProducts();
     
@@ -691,26 +870,37 @@ function renderProducts() {
   
   container.innerHTML = allListings.map(listing => {
     const imageUrls = listing.imageUrls || [];
-    const firstImage = getImageUrl(imageUrls[0], 'product');
-    const sellerPic = getImageUrl(listing.sellerPic, 'profile');
+    const firstImage = sanitizeUrl(getImageUrl(imageUrls[0], 'product'));
+    const sellerPic = sanitizeUrl(getImageUrl(listing.sellerPic, 'profile'));
+    
+    // Escape user-provided content
+    const safeName = escapeHtml(listing.name);
+    const safeSellerName = escapeHtml(listing.sellerName);
+    const safeDescription = escapeHtml(listing.description || 'No description available');
+    const safeSubcategory = escapeHtml(listing.subcategory || '');
+    const safeBrand = escapeHtml(listing.brand || '');
+    const safeId = escapeHtml(listing.id);
+    const safeSellerId = escapeHtml(listing.sellerId);
+    const safeSellerUid = escapeHtml(listing.sellerUid);
+    const safePackInfo = escapeHtml(listing.packInfo || '');
     
     return `
       <div class="listing-item">
         <div class="product-item">
           <div class="profile">
-            <img src="${sellerPic}" alt="${listing.sellerName}" onclick="goToUserProfile('${listing.sellerUid}')" loading="lazy" data-fallback="profile">
+            <img src="${sellerPic}" alt="${safeSellerName}" onclick="goToUserProfile('${safeSellerUid}')" loading="lazy" data-fallback="profile">
             <div class="uploader-info">
-              <p class="uploader-name"><strong>${listing.sellerName}</strong>${listing.isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
-              <p class="product-name">${listing.name}</p>
-              ${listing.packInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${listing.packInfo}</p>` : ''}
+              <p class="uploader-name"><strong>${safeSellerName}</strong>${listing.isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
+              <p class="product-name">${safeName}</p>
+              ${safePackInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${safePackInfo}</p>` : ''}
             </div>
             <div class="product-actions profile-actions">
               <div>
-                <i class="fas fa-comments" onclick="goToChat('${listing.sellerId}', '${listing.id}')"></i>
+                <i class="fas fa-comments" onclick="goToChat('${safeSellerId}', '${safeId}')"></i>
                 <small>Message</small>
               </div>
               <div>
-                <i class="fas fa-share" onclick="shareProduct('${listing.id}', '${listing.name}', '${listing.description || ''}')"></i>
+                <i class="fas fa-share" onclick="shareProduct('${safeId}', '${safeName}', '${escapeHtml((listing.description || '').substring(0, 100))}')"></i>
                 <small>Share</small>
               </div>
             </div>
@@ -738,18 +928,18 @@ function renderProducts() {
               <span class="profit-badge">+${listing.margin}%</span>
             </div>` : ''}
           </div>
-          <p class="product-description">${listing.description || 'No description available'}</p>
+          <p class="product-description">${safeDescription}</p>
           <div class="product-actions">
             <div>
-              <i class="fas fa-cart-plus" onclick="addToCart('${listing.id}')"></i>
+              <i class="fas fa-cart-plus" onclick="addToCart('${safeId}')"></i>
               <p>Cart</p>
             </div>
             <div>
-              <i class="fas fa-bolt" onclick="buyNow('${listing.id}')"></i>
+              <i class="fas fa-bolt" onclick="buyNow('${safeId}')"></i>
               <p>Buy Now</p>
             </div>
             <div>
-              <i class="fas fa-heart" onclick="addToWishlist('${listing.id}')"></i>
+              <i class="fas fa-heart" onclick="addToWishlist('${safeId}')"></i>
               <p>Wishlist</p>
             </div>
           </div>
@@ -770,6 +960,7 @@ $('sortSelect')?.addEventListener('change', function() {
     case 'price-high': allListings.sort((a, b) => b.minPrice - a.minPrice); break;
     case 'profit': allListings.sort((a, b) => b.margin - a.margin); break;
     case 'popular': allListings.sort((a, b) => b.popularity - a.popularity); break;
+    case 'for-you': sortByRecommendation(allListings); break;
     case 'newest': 
     default: allListings.sort((a, b) => {
       const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
@@ -1110,6 +1301,13 @@ const badgeObserver = new MutationObserver(syncBadgeCounts);
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize PWA (service worker, install prompt, push notifications)
+  initializePWA().then(() => {
+    console.log('[App] PWA initialized');
+  }).catch(err => {
+    console.warn('[App] PWA init failed:', err);
+  });
+  
   // Setup global image error handling to prevent excessive Firestore reads
   setupGlobalImageErrorHandler();
   
@@ -1135,8 +1333,101 @@ document.addEventListener('DOMContentLoaded', async () => {
       updateChatCounter(db, user.uid);
       // Sync after counters update
       setTimeout(syncBadgeCounts, 1000);
+      
+      // Request notification permission for logged-in users (after a delay)
+      setTimeout(() => {
+        if (Notification.permission === 'default') {
+          showNotificationPrompt();
+        }
+      }, 5000);
     }
   });
 });
+
+// Show notification permission prompt
+function showNotificationPrompt() {
+  const prompt = document.createElement('div');
+  prompt.id = 'notification-prompt';
+  prompt.innerHTML = `
+    <div class="notif-prompt-content">
+      <i class="fas fa-bell"></i>
+      <div class="notif-prompt-text">
+        <strong>Enable Notifications</strong>
+        <span>Get updates on orders, deals & messages</span>
+      </div>
+      <button id="enable-notif-btn">Enable</button>
+      <button id="dismiss-notif-btn">×</button>
+    </div>
+  `;
+  document.body.appendChild(prompt);
+  
+  // Add styles
+  const style = document.createElement('style');
+  style.textContent = `
+    #notification-prompt {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 99998;
+      padding: 12px 16px;
+      max-width: 350px;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+      to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    }
+    .notif-prompt-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .notif-prompt-content > i {
+      font-size: 24px;
+      color: #ff5722;
+    }
+    .notif-prompt-text {
+      flex: 1;
+    }
+    .notif-prompt-text strong { display: block; font-size: 14px; color: #333; }
+    .notif-prompt-text span { font-size: 12px; color: #666; }
+    #enable-notif-btn {
+      background: #ff5722;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    #dismiss-notif-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #999;
+      cursor: pointer;
+    }
+  `;
+  document.head.appendChild(style);
+  
+  document.getElementById('enable-notif-btn').addEventListener('click', async () => {
+    const result = await requestNotificationPermission();
+    if (result.success) {
+      showNotification('Notifications enabled!', 'success');
+    } else if (result.reason === 'denied') {
+      showNotification('Notifications blocked. Enable in browser settings.', 'warning');
+    }
+    prompt.remove();
+  });
+  
+  document.getElementById('dismiss-notif-btn').addEventListener('click', () => {
+    prompt.remove();
+    localStorage.setItem('notif-prompt-dismissed', Date.now());
+  });
+}
 
 onAuthChange(updateAuthStatus);

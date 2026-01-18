@@ -320,25 +320,72 @@
     .order-status.cancelled { background: #f8d7da; color: #721c24; }
     .order-card-body {
       display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .order-items-preview {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .order-item-row {
+      display: flex;
       gap: 10px;
       align-items: center;
+      padding: 6px;
+      background: #f9f9f9;
+      border-radius: 8px;
     }
     .order-item-img {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 6px;
       object-fit: cover;
+      flex-shrink: 0;
     }
-    .order-item-details { flex: 1; }
+    .order-item-details { flex: 1; min-width: 0; }
     .order-item-name {
       font-size: 0.8rem;
       font-weight: 500;
       color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .order-item-qty { font-size: 0.7rem; color: #888; }
+    .order-item-variant {
+      font-size: 0.7rem;
+      color: #ff5722;
+      background: #fff3e0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 2px;
+    }
+    .order-item-qty { 
+      font-size: 0.7rem; 
+      color: #666;
+      margin-top: 2px;
+    }
     .order-item-price {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 600;
+      color: #333;
+      text-align: right;
+    }
+    .order-summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px dashed #eee;
+      margin-top: 4px;
+    }
+    .order-buyer-info {
+      font-size: 0.7rem;
+      color: #666;
+    }
+    .order-total {
+      font-size: 0.9rem;
+      font-weight: 700;
       color: #ff5722;
     }
     .order-actions {
@@ -648,15 +695,16 @@
     <button onclick="document.getElementById('edit-name-container').classList.add('active')">Complete Now</button>
   </div>
 
-  <!-- Balance Card -->
+  <!-- Balance Card (Read-only Display) -->
   <div class="balance-card">
     <div class="balance-info">
-      <h4>Account Balance</h4>
+      <h4>💰 Your Balance</h4>
       <div class="balance-amount" id="account-balance">KES 0.00</div>
+      <small style="opacity: 0.8; font-size: 0.7rem;">Tap Deposit to add funds</small>
     </div>
-    <button class="balance-toggle" id="toggle-balance">
-      <i class="fas fa-eye"></i>
-    </button>
+    <a href="deposit.html" class="balance-toggle" style="text-decoration: none;">
+      <i class="fas fa-plus"></i>
+    </a>
   </div>
 
   <!-- Quick Actions -->
@@ -669,9 +717,9 @@
       <i class="fas fa-plus-circle"></i>
       <span>Deposit</span>
     </a>
-    <a href="withdraw.html" class="quick-action">
-      <i class="fas fa-money-bill-wave"></i>
-      <span>Withdraw</span>
+    <a href="orderTracking.html" class="quick-action">
+      <i class="fas fa-truck"></i>
+      <span>Orders</span>
     </a>
     <a href="listing.html" class="quick-action">
       <i class="fas fa-store"></i>
@@ -684,6 +732,7 @@
     <div class="section-header">
       <h3><i class="fas fa-user"></i> Personal Info</h3>
     </div>
+    <p style="font-size: 0.7rem; color: #888; padding: 8px 12px 0; margin: 0;">✅ Keep your info updated so sellers can reach you easily</p>
     <div class="info-row">
       <div>
         <div class="info-label">Full Name</div>
@@ -817,6 +866,10 @@
     const EDIT_LOCK_DURATION = 24 * 60 * 60 * 1000;
     let currentUserId = null;
     let balanceVisible = true;
+    
+    // Seller orders state (moved to top to avoid hoisting issues)
+    let allSellerOrders = [];
+    let currentOrderFilter = 'all';
 
     // Toast notification function
     function showToast(message, type = 'info') {
@@ -904,7 +957,7 @@
         ? [userData.specificLocation, ...locationParts, userData.region].filter(Boolean).join(', ')
         : 'Not Set';
 
-      const balance = userData.balance || 0;
+      const balance = userData.walletBalance || 0;
       document.getElementById('account-balance').textContent = `KES ${balance.toLocaleString()}`;
 
       // Show profile prompt if incomplete
@@ -948,15 +1001,6 @@
       } catch (e) {
         showNotification("Failed to update picture", "error");
       }
-    });
-
-    // Balance toggle
-    document.getElementById('toggle-balance').addEventListener('click', () => {
-      const balanceEl = document.getElementById('account-balance');
-      const icon = document.querySelector('#toggle-balance i');
-      balanceVisible = !balanceVisible;
-      balanceEl.classList.toggle('hidden', !balanceVisible);
-      icon.className = balanceVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
     });
 
     // Name editing
@@ -1126,10 +1170,27 @@
     // Logout
     document.getElementById('logout-btn').addEventListener('click', async (e) => {
       e.preventDefault();
-      if (confirm('Are you sure you want to logout?')) {
+      // Show logout confirmation modal
+      const modal = document.createElement('div');
+      modal.className = 'logout-modal-overlay';
+      modal.innerHTML = `
+        <div class=\"logout-modal\" style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
+          <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
+            <i class=\"fas fa-sign-out-alt\" style=\"font-size:48px;color:#ff5722;margin-bottom:16px;\"></i>
+            <h3 style=\"margin:0 0 8px;color:#333;\">Logout</h3>
+            <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Are you sure you want to logout?</p>
+            <div style=\"display:flex;gap:12px;\">
+              <button onclick=\"this.closest('.logout-modal').remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;font-weight:500;\">Cancel</button>
+              <button id=\"confirmLogoutBtn\" style=\"flex:1;padding:12px;border:none;background:#ff5722;color:white;border-radius:8px;cursor:pointer;font-weight:500;\">Logout</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      document.getElementById('confirmLogoutBtn').addEventListener('click', async () => {
         await signOut(auth);
         window.location.href = 'login.html';
-      }
+      });
     });
 
     // Lock helpers
@@ -1163,9 +1224,6 @@
     }
 
     // Seller Orders
-    let allSellerOrders = [];
-    let currentOrderFilter = 'all';
-
     async function loadSellerOrders(uid) {
       try {
         const ordersQuery = query(collection(db, "Orders"), where("sellerId", "==", uid));
@@ -1212,31 +1270,53 @@
       let html = '';
       filteredOrders.slice(0, 8).forEach(order => {
         const status = order.status || order.orderStatus || 'pending';
-        // Get the first item info - check all possible field names
-        const firstItem = order.items?.[0] || {};
-        const itemName = firstItem.productName || firstItem.name || order.itemName || 'Product';
-        const itemImage = firstItem.imageUrl || firstItem.image || firstItem.photoTraceUrl || order.itemImage || 'images/product-placeholder.png';
-        const qty = firstItem.quantity || order.quantity || 1;
-        const total = order.totalAmount || order.total || firstItem.totalPrice || 0;
+        const total = order.totalAmount || order.total || 0;
         const orderId = (order.orderId || order.id).slice(-6).toUpperCase();
         const buyerName = order.buyerDetails?.name || 'Customer';
+        const buyerPhone = order.buyerDetails?.phone || '';
         const orderDate = order.createdAt?.toDate?.() || (order.createdAt ? new Date(order.createdAt) : new Date());
-        const itemCount = order.items?.length || 1;
+        const items = order.items || [];
+        const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+
+        // Build items preview (show up to 3 items)
+        const itemsHtml = items.slice(0, 3).map(item => {
+          const name = item.productName || item.name || 'Product';
+          const image = item.imageUrl || item.image || 'images/product-placeholder.png';
+          const qty = item.quantity || 1;
+          const price = item.pricePerUnit || item.price || 0;
+          const variation = item.selectedVariation;
+          const variantText = variation ? (typeof variation === 'object' ? `${variation.title || ''}: ${variation.attr_name || variation.value || ''}` : variation) : '';
+          
+          return `
+            <div class="order-item-row">
+              <img src="${image}" class="order-item-img" onerror="this.src='images/product-placeholder.png'" alt="${name}">
+              <div class="order-item-details">
+                <div class="order-item-name">${name}</div>
+                ${variantText ? `<span class="order-item-variant">${variantText}</span>` : ''}
+                <div class="order-item-qty">Qty: ${qty} × KES ${price.toLocaleString()}</div>
+              </div>
+              <div class="order-item-price">KES ${(price * qty).toLocaleString()}</div>
+            </div>
+          `;
+        }).join('');
+
+        const moreItems = items.length > 3 ? `<div style="font-size:0.7rem;color:#666;text-align:center;padding:4px;">+${items.length - 3} more item(s)</div>` : '';
 
         html += `
           <div class="order-card" style="cursor: pointer;" onclick="showOrderDetails('${order.id}')">
             <div class="order-card-header">
-              <span class="order-id">#${orderId}</span>
+              <span class="order-id">#${orderId} • ${orderDate.toLocaleDateString()}</span>
               <span class="order-status ${status.toLowerCase()}">${status}</span>
             </div>
             <div class="order-card-body">
-              <img src="${itemImage}" class="order-item-img" onerror="this.src='images/product-placeholder.png'" alt="${itemName}">
-              <div class="order-item-details">
-                <div class="order-item-name">${itemName}${itemCount > 1 ? ` +${itemCount-1} more` : ''}</div>
-                <div class="order-item-qty">Qty: ${qty} • ${buyerName}</div>
-                <div style="font-size: 0.65rem; color: #999;">${orderDate.toLocaleDateString()}</div>
+              <div class="order-items-preview">
+                ${itemsHtml}
+                ${moreItems}
               </div>
-              <div class="order-item-price">KES ${total.toLocaleString()}</div>
+              <div class="order-summary-row">
+                <span class="order-buyer-info"><i class="fas fa-user"></i> ${buyerName} ${buyerPhone ? '• ' + buyerPhone : ''}</span>
+                <span class="order-total">${totalQty} item(s) • KES ${total.toLocaleString()}</span>
+              </div>
             </div>
             ${renderOrderActions(order)}
           </div>
@@ -1255,7 +1335,23 @@
       });
       container.querySelectorAll('.btn-cancel-order').forEach(btn => {
         btn.addEventListener('click', () => {
-          if (confirm('Cancel this order?')) updateOrderStatus(btn.dataset.orderId, 'cancelled');
+          // Show cancel confirmation modal
+          const orderId = btn.dataset.orderId;
+          const modal = document.createElement('div');
+          modal.innerHTML = `
+            <div style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
+              <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
+                <i class=\"fas fa-times-circle\" style=\"font-size:48px;color:#f44336;margin-bottom:16px;\"></i>
+                <h3 style=\"margin:0 0 8px;color:#333;\">Cancel Order</h3>
+                <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Are you sure you want to cancel this order?</p>
+                <div style=\"display:flex;gap:12px;\">
+                  <button onclick=\"this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;\">No, Keep</button>
+                  <button onclick=\"updateOrderStatus('${orderId}', 'cancelled');this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:none;background:#f44336;color:white;border-radius:8px;cursor:pointer;\">Cancel Order</button>
+                </div>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modal.firstElementChild);
         });
       });
     }
@@ -1301,18 +1397,32 @@
               <p><i class="fas fa-home"></i> ${order.buyerDetails?.deliveryAddress || 'N/A'}</p>
             </div>
             <div class="order-detail-section">
-              <h4>Items Sold</h4>
-              ${order.items?.map(item => `
-                <div class="order-detail-item">
-                  <img src="${item.imageUrl || 'images/product-placeholder.png'}" alt="${item.productName || item.name}" onerror="this.src='images/product-placeholder.png'">
-                  <div class="order-detail-item-info">
-                    <strong>${item.productName || item.name || 'Product'}</strong>
-                    ${item.selectedVariation ? `<small>${item.selectedVariation.title}: ${item.selectedVariation.attr_name}</small>` : ''}
-                    <span>Qty: ${item.quantity} × KES ${(item.pricePerUnit || item.price || 0).toLocaleString()}</span>
+              <h4>Items Sold (${order.items?.length || 0})</h4>
+              ${order.items?.map(item => {
+                const name = item.productName || item.name || 'Product';
+                const qty = item.quantity || 1;
+                const price = item.pricePerUnit || item.price || 0;
+                const variation = item.selectedVariation;
+                let variantDisplay = '';
+                if (variation) {
+                  if (typeof variation === 'object') {
+                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${variation.title || 'Variant'}: ${variation.attr_name || variation.value || ''}</div>`;
+                  } else {
+                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${variation}</div>`;
+                  }
+                }
+                return `
+                <div class="order-detail-item" style="background:#f9f9f9;padding:10px;border-radius:8px;margin-bottom:8px;">
+                  <img src="${item.imageUrl || 'images/product-placeholder.png'}" alt="${name}" onerror="this.src='images/product-placeholder.png'" style="width:50px;height:50px;border-radius:6px;object-fit:cover;">
+                  <div class="order-detail-item-info" style="flex:1;margin-left:10px;">
+                    <strong style="font-size:0.85rem;">${name}</strong>
+                    ${variantDisplay}
+                    <div style="font-size:0.8rem;color:#666;"><i class="fas fa-box"></i> Qty: <strong>${qty}</strong> × KES ${price.toLocaleString()}</div>
                   </div>
-                  <div class="order-detail-item-price">KES ${(item.totalPrice || 0).toLocaleString()}</div>
+                  <div class="order-detail-item-price" style="font-weight:700;color:#333;">KES ${(price * qty).toLocaleString()}</div>
                 </div>
-              `).join('') || '<p>No item details</p>'}
+              `;
+              }).join('') || '<p>No item details</p>'}
             </div>
             <div class="order-detail-section">
               <h4>Payment</h4>

@@ -5,6 +5,7 @@ import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { counties } from './js/locationData.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
+import authModal from './js/authModal.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -74,7 +75,15 @@ onAuthStateChanged(auth, async (user) => {
     }
     LOCKED_FIELDS.forEach(updateEditButtonState);
   } else {
-    window.location.href = 'login.html';
+    // Show login modal with cancel option
+    authModal.show({
+      title: 'Login Required',
+      message: 'Sign in to view and manage your profile',
+      icon: 'fa-user',
+      feature: 'access your profile',
+      allowCancel: true,
+      cancelRedirect: 'index.html'
+    });
   }
 });
 

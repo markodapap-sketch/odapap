@@ -2,6 +2,7 @@ import { app } from "./js/firebase.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, collection, query, where, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { showNotification } from './notifications.js';
+import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -93,13 +94,18 @@ async function loadRelatedProducts(category, currentProductId) {
         const product = doc.data();
         const productEl = document.createElement('div');
         productEl.className = 'related-product-card';
+        
+        const safeImageUrl = sanitizeUrl(product.imageUrls?.[0], 'images/product-placeholder.png');
+        const safeName = escapeHtml(product.name || 'Product');
+        const safeId = encodeURIComponent(doc.id);
+        
         productEl.innerHTML = `
-            <img src="${product.imageUrls[0]}" alt="${product.name}">
-            <h3>${product.name}</h3>
-            <p>KES ${product.price}</p>
+            <img src="${safeImageUrl}" alt="${safeName}">
+            <h3>${safeName}</h3>
+            <p>KES ${(product.price || 0).toLocaleString()}</p>
         `;
         productEl.onclick = () => {
-            window.location.href = `product.html?id=${doc.id}`;
+            window.location.href = `product.html?id=${safeId}`;
         };
         relatedContainer.appendChild(productEl);
     });

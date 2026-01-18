@@ -1171,6 +1171,7 @@ a.info-tag:hover {
 }
 
 .error-message {
+    display: none; /* Hidden by default, shown via JS when error occurs */
     background: #fef2f2;
     color: #dc2626;
     padding: 20px;
@@ -1386,4 +1387,116 @@ a.info-tag:hover {
         width: 32px;
         height: 36px;
     }
+}
+
+/* Login Prompt Modal */
+.login-prompt-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.login-prompt-content {
+    background: white;
+    padding: 32px;
+    border-radius: var(--radius-lg);
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: var(--shadow-lg);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.login-prompt-content .modal-icon {
+    font-size: 48px;
+    color: var(--primary);
+    margin-bottom: 16px;
+}
+
+.login-prompt-content h3 {
+    margin: 0 0 12px;
+    font-size: 20px;
+    color: var(--text-primary);
+}
+
+.login-prompt-content p {
+    margin: 0 0 24px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.login-prompt-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.login-prompt-actions .signup-btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: var(--radius);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.login-prompt-actions .signup-btn:hover {
+    background: var(--primary-dark);
+}
+
+.login-prompt-actions .login-link-btn {
+    background: transparent;
+    color: var(--primary);
+    border: 2px solid var(--primary);
+    padding: 12px 24px;
+    border-radius: var(--radius);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.login-prompt-actions .login-link-btn:hover {
+    background: var(--primary-bg);
+}
+
+.login-prompt-actions .continue-btn {
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    padding: 12px;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.login-prompt-actions .continue-btn:hover {
+    color: var(--text-primary);
 }
