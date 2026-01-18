@@ -5,6 +5,7 @@
 
 import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./firebase.js";
+import { escapeHtml, sanitizeUrl } from './sanitize.js';
 
 const db = getFirestore(app);
 
@@ -244,16 +245,20 @@ async function performSearch(query, container, config) {
   if (results.length > 0) {
     html += `<div class="search-section">
       <div class="search-section-title"><i class="fas fa-box"></i> Products</div>
-      ${results.slice(0, config.maxSuggestions).map(item => `
-        <div class="search-suggestion-item product" onclick="window.location.href='product.html?id=${item.id}'">
-          <img src="${item.image}" alt="" class="suggestion-image" onerror="this.src='images/product-placeholder.png'">
+      ${results.slice(0, config.maxSuggestions).map(item => {
+        const safeId = encodeURIComponent(item.id || '');
+        const safeImage = sanitizeUrl(item.image, 'images/product-placeholder.png');
+        const safeBrand = escapeHtml(item.brand || '');
+        return `
+        <div class="search-suggestion-item product" onclick="window.location.href='product.html?id=${safeId}'">
+          <img src="${safeImage}" alt="" class="suggestion-image" onerror="this.src='images/product-placeholder.png'">
           <div class="suggestion-info">
-            <span class="suggestion-name">${highlightMatch(item.name, queryLower)}</span>
+            <span class="suggestion-name">${highlightMatch(item.name || '', queryLower)}</span>
             <span class="suggestion-price">KES ${(item.price || 0).toLocaleString()}</span>
           </div>
-          ${item.brand ? `<span class="suggestion-brand">${item.brand}</span>` : ''}
+          ${safeBrand ? `<span class="suggestion-brand">${safeBrand}</span>` : ''}
         </div>
-      `).join('')}
+      `}).join('')}
     </div>`;
   }
   
@@ -352,9 +357,13 @@ async function getCachedListings() {
 }
 
 function highlightMatch(text, query) {
-  if (!text || !query) return text;
-  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return text.replace(regex, '<mark>$1</mark>');
+  if (!text || !query) return escapeHtml(text || '');
+  // First escape the text to prevent XSS
+  const safeText = escapeHtml(text);
+  const safeQuery = escapeHtml(query);
+  // Then highlight matches
+  const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return safeText.replace(regex, '<mark>$1</mark>');
 }
 
 function updateSelection(items, index) {

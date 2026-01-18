@@ -230,6 +230,9 @@ export class MpesaPaymentManager {
             this.startPolling(transactionId);
         });
         
+        // Also start active status checking via API (as backup for callback failures)
+        this.startActiveStatusCheck(transactionId);
+        
         // Set timeout for payment window
         this.timeoutTimer = setTimeout(() => {
             this.handleTimeout();
@@ -237,31 +240,213 @@ export class MpesaPaymentManager {
     }
 
     /**
+     * Actively check payment status via M-Pesa API
+     * This handles cases where callback doesn't reach the server
+     */
+    startActiveStatusCheck(transactionId) {
+        // Wait 15 seconds then start checking
+        setTimeout(() => {
+            this.activeCheckTimer = setInterval(async () => {
+                await this.queryPaymentStatus(transactionId);
+            }, 10000); // Check every 10 seconds
+        }, 15000);
+    }
+
+    /**
+     * Query M-Pesa API for payment status
+     */
+    async queryPaymentStatus(transactionId) {
+        try {
+            // Get the transaction to find checkoutRequestId
+            const docRef = doc(db, 'MpesaTransactions', transactionId);
+            const snapshot = await getDoc(docRef);
+            
+            if (!snapshot.exists()) return;
+            
+            const data = snapshot.data();
+            
+            // Skip if already completed or failed
+            if (['completed', 'success', 'failed', 'cancelled'].includes(data.status)) {
+                this.stopActiveStatusCheck();
+                return;
+            }
+            
+            const checkoutRequestId = data.checkoutRequestId;
+            if (!checkoutRequestId || checkoutRequestId.startsWith('FALLBACK')) return;
+            
+            console.log('🔍 Querying M-Pesa status for:', checkoutRequestId);
+            
+            const response = await this.callBackendAPI('/api/mpesa/query', {
+                checkoutRequestId
+            }, 1); // Only 1 retry for query
+            
+            if (response.success && response.data) {
+                const resultCode = response.data.ResultCode;
+                
+                if (resultCode === '0' || resultCode === 0) {
+                    // Payment successful - the callback should arrive with the receipt
+                    // First check if the document already has the receipt from callback
+                    const currentDoc = await getDoc(docRef);
+                    const currentData = currentDoc.exists() ? currentDoc.data() : {};
+                    
+                    // If callback already processed and has receipt, use that
+                    if (currentData.mpesaReceiptNumber) {
+                        console.log('📝 M-Pesa Receipt (from callback):', currentData.mpesaReceiptNumber);
+                        // Just update status if needed
+                        if (currentData.status !== 'completed') {
+                            await updateDoc(docRef, {
+                                status: 'completed',
+                                resultCode: 0,
+                                updatedAt: serverTimestamp()
+                            });
+                        }
+                    } else {
+                        // Try to extract from query response (some sandbox environments)
+                        let mpesaReceiptNumber = response.data.MpesaReceiptNumber || 
+                                                  response.data.mpesaReceiptNumber ||
+                                                  null;
+                        
+                        // Check CallbackMetadata if available
+                        const callbackMetadata = response.data.CallbackMetadata?.Item || [];
+                        for (const item of callbackMetadata) {
+                            if (item.Name === 'MpesaReceiptNumber') {
+                                mpesaReceiptNumber = item.Value;
+                                break;
+                            }
+                        }
+                        
+                        console.log('📝 M-Pesa Receipt (from query):', mpesaReceiptNumber || 'pending callback');
+                        
+                        // Update Firestore - receipt will come from callback
+                        await updateDoc(docRef, {
+                            status: 'completed',
+                            resultCode: 0,
+                            resultDesc: 'Payment confirmed via query',
+                            ...(mpesaReceiptNumber && { mpesaReceiptNumber }),
+                            queryConfirmedAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                    console.log('✅ Payment confirmed via API query');
+                } else if (resultCode !== undefined && resultCode !== '1032' && resultCode !== 1032) {
+                    // Failed (but not user cancellation which we might want to retry)
+                    await updateDoc(docRef, {
+                        status: 'failed',
+                        resultCode: parseInt(resultCode),
+                        resultDesc: response.data.ResultDesc || 'Payment failed',
+                        updatedAt: serverTimestamp()
+                    });
+                    console.log('❌ Payment failed via API query:', response.data.ResultDesc);
+                }
+            }
+        } catch (error) {
+            // Query failed - this is ok, callback might still come through
+            console.log('Query status check failed (will retry):', error.message);
+        }
+    }
+
+    /**
+     * Stop active status checking
+     */
+    stopActiveStatusCheck() {
+        if (this.activeCheckTimer) {
+            clearInterval(this.activeCheckTimer);
+            this.activeCheckTimer = null;
+        }
+    }
+
+    /**
+     * Manually check payment status (user-initiated)
+     */
+    async checkPaymentStatus() {
+        if (!this.currentTransaction?.id) {
+            throw new Error('No active transaction to check');
+        }
+        
+        this.onStatusChange('checking', 'Checking payment status...');
+        
+        try {
+            await this.queryPaymentStatus(this.currentTransaction.id);
+            
+            // Re-fetch the transaction to get updated status
+            const docRef = doc(db, 'MpesaTransactions', this.currentTransaction.id);
+            const snapshot = await getDoc(docRef);
+            
+            if (snapshot.exists()) {
+                const data = snapshot.data();
+                
+                if (data.status === 'completed' || data.status === 'success') {
+                    return { success: true, status: 'completed', data };
+                } else if (data.status === 'failed' || data.status === 'cancelled') {
+                    return { success: false, status: data.status, message: data.resultDesc };
+                } else {
+                    return { success: false, status: 'pending', message: 'Payment is still being processed' };
+                }
+            }
+        } catch (error) {
+            console.error('Status check error:', error);
+            throw new Error('Could not check payment status. Please try again or enter M-Pesa code manually.');
+        }
+    }
+
+    /**
      * Handle status updates from Firestore
      */
     handleStatusUpdate(data) {
         const status = data.status;
+        const resultCode = data.resultCode;
+        
+        // User-friendly messages for specific M-Pesa result codes
+        const resultMessages = {
+            1032: 'You cancelled the payment request',
+            1037: 'Payment request timed out. Please try again.',
+            2001: 'Wrong M-Pesa PIN entered',
+            1: 'Insufficient M-Pesa balance',
+            1025: 'Invalid phone number format',
+            1019: 'Transaction expired. Please try again.'
+        };
         
         switch (status) {
             case 'completed':
             case 'success':
                 this.cleanup();
                 this.onStatusChange('completed', 'Payment successful!');
-                this.onPaymentComplete({
-                    transactionId: this.currentTransaction.id,
-                    mpesaReceiptNumber: data.mpesaReceiptNumber,
+                
+                // Get receipt from Firestore data (callback updates this)
+                const mpesaReceiptNumber = data.mpesaReceiptNumber || data.mpesaCode || null;
+                
+                console.log('Payment complete:', {
+                    transactionId: this.currentTransaction?.id,
+                    mpesaReceiptNumber: mpesaReceiptNumber,
                     amount: data.amount,
                     phoneNumber: data.phoneNumber
+                });
+                
+                this.onPaymentComplete({
+                    transactionId: this.currentTransaction?.id,
+                    mpesaReceiptNumber: mpesaReceiptNumber,
+                    mpesaCode: mpesaReceiptNumber, // Alias for compatibility
+                    amount: data.amount,
+                    phoneNumber: data.phoneNumber,
+                    // Include raw transaction data for audit
+                    rawTransactionData: {
+                        checkoutRequestId: data.checkoutRequestId,
+                        merchantRequestId: data.merchantRequestId,
+                        transactionDate: data.transactionDate,
+                        completedAt: data.completedAt
+                    }
                 });
                 break;
                 
             case 'failed':
             case 'cancelled':
                 this.cleanup();
-                this.onStatusChange('failed', data.resultDescription || 'Payment failed');
+                const userMessage = resultMessages[resultCode] || data.resultDescription || 'Payment was not completed';
+                this.onStatusChange('failed', userMessage);
                 this.onPaymentFailed({
                     transactionId: this.currentTransaction?.id,
-                    reason: data.resultDescription || 'Payment was not completed'
+                    reason: userMessage,
+                    resultCode: resultCode
                 });
                 break;
                 
@@ -537,6 +722,8 @@ export class MpesaPaymentManager {
             clearTimeout(this.timeoutTimer);
             this.timeoutTimer = null;
         }
+        
+        this.stopActiveStatusCheck();
     }
 
     /**
