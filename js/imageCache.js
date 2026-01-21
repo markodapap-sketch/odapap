@@ -314,9 +314,124 @@ export function preloadImages(urls) {
     });
 }
 
+/**
+ * Enhanced image loading with retry for slow connections
+ * @param {HTMLImageElement} img - Image element
+ * @param {string} src - Source URL
+ * @param {Object} options - Options
+ */
+export function loadImageWithRetry(img, src, options = {}) {
+    const { maxRetries = 2, timeout = 15000, fallbackType = 'product' } = options;
+    let retries = 0;
+    
+    // Add loading state
+    img.classList.add('img-loading');
+    img.dataset.loading = 'true';
+    
+    const attemptLoad = () => {
+        const tempImg = new Image();
+        let timeoutId = null;
+        
+        const cleanup = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            tempImg.onload = null;
+            tempImg.onerror = null;
+        };
+        
+        // Timeout handler for slow connections
+        timeoutId = setTimeout(() => {
+            cleanup();
+            if (retries < maxRetries) {
+                retries++;
+                console.log(`[ImageLoader] Retry ${retries}/${maxRetries} for:`, src.substring(0, 50));
+                attemptLoad();
+            } else {
+                // All retries failed - use placeholder
+                img.src = PLACEHOLDERS[fallbackType] || PLACEHOLDERS.product;
+                img.classList.remove('img-loading');
+                img.classList.add('img-failed');
+                delete img.dataset.loading;
+                markUrlFailed(src);
+            }
+        }, timeout);
+        
+        tempImg.onload = () => {
+            cleanup();
+            img.src = src;
+            img.classList.remove('img-loading');
+            img.classList.add('img-loaded');
+            delete img.dataset.loading;
+        };
+        
+        tempImg.onerror = () => {
+            cleanup();
+            if (retries < maxRetries) {
+                retries++;
+                setTimeout(attemptLoad, 1000 * retries); // Exponential backoff
+            } else {
+                img.src = PLACEHOLDERS[fallbackType] || PLACEHOLDERS.product;
+                img.classList.remove('img-loading');
+                img.classList.add('img-failed');
+                delete img.dataset.loading;
+                markUrlFailed(src);
+            }
+        };
+        
+        tempImg.src = src;
+    };
+    
+    attemptLoad();
+}
+
+/**
+ * Check network connection quality
+ * @returns {string} 'fast', 'slow', or 'offline'
+ */
+export function getConnectionQuality() {
+    if (!navigator.onLine) return 'offline';
+    
+    // Use Network Information API if available
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (connection) {
+        const effectiveType = connection.effectiveType;
+        if (effectiveType === '4g') return 'fast';
+        if (effectiveType === '3g') return 'medium';
+        return 'slow';
+    }
+    
+    return 'unknown';
+}
+
+/**
+ * Initialize connection-aware image loading
+ */
+export function initConnectionAwareLoading() {
+    const quality = getConnectionQuality();
+    
+    // Adjust loading strategy based on connection
+    if (quality === 'slow' || quality === 'offline') {
+        // Reduce image quality or use smaller versions
+        document.body.classList.add('slow-connection');
+        console.log('[ImageLoader] Slow connection detected, optimizing image loading');
+    }
+    
+    // Listen for connection changes
+    if (navigator.connection) {
+        navigator.connection.addEventListener('change', () => {
+            const newQuality = getConnectionQuality();
+            if (newQuality === 'slow' || newQuality === 'offline') {
+                document.body.classList.add('slow-connection');
+            } else {
+                document.body.classList.remove('slow-connection');
+            }
+        });
+    }
+}
+
 // Auto-setup global handler on import
 if (typeof window !== 'undefined') {
     setupGlobalImageErrorHandler();
+    initConnectionAwareLoading();
 }
 
 // Export placeholders for direct use
