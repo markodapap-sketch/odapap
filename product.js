@@ -771,6 +771,7 @@ class ProductPage {
     showQuantityModal() {
         const maxStock = this.selectedVariation ? this.selectedVariation.stock : this.product.totalStock;
         const displayPrice = this.selectedVariation?.price || this.product.price;
+        const minOrder = this.product.minOrderQuantity || 1;
         
         const modal = document.createElement('div');
         modal.className = 'quantity-modal';
@@ -778,9 +779,10 @@ class ProductPage {
             <div class="quantity-modal-content">
                 <h3>Select Quantity</h3>
                 <p>Available stock: ${maxStock} units</p>
+                ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
                 <div class="quantity-selector">
                     <button class="qty-btn minus">-</button>
-                    <input type="number" id="buyNowQuantity" value="1" min="1" max="${maxStock}">
+                    <input type="number" id="buyNowQuantity" value="${minOrder}" min="${minOrder}" max="${maxStock}">
                     <button class="qty-btn plus">+</button>
                 </div>
                 <div class="quantity-total">
@@ -809,7 +811,7 @@ class ProductPage {
         };
 
         minusBtn.addEventListener('click', () => {
-            if (parseInt(quantityInput.value) > 1) {
+            if (parseInt(quantityInput.value) > minOrder) {
                 quantityInput.value = parseInt(quantityInput.value) - 1;
                 updateTotal();
             }
