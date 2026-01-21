@@ -9,6 +9,7 @@ import { initializeImageSliders } from './imageSlider.js';
 import { setupGlobalImageErrorHandler, getImageUrl, PLACEHOLDERS, initLazyLoading } from './js/imageCache.js';
 import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
 import { initializePWA, requestNotificationPermission } from './js/pwa.js';
+import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons, getSkeletonCards } from './loader.js';
 
 // Firebase
 const auth = getAuth(app);
@@ -1086,6 +1087,7 @@ function showQuantityModal(id, listing, isCart) {
   let selected = options[0] || null;
   let price = selected?.price || selected?.originalPrice || listing.minPrice;
   let maxStock = selected?.stock || listing.stock || 10;
+  const minOrder = listing.minOrderQuantity || 1;
   
   const modal = document.createElement('div');
   modal.className = 'quantity-modal';
@@ -1093,6 +1095,7 @@ function showQuantityModal(id, listing, isCart) {
     <div class="quantity-modal-content">
       <h3>Select Options</h3>
       <p>Stock: <strong id="modalStock">${maxStock}</strong> units</p>
+      ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
       ${options.length ? `
         <div class="modal-variations">
           <h4>Select Option:</h4>
@@ -1111,7 +1114,7 @@ function showQuantityModal(id, listing, isCart) {
       ` : ''}
       <div class="quantity-selector">
         <button class="qty-btn" id="qtyMinus">-</button>
-        <input type="number" id="qtyInput" value="1" min="1" max="${maxStock}">
+        <input type="number" id="qtyInput" value="${minOrder}" min="${minOrder}" max="${maxStock}">
         <button class="qty-btn" id="qtyPlus">+</button>
       </div>
       <div class="quantity-total">Total: <span id="qtyTotal">KES ${price.toLocaleString()}</span></div>
@@ -1145,7 +1148,7 @@ function showQuantityModal(id, listing, isCart) {
   });
   
   modal.querySelector('#qtyMinus').onclick = () => {
-    if (parseInt(input.value) > 1) { input.value = parseInt(input.value) - 1; updateTotal(); }
+    if (parseInt(input.value) > minOrder) { input.value = parseInt(input.value) - 1; updateTotal(); }
   };
   modal.querySelector('#qtyPlus').onclick = () => {
     if (parseInt(input.value) < maxStock) { input.value = parseInt(input.value) + 1; updateTotal(); }
@@ -1301,6 +1304,13 @@ const badgeObserver = new MutationObserver(syncBadgeCounts);
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // Show skeleton loaders immediately for fast visual feedback
+  showSkeletons();
+  
+  // Show non-blocking progress toast
+  showLoader('main');
+  updateLoaderMessage('Loading your feed...', 'stream');
+  
   // Initialize PWA (service worker, install prompt, push notifications)
   initializePWA().then(() => {
     console.log('[App] PWA initialized');
@@ -1315,9 +1325,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupSearch();
   
   // Load hero slides first for fast initial display
+  setProgress(10);
+  updateLoaderMessage('Loading banner...', 'image');
   loadHeroSlides();
   
-  await Promise.all([loadCategories(), loadProducts(), loadFeaturedItems()]);
+  setProgress(30);
+  updateLoaderMessage('Fetching categories...', 'th-large');
+  
+  try {
+    await Promise.all([loadCategories(), loadProducts(), loadFeaturedItems()]);
+    setProgress(90);
+    updateLoaderMessage('Almost ready...', 'check');
+  } catch (err) {
+    console.error('Load error:', err);
+    updateLoaderMessage('Loaded with some errors', 'exclamation-triangle');
+  }
+  
+  // Mark containers as loaded
+  ['listings-container', 'featuredItems', 'categoryStrip', 'carouselTrack'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.dataset.loaded = 'true';
+  });
+  
+  // Hide loader
+  hideLoader();
   
   // Initialize lazy loading for images
   initLazyLoading();

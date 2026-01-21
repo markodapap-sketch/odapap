@@ -23,6 +23,20 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="css/dynamicSearch.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <style>
+    /* Critical skeleton styles - show immediately before JS loads */
+    .skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:skeletonShimmer 1.5s infinite;border-radius:8px}
+    @keyframes skeletonShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .skeleton-card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);margin-bottom:16px}
+    .skeleton-card .skeleton-image{width:100%;aspect-ratio:1;background:linear-gradient(90deg,#f5f5f5 25%,#eee 50%,#f5f5f5 75%);background-size:200% 100%;animation:skeletonShimmer 1.5s infinite}
+    .skeleton-card .skeleton-content{padding:12px}
+    .skeleton-card .skeleton-line{height:14px;margin-bottom:8px;border-radius:4px}
+    .skeleton-card .skeleton-line.short{width:60%}
+    .skeleton-card .skeleton-line.medium{width:80%}
+    .skeleton-card .skeleton-line.full{width:100%}
+    .img-placeholder{background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:24px;min-height:150px}
+    .img-placeholder::before{content:'\f03e';font-family:'Font Awesome 5 Free';font-weight:900}
+  </style>
   <script src="./js/firebase.js" type="module"></script>
   <script src="index.js" type="module"></script>
   <!-- Hidden SEO Content -->
@@ -199,7 +213,13 @@
           <option value="newest">Newest</option>
         </select>
       </div>
-      <div class="listings-container" id="listings-container"></div>
+      <div class="listings-container" id="listings-container">
+        <!-- Initial skeleton placeholders for instant visual feedback -->
+        <div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-content"><div class="skeleton-line full skeleton"></div><div class="skeleton-line medium skeleton"></div><div class="skeleton-line short skeleton"></div></div></div>
+        <div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-content"><div class="skeleton-line full skeleton"></div><div class="skeleton-line medium skeleton"></div><div class="skeleton-line short skeleton"></div></div></div>
+        <div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-content"><div class="skeleton-line full skeleton"></div><div class="skeleton-line medium skeleton"></div><div class="skeleton-line short skeleton"></div></div></div>
+        <div class="skeleton-card"><div class="skeleton-image skeleton"></div><div class="skeleton-content"><div class="skeleton-line full skeleton"></div><div class="skeleton-line medium skeleton"></div><div class="skeleton-line short skeleton"></div></div></div>
+      </div>
     </section>
   </main>
 

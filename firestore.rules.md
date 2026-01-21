@@ -102,17 +102,28 @@ service cloud.firestore {
     
     // Messages collection - Users can access messages they sent or received
     match /Messages/{messageId} {
-      // Allow read if user is sender or recipient
+      // Helper function to check if user is participant in chat
+      function isParticipant(chatId) {
+        return chatId.matches('.*' + request.auth.uid + '.*');
+      }
+      
+      // Allow read if user is sender, buyer, seller, recipient, or participant in chatId
       allow read: if request.auth != null && 
                     (resource.data.senderId == request.auth.uid || 
-                     resource.data.recipientId == request.auth.uid);
+                     resource.data.buyerId == request.auth.uid ||
+                     resource.data.sellerId == request.auth.uid ||
+                     resource.data.recipientId == request.auth.uid ||
+                     isParticipant(resource.data.chatId));
       // Allow create if user is the sender
       allow create: if request.auth != null && 
                       request.resource.data.senderId == request.auth.uid;
       // Allow update for marking messages as read
       allow update: if request.auth != null && 
                       (resource.data.senderId == request.auth.uid || 
-                       resource.data.recipientId == request.auth.uid);
+                       resource.data.buyerId == request.auth.uid ||
+                       resource.data.sellerId == request.auth.uid ||
+                       resource.data.recipientId == request.auth.uid ||
+                       isParticipant(resource.data.chatId));
       allow delete: if request.auth != null && 
                       resource.data.senderId == request.auth.uid;
     }
@@ -227,6 +238,14 @@ service cloud.firestore {
                               request.resource.data.userId == request.auth.uid;
       allow delete: if request.auth != null && 
                       (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
+    // Notifications collection - Global notifications from admins
+    match /Notifications/{notifId} {
+      // All authenticated users can read global notifications
+      allow read: if request.auth != null;
+      // Only admins can create, update, or delete notifications
+      allow create, update, delete: if isAdmin();
     }
     
     // SentNotifications collection - Admin notification history

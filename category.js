@@ -18,7 +18,7 @@ import {
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { initializeImageSliders } from './imageSlider.js';
-import { showLoader, hideLoader } from './loader.js';
+import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons, getSkeletonCards } from './loader.js';
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
@@ -238,6 +238,7 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
     let selectedVariation = null;
     let price = getMinPriceFromVariations(listing);
     let maxStock = listing.totalStock || 10;
+    const minOrder = listing.minOrderQuantity || 1;
 
     // Flatten variations with attributes into selectable options
     let allOptions = [];
@@ -291,10 +292,11 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
         <div class="quantity-modal-content">
             <h3>Select Quantity</h3>
             <p>Available stock: <span id="modalStock">${maxStock}</span> units</p>
+            ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
             ${variationsHTML}
             <div class="quantity-selector">
                 <button class="qty-btn minus">-</button>
-                <input type="number" id="buyNowQuantity" value="1" min="1" max="${maxStock}">
+                <input type="number" id="buyNowQuantity" value="${minOrder}" min="${minOrder}" max="${maxStock}">
                 <button class="qty-btn plus">+</button>
             </div>
             <div class="quantity-total">
@@ -343,7 +345,7 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
     };
 
     minusBtn.addEventListener('click', () => {
-        if (parseInt(quantityInput.value) > 1) {
+        if (parseInt(quantityInput.value) > minOrder) {
             quantityInput.value = parseInt(quantityInput.value) - 1;
             updateTotal();
         }
@@ -1203,6 +1205,14 @@ async function loadMegaMenuCategories() {
 
 // Initialize everything when DOM is loaded
 document.addEventListener("DOMContentLoaded", async () => {
+  // Show skeleton loaders and progress toast immediately
+  const listingsContainer = document.getElementById('listings-container');
+  if (listingsContainer) {
+    listingsContainer.innerHTML = getSkeletonCards(8);
+  }
+  showLoader('category');
+  updateLoaderMessage('Loading category...', 'folder-open');
+  
   // Load mega menu categories dynamically
   loadMegaMenuCategories();
   
@@ -1212,9 +1222,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   
   if (category) {
     currentCategory = category;
+    updateLoaderMessage(`Loading ${category}...`, 'boxes');
+    setProgress(20);
     
     // Load all category listings first
     await loadCategoryListings();
+    setProgress(50);
     
     // Check localStorage for saved filters
     const savedFilters = JSON.parse(localStorage.getItem('categoryFilters') || '{}');
@@ -1231,11 +1244,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderBreadcrumb();
   }
   
+  setProgress(70);
+  updateLoaderMessage('Loading products...', 'box');
   await loadFeaturedListings({}, true);
   
+  setProgress(85);
+  updateLoaderMessage('Setting up filters...', 'filter');
   // Render filter cards after listings are loaded
   await renderSubcategoryCards();
   await renderBrandCards();
+  
+  // Mark container as loaded
+  if (listingsContainer) listingsContainer.dataset.loaded = 'true';
+  
+  setProgress(100);
+  hideLoader();
+  
+  // Initialize lazy loading
+  initLazyLoading();
 
   // Setup search event listeners
   if (searchInput) {
