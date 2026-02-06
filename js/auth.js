@@ -73,11 +73,12 @@ export const signUpUser = async (email, phone, password, surveyData = null) => {
     const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
-    // Build user data object
+    // Build user data object — use email prefix as placeholder name
+    const emailPrefix = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim() : 'User';
     const userData = {
       email: user.email,
       phone: phone.trim(),
-      name: "",
+      name: emailPrefix,
       profilePicUrl: "images/profile-placeholder.png",
       createdAt: new Date().toISOString()
     };
@@ -160,10 +161,11 @@ export const signInWithGoogle = async () => {
     
     if (!userDoc.exists()) {
       // New user - create minimal profile, they'll complete it later
+      const emailPrefix = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim() : 'User';
       await setDoc(doc(firestore, "Users", user.uid), {
         email: user.email,
         phone: "",
-        name: user.displayName || "",
+        name: user.displayName || emailPrefix,
         profilePicUrl: user.photoURL || "images/profile-placeholder.png",
         createdAt: new Date().toISOString()
       });
@@ -198,10 +200,11 @@ export const handleGoogleRedirectResult = async () => {
       const userDoc = await getDoc(doc(firestore, "Users", user.uid));
       
       if (!userDoc.exists()) {
+        const emailPrefix = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim() : 'User';
         await setDoc(doc(firestore, "Users", user.uid), {
           email: user.email,
           phone: "",
-          name: user.displayName || "",
+          name: user.displayName || emailPrefix,
           profilePicUrl: user.photoURL || "images/profile-placeholder.png",
           createdAt: new Date().toISOString()
         });

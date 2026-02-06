@@ -797,11 +797,14 @@ export async function checkFreeShipping(orderTotal) {
         
         if (settingsDoc.exists()) {
             const settings = settingsDoc.data();
-            const threshold = settings.freeThreshold || 0;
+            const threshold = settings.freeThreshold || 3000;
             
             if (threshold > 0 && orderTotal >= threshold) {
                 return true;
             }
+        } else {
+            // Default: free shipping for orders KES 3,000+
+            return orderTotal >= 3000;
         }
     } catch (error) {
         console.error('Error checking free shipping:', error);

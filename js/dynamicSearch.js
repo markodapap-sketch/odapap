@@ -81,13 +81,27 @@ export function initDynamicSearch(inputId, options = {}) {
       performSearch(query, suggestionsContainer, config);
     }
     suggestionsContainer.classList.add('active');
+    // On mobile, prevent body scroll when suggestions are open
+    if (window.innerWidth <= 768) {
+      document.body.style.overflow = 'hidden';
+    }
   });
 
   // Blur event - hide suggestions after delay (to allow clicks)
   input.addEventListener('blur', () => {
     setTimeout(() => {
       suggestionsContainer.classList.remove('active');
-    }, 200);
+      document.body.style.overflow = '';
+    }, 250);
+  });
+
+  // On mobile, tap the ::before "back" area to close
+  suggestionsContainer.addEventListener('click', (e) => {
+    if (e.target === suggestionsContainer && window.innerWidth <= 768) {
+      suggestionsContainer.classList.remove('active');
+      document.body.style.overflow = '';
+      input.blur();
+    }
   });
 
   // Keyboard navigation
@@ -116,6 +130,7 @@ export function initDynamicSearch(inputId, options = {}) {
       }
     } else if (e.key === 'Escape') {
       suggestionsContainer.classList.remove('active');
+      document.body.style.overflow = '';
       input.blur();
     }
   });
