@@ -150,6 +150,45 @@
                 </div>
             </div>
 
+            <!-- Quick Actions for Solo Manager -->
+            <div class="card" style="margin-bottom:16px;">
+                <div class="card-header">
+                    <h3><i class="fas fa-bolt" style="color:#f59e0b;"></i> Quick Actions</h3>
+                </div>
+                <div class="card-body" style="padding:12px;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;">
+                        <button class="btn btn-outline" onclick="switchSection('orders')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-shopping-bag" style="font-size:20px;color:#3b82f6;"></i>
+                            Manage Orders
+                        </button>
+                        <button class="btn btn-outline" onclick="switchSection('products')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-box" style="font-size:20px;color:#10b981;"></i>
+                            Products
+                        </button>
+                        <button class="btn btn-outline" onclick="switchSection('notifications')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-bullhorn" style="font-size:20px;color:#f97316;"></i>
+                            Send Notification
+                        </button>
+                        <button class="btn btn-outline" onclick="switchSection('settings')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-images" style="font-size:20px;color:#8b5cf6;"></i>
+                            Hero Slides
+                        </button>
+                        <button class="btn btn-outline" onclick="switchSection('verifications')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-shield-alt" style="font-size:20px;color:#ef4444;"></i>
+                            Verifications
+                        </button>
+                        <button class="btn btn-outline" onclick="switchSection('settings')" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;">
+                            <i class="fas fa-map-marked-alt" style="font-size:20px;color:#06b6d4;"></i>
+                            Delivery Areas
+                        </button>
+                        <a href="delivery.html" class="btn btn-outline" style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;font-size:12px;text-decoration:none;color:inherit;">
+                            <i class="fas fa-truck" style="font-size:20px;color:#16a34a;"></i>
+                            Delivery Board
+                        </a>
+                    </div>
+                </div>
+            </div>
+
             <div class="dashboard-grid">
                 <div class="card">
                     <div class="card-header">
@@ -804,8 +843,8 @@
                             </div>
                             
                             <div class="form-group">
-                                <label>Free Shipping Threshold (KES) <small>(0 = disabled)</small></label>
-                                <input type="number" id="freeShippingThreshold" min="0" placeholder="5000" value="0">
+                                <label>Free Shipping Threshold (KES) <small>(Orders above this amount get free delivery. 0 = disabled)</small></label>
+                                <input type="number" id="freeShippingThreshold" min="0" placeholder="3000" value="3000">
                             </div>
                         </div>
                         
@@ -820,6 +859,23 @@
                         <button class="btn btn-outline btn-sm" id="addShippingZoneBtn" style="margin-top: 15px;">
                             <i class="fas fa-plus"></i> Add Shipping Zone
                         </button>
+                    </div>
+                </div>
+
+                <!-- Delivery Staff Management -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-truck"></i> Delivery Staff</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Add user accounts that can access the <a href="delivery.html" target="_blank">Delivery Dashboard</a> to manage order pickups and deliveries.</p>
+                        <div style="display:flex;gap:8px;margin-bottom:16px;">
+                            <input type="email" id="deliveryStaffEmail" placeholder="Enter user email" style="flex:1;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;">
+                            <button class="btn btn-primary btn-sm" id="addDeliveryStaffBtn"><i class="fas fa-plus"></i> Add</button>
+                        </div>
+                        <div id="deliveryStaffList" style="display:flex;flex-direction:column;gap:8px;">
+                            <div class="loading-spinner"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -1025,6 +1081,24 @@
                     <button type="submit" class="btn btn-primary">Save Slide</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Status Change Modal -->
+    <div class="modal" id="statusModal">
+        <div class="modal-content" style="max-width:400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-exchange-alt"></i> Change Order Status</h3>
+                <button class="close-btn" onclick="closeStatusModal()">&times;</button>
+            </div>
+            <div style="padding:20px;">
+                <p style="margin-bottom:12px;color:var(--gray-600);font-size:14px;">Select new status for this order:</p>
+                <select id="statusSelect" style="width:100%;padding:10px 12px;border:1px solid var(--gray-200);border-radius:var(--radius);font-size:14px;margin-bottom:16px;"></select>
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                    <button class="btn btn-outline" onclick="closeStatusModal()">Cancel</button>
+                    <button class="btn btn-primary" id="confirmStatusBtn" onclick="confirmStatusChange()">Update Status</button>
+                </div>
+            </div>
         </div>
     </div>
 
