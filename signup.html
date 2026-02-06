@@ -424,8 +424,13 @@
 </head>
 <body>
     <div class="signup-container">
-        <h2>Create Account</h2>
-            <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin-bottom: 15px;">📝 Fill in your details to join Oda Pap marketplace</p>
+        <h2>Join Oda Pap</h2>
+        <p style="color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 6px;">🛍️ Mombasa's wholesale marketplace — buy & sell at trade prices</p>
+        <div style="display:flex; justify-content:center; gap:16px; margin-bottom:15px; font-size:11px; color:rgba(255,255,255,0.8);">
+            <span><i class="fas fa-check-circle"></i> Free to join</span>
+            <span><i class="fas fa-shield-alt"></i> Secure</span>
+            <span><i class="fas fa-truck"></i> Fast delivery</span>
+        </div>
         
         <div class="error-display" id="error-display"></div>
         
@@ -438,8 +443,9 @@
             </div>
             <p class="password-hint"><i class="fas fa-info-circle"></i> Minimum 6 characters</p>
             <button type="submit" id="signup-button" class="signup-button">
-                <i class="fas fa-user-plus"></i> Sign Up
+                <i class="fas fa-user-plus"></i> Create Account
             </button>
+            <p style="font-size:11px; color:rgba(255,255,255,0.7); margin-top:10px; line-height:1.4;">By signing up, you agree to our <a href="customer_care.html" style="color:#fff; text-decoration:underline;">Terms of Service</a> and acknowledge our buyer protection policy.</p>
         </form>
         
         <div class="divider">
@@ -616,7 +622,11 @@
 
         // Error display helper
         function showError(message) {
-            errorDisplay.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-exclamation-circle';
+            errorDisplay.textContent = '';
+            errorDisplay.appendChild(icon);
+            errorDisplay.appendChild(document.createTextNode(' ' + message));
             errorDisplay.style.display = 'flex';
             setTimeout(() => {
                 errorDisplay.style.display = 'none';
@@ -649,6 +659,13 @@
             const email = document.getElementById('signup-email-input').value.trim();
             const phone = document.getElementById('signup-phone-input').value.trim();
             const password = signupPasswordInput.value;
+
+            // Validate phone number (Kenyan format)
+            const phoneDigits = phone.replace(/\D/g, '');
+            if (phoneDigits.length < 9 || phoneDigits.length > 13) {
+                showError('Please enter a valid phone number (e.g. 0712345678)');
+                return;
+            }
 
             signupButton.disabled = true;
             signupButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating account...';
@@ -702,6 +719,7 @@
             currentQuestion = 1;
             updateSurveyUI();
             surveyModal.classList.add('active');
+            document.body.style.overflow = 'hidden';
         }
 
         function updateSurveyUI() {
@@ -785,16 +803,19 @@
                         pendingSignupData.password,
                         data
                     );
+                    document.body.style.overflow = '';
                     window.location.href = 'index.html';
                 } else if (pendingSignupData.type === 'google') {
                     // Update Google user with survey data
                     if (data && pendingSignupData.user) {
                         await updateUserSurvey(pendingSignupData.user.uid, data);
                     }
+                    document.body.style.overflow = '';
                     window.location.href = 'complete-profile.html';
                 }
             } catch (error) {
                 surveyModal.classList.remove('active');
+                document.body.style.overflow = '';
                 showError(error.message);
                 nextSurveyBtn.disabled = false;
                 skipSurveyBtn.disabled = false;

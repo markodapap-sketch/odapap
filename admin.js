@@ -63,16 +63,27 @@ async function handleAuth(user) {
 }
 
 async function checkAdmin(email, uid) {
-    if (email === MASTER_ADMIN_EMAIL) {
-        const ref = doc(db, "Admins", uid);
-        const snap = await getDoc(ref);
-        if (!snap.exists()) {
-            await setDoc(ref, { email, role: 'master_admin', createdAt: Timestamp.now() });
+    try {
+        if (email === MASTER_ADMIN_EMAIL) {
+            const ref = doc(db, "Admins", uid);
+            try {
+                const snap = await getDoc(ref);
+                if (!snap.exists()) {
+                    await setDoc(ref, { email, role: 'master_admin', createdAt: Timestamp.now() });
+                }
+            } catch (e) {
+                // If rules block the read/write, master admin is still valid by email
+                console.warn('Could not verify/create Admins doc (check Firestore rules):', e.message);
+            }
+            return true;
         }
-        return true;
+        const q = query(collection(db, "Admins"), where("email", "==", email));
+        return !(await getDocs(q)).empty;
+    } catch (error) {
+        console.error('Admin check failed:', error.message);
+        // Fallback: allow master admin by email even if Firestore rules block the query
+        return email === MASTER_ADMIN_EMAIL;
     }
-    const q = query(collection(db, "Admins"), where("email", "==", email));
-    return !(await getDocs(q)).empty;
 }
 
 // ============= Mobile Menu =============
@@ -452,10 +463,10 @@ function renderRecentOrders() {
     }
     
     container.innerHTML = recent.map(o => `
-        <div class="recent-order" onclick="viewOrder('${o.id}')">
+        <div class="recent-order" onclick="viewOrder('${escapeAttr(o.id)}')">
             <div>
-                <span class="order-id">${o.orderId || o.id.slice(0, 8)}</span>
-                <span class="customer">${o.buyerDetails?.name || 'N/A'}</span>
+                <span class="order-id">${escapeHtml(o.orderId || o.id.slice(0, 8))}</span>
+                <span class="customer">${escapeHtml(o.buyerDetails?.name || 'N/A')}</span>
             </div>
             <span class="status ${o.orderStatus}">${o.orderStatus}</span>
             <span class="amount">KES ${(o.totalAmount || 0).toLocaleString()}</span>
@@ -599,16 +610,16 @@ function renderOrders(orders = state.orders) {
     
     tbody.innerHTML = orders.sort((a, b) => getDate(b.orderDate) - getDate(a.orderDate)).map(o => `
         <tr>
-            <td><strong>${o.orderId || o.id.slice(0, 8)}</strong></td>
-            <td>${o.buyerDetails?.name || 'N/A'}</td>
+            <td><strong>${escapeHtml(o.orderId || o.id.slice(0, 8))}</strong></td>
+            <td>${escapeHtml(o.buyerDetails?.name || 'N/A')}</td>
             <td class="hide-sm">${o.items?.length || 0}</td>
             <td>KES ${(o.totalAmount || 0).toLocaleString()}</td>
-            <td><span class="status ${o.orderStatus}">${o.orderStatus}</span></td>
+            <td><span class="status ${escapeAttr(o.orderStatus)}">${escapeHtml(o.orderStatus)}</span></td>
             <td class="hide-sm">${formatDate(o.orderDate)}</td>
             <td>
                 <div class="action-btns">
-                    <button class="action-btn view" onclick="viewOrder('${o.id}')" title="View"><i class="fas fa-eye"></i></button>
-                    <button class="action-btn edit" onclick="changeStatus('${o.id}', '${o.orderStatus}')" title="Status"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn view" onclick="viewOrder('${escapeAttr(o.id)}')" title="View"><i class="fas fa-eye"></i></button>
+                    <button class="action-btn edit" onclick="changeStatus('${escapeAttr(o.id)}', '${escapeAttr(o.orderStatus)}')" title="Status"><i class="fas fa-edit"></i></button>
                 </div>
             </td>
         </tr>
@@ -639,26 +650,26 @@ window.viewOrder = function(id) {
     const content = $('orderModalContent');
     content.innerHTML = `
         <div class="order-detail-header">
-            <h3>Order ${order.orderId || order.id.slice(0, 8)}</h3>
-            <span class="status ${order.orderStatus}">${order.orderStatus}</span>
+            <h3>Order ${escapeHtml(order.orderId || order.id.slice(0, 8))}</h3>
+            <span class="status ${escapeAttr(order.orderStatus)}">${escapeHtml(order.orderStatus)}</span>
         </div>
         <div class="order-info-grid">
             <div class="order-info-box">
                 <h4>Customer</h4>
-                <p><strong>${order.buyerDetails?.name || 'N/A'}</strong></p>
-                <p>${order.buyerDetails?.email || ''}</p>
-                <p>${order.buyerDetails?.phone || ''}</p>
+                <p><strong>${escapeHtml(order.buyerDetails?.name || 'N/A')}</strong></p>
+                <p>${escapeHtml(order.buyerDetails?.email || '')}</p>
+                <p>${escapeHtml(order.buyerDetails?.phone || '')}</p>
             </div>
             <div class="order-info-box">
                 <h4>Delivery</h4>
-                <p>${order.buyerDetails?.deliveryAddress || order.deliveryDetails?.address || 'N/A'}</p>
-                <p>${order.buyerDetails?.location || order.deliveryDetails?.city || ''}</p>
+                <p>${escapeHtml(order.buyerDetails?.deliveryAddress || order.deliveryDetails?.address || 'N/A')}</p>
+                <p>${escapeHtml(order.buyerDetails?.location || order.deliveryDetails?.city || '')}</p>
             </div>
             <div class="order-info-box">
                 <h4>Payment</h4>
-                <p><strong>${order.paymentMethod || 'N/A'}</strong></p>
-                <p>Status: ${order.paymentStatus || 'pending'}</p>
-                ${order.mpesaTransactionId ? `<p>M-Pesa: ${order.mpesaTransactionId}</p>` : ''}
+                <p><strong>${escapeHtml(order.paymentMethod || 'N/A')}</strong></p>
+                <p>Status: ${escapeHtml(order.paymentStatus || 'pending')}</p>
+                ${order.mpesaTransactionId ? `<p>M-Pesa: ${escapeHtml(order.mpesaTransactionId)}</p>` : ''}
             </div>
             <div class="order-info-box">
                 <h4>Date</h4>
@@ -669,11 +680,11 @@ window.viewOrder = function(id) {
             <h4>Items Purchased</h4>
             ${order.items?.map(i => `
                 <div class="order-item" style="display: flex; align-items: center; gap: 12px; padding: 10px; background: #f9f9f9; border-radius: 8px; margin-bottom: 8px;">
-                    <img src="${i.imageUrl || 'images/product-placeholder.png'}" alt="${i.productName || i.name}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;" onerror="this.src='images/product-placeholder.png'">
+                    <img src="${escapeAttr(i.imageUrl || 'images/product-placeholder.png')}" alt="${escapeAttr(i.productName || i.name || '')}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 6px;" onerror="this.src='images/product-placeholder.png'">
                     <div style="flex: 1;">
-                        <strong>${i.productName || i.name || 'Unknown Product'}</strong>
-                        ${i.selectedVariation ? `<br><small style="color: #666;">${i.selectedVariation.title || ''}: ${i.selectedVariation.attr_name || ''}</small>` : ''}
-                        <br><small>Listing ID: ${i.listingId || 'N/A'}</small>
+                        <strong>${escapeHtml(i.productName || i.name || 'Unknown Product')}</strong>
+                        ${i.selectedVariation ? `<br><small style="color: #666;">${escapeHtml(i.selectedVariation.title || '')}: ${escapeHtml(i.selectedVariation.attr_name || '')}</small>` : ''}
+                        <br><small>Listing ID: ${escapeHtml(i.listingId || 'N/A')}</small>
                     </div>
                     <div style="text-align: right;">
                         <span>× ${i.quantity}</span>
@@ -694,9 +705,11 @@ window.viewOrder = function(id) {
     $('orderModal').classList.add('active');
 };
 
-// Change Status
-window.changeStatus = async function(id, current) {
-    const statuses = ['pending', 'seller_confirmed', 'confirmed', 'out_for_delivery', 'delivered', 'cancelled', 'refund_requested', 'refunded', 'disputed'];
+// Change Status — opens a dropdown modal instead of prompt()
+let pendingStatusOrderId = null;
+let pendingStatusCurrent = null;
+
+window.changeStatus = function(id, current) {
     const statusLabels = {
         'pending': 'Pending',
         'seller_confirmed': 'Seller Confirmed',
@@ -709,56 +722,87 @@ window.changeStatus = async function(id, current) {
         'disputed': 'Disputed'
     };
     
-    const newStatus = prompt(`Enter new status:\n${Object.entries(statusLabels).map(([k,v]) => `${k} - ${v}`).join('\n')}`, current);
+    pendingStatusOrderId = id;
+    pendingStatusCurrent = current;
     
-    if (newStatus && statuses.includes(newStatus) && newStatus !== current) {
-        try {
-            // Get order details for notification
-            const order = state.orders.find(o => o.id === id);
-            
-            const updates = { 
-                orderStatus: newStatus, 
-                status: newStatus,
-                updatedAt: Timestamp.now() 
-            };
-            
-            // Add confirmation timestamps
-            if (newStatus === 'seller_confirmed') {
-                updates.sellerConfirmedAt = Timestamp.now();
-                updates.sellerConfirmed = true;
-            }
-            if (newStatus === 'confirmed') {
-                updates.adminConfirmedAt = Timestamp.now();
-                updates.adminConfirmed = true;
-                updates.confirmedBy = state.user.uid;
-            }
-            if (newStatus === 'delivered') {
-                updates.deliveredAt = Timestamp.now();
-            }
-            if (newStatus === 'cancelled') {
-                updates.cancelledAt = Timestamp.now();
-                updates.cancelledBy = state.user.uid;
-            }
-            if (newStatus === 'refunded') {
-                updates.refundedAt = Timestamp.now();
-                updates.refundProcessedBy = state.user.uid;
-            }
-            
-            await updateDoc(doc(db, "Orders", id), updates);
-            
-            // Notify buyer of status change
-            if (order && order.buyerInfo && order.buyerInfo.userId) {
-                await notifyBuyerOfStatusChange(order, newStatus);
-            }
-            
-            showNotification('Status updated');
-            loadOrders().then(() => {
-                updateMetrics();
-                renderRecentOrders();
-            });
-        } catch (err) {
-            showNotification('Error updating status', 'error');
+    const select = $('statusSelect');
+    select.innerHTML = Object.entries(statusLabels).map(([k, v]) =>
+        `<option value="${k}" ${k === current ? 'selected disabled' : ''}>${v}${k === current ? ' (current)' : ''}</option>`
+    ).join('');
+    
+    $('statusModal').classList.add('active');
+};
+
+window.closeStatusModal = function() {
+    $('statusModal').classList.remove('active');
+    pendingStatusOrderId = null;
+    pendingStatusCurrent = null;
+};
+
+window.confirmStatusChange = async function() {
+    const newStatus = $('statusSelect').value;
+    const id = pendingStatusOrderId;
+    const current = pendingStatusCurrent;
+    
+    if (!id || !newStatus || newStatus === current) {
+        closeStatusModal();
+        return;
+    }
+    
+    const btn = $('confirmStatusBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+    
+    try {
+        // Get order details for notification
+        const order = state.orders.find(o => o.id === id);
+        
+        const updates = { 
+            orderStatus: newStatus, 
+            status: newStatus,
+            updatedAt: Timestamp.now() 
+        };
+        
+        // Add confirmation timestamps
+        if (newStatus === 'seller_confirmed') {
+            updates.sellerConfirmedAt = Timestamp.now();
+            updates.sellerConfirmed = true;
         }
+        if (newStatus === 'confirmed') {
+            updates.adminConfirmedAt = Timestamp.now();
+            updates.adminConfirmed = true;
+            updates.confirmedBy = state.user.uid;
+        }
+        if (newStatus === 'delivered') {
+            updates.deliveredAt = Timestamp.now();
+        }
+        if (newStatus === 'cancelled') {
+            updates.cancelledAt = Timestamp.now();
+            updates.cancelledBy = state.user.uid;
+        }
+        if (newStatus === 'refunded') {
+            updates.refundedAt = Timestamp.now();
+            updates.refundProcessedBy = state.user.uid;
+        }
+        
+        await updateDoc(doc(db, "Orders", id), updates);
+        
+        // Notify buyer of status change
+        if (order && order.buyerInfo && order.buyerInfo.userId) {
+            await notifyBuyerOfStatusChange(order, newStatus);
+        }
+        
+        showNotification('Status updated');
+        loadOrders().then(() => {
+            updateMetrics();
+            renderRecentOrders();
+        });
+    } catch (err) {
+        showNotification('Error updating status', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Update Status';
+        closeStatusModal();
     }
 };
 
@@ -867,50 +911,50 @@ function renderProductRow(p) {
     const isOffers = p.primeCategories?.offers || false;
     
     return `
-        <tr data-id="${p.id}">
+        <tr data-id="${escapeAttr(p.id)}">
             <td>
-                <img src="${img}" class="product-thumb" alt="${p.name || ''}" 
+                <img src="${escapeAttr(img)}" class="product-thumb" alt="${escapeAttr(p.name || '')}" 
                      onerror="this.src='https://placehold.co/44x44/e2e8f0/64748b?text=N/A'"
-                     onclick="window.open('product.html?id=${p.id}', '_blank')">
+                     onclick="window.open('product.html?id=${escapeAttr(p.id)}', '_blank')">
             </td>
             <td class="editable-cell">
-                <input type="text" value="${escapeHtml(p.name || '')}" data-field="name" onchange="updateProductField('${p.id}', 'name', this.value, this)">
+                <input type="text" value="${escapeHtml(p.name || '')}" data-field="name" onchange="updateProductField('${escapeAttr(p.id)}', 'name', this.value, this)">
                 <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
             </td>
             <td class="editable-cell">
-                <input type="text" value="${escapeHtml(p.category || '')}" data-field="category" onchange="updateProductField('${p.id}', 'category', this.value, this)">
+                <input type="text" value="${escapeHtml(p.category || '')}" data-field="category" onchange="updateProductField('${escapeAttr(p.id)}', 'category', this.value, this)">
                 <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
             </td>
             <td class="editable-cell">
-                <input type="number" value="${p.price || 0}" data-field="price" min="0" onchange="updateProductField('${p.id}', 'price', Number(this.value), this)">
+                <input type="number" value="${p.price || 0}" data-field="price" min="0" onchange="updateProductField('${escapeAttr(p.id)}', 'price', Number(this.value), this)">
                 <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
             </td>
             <td class="editable-cell">
-                <input type="number" value="${p.totalStock || 0}" data-field="totalStock" min="0" onchange="updateProductField('${p.id}', 'totalStock', Number(this.value), this)">
+                <input type="number" value="${p.totalStock || 0}" data-field="totalStock" min="0" onchange="updateProductField('${escapeAttr(p.id)}', 'totalStock', Number(this.value), this)">
                 <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
             </td>
             <td class="editable-cell">
-                <input type="text" value="${escapeHtml(p.brand || '')}" data-field="brand" onchange="updateProductField('${p.id}', 'brand', this.value, this)">
+                <input type="text" value="${escapeHtml(p.brand || '')}" data-field="brand" onchange="updateProductField('${escapeAttr(p.id)}', 'brand', this.value, this)">
                 <span class="cell-save-indicator"><i class="fas fa-check"></i></span>
             </td>
             <td>
                 <div class="prime-tags">
-                    <span class="prime-tag ${isGeneral ? 'general' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'generalShop', ${!isGeneral})" title="General Shop">
+                    <span class="prime-tag ${isGeneral ? 'general' : 'inactive'}" onclick="togglePrimeTag('${escapeAttr(p.id)}', 'generalShop', ${!isGeneral})" title="General Shop">
                         <i class="fas fa-store"></i> Shop
                     </span>
-                    <span class="prime-tag ${isFeatured ? 'featured' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'featured', ${!isFeatured})" title="Featured">
+                    <span class="prime-tag ${isFeatured ? 'featured' : 'inactive'}" onclick="togglePrimeTag('${escapeAttr(p.id)}', 'featured', ${!isFeatured})" title="Featured">
                         <i class="fas fa-star"></i> Featured
                     </span>
-                    <span class="prime-tag ${isBestseller ? 'bestseller' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'bestseller', ${!isBestseller})" title="Best Seller">
+                    <span class="prime-tag ${isBestseller ? 'bestseller' : 'inactive'}" onclick="togglePrimeTag('${escapeAttr(p.id)}', 'bestseller', ${!isBestseller})" title="Best Seller">
                         <i class="fas fa-fire"></i> Best
                     </span>
-                    <span class="prime-tag ${isOffers ? 'offers' : 'inactive'}" onclick="togglePrimeTag('${p.id}', 'offers', ${!isOffers})" title="Offers/Deals">
+                    <span class="prime-tag ${isOffers ? 'offers' : 'inactive'}" onclick="togglePrimeTag('${escapeAttr(p.id)}', 'offers', ${!isOffers})" title="Offers/Deals">
                         <i class="fas fa-percent"></i> Offer
                     </span>
                 </div>
             </td>
             <td>
-                <select class="status-select ${status}" onchange="updateProductField('${p.id}', 'status', this.value, this); this.className='status-select '+this.value">
+                <select class="status-select ${escapeAttr(status)}" onchange="updateProductField('${escapeAttr(p.id)}', 'status', this.value, this); this.className='status-select '+this.value">
                     <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
                     <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
                     <option value="out_of_stock" ${status === 'out_of_stock' ? 'selected' : ''}>Out of Stock</option>
@@ -918,8 +962,8 @@ function renderProductRow(p) {
             </td>
             <td>
                 <div class="action-btns">
-                    <button class="action-btn edit" onclick="openEditModal('${p.id}')" title="Full Edit"><i class="fas fa-expand"></i></button>
-                    <button class="action-btn delete" onclick="deleteProduct('${p.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                    <button class="action-btn edit" onclick="openEditModal('${escapeAttr(p.id)}')" title="Full Edit"><i class="fas fa-expand"></i></button>
+                    <button class="action-btn delete" onclick="deleteProduct('${escapeAttr(p.id)}')" title="Delete"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
@@ -1114,7 +1158,7 @@ window.deleteProduct = async function(id) {
 function exportProducts() {
     const csv = ['Name,Price,Category,Stock,Brand,Status,UploaderId'];
     state.products.forEach(p => {
-        csv.push(`"${p.name || ''}",${p.price || 0},"${p.category || ''}",${p.totalStock || 0},"${p.brand || ''}","${p.status || 'active'}","${p.uploaderId || ''}"`);
+        csv.push(`"${sanitizeCSV(p.name || '')}",${p.price || 0},"${sanitizeCSV(p.category || '')}",${p.totalStock || 0},"${sanitizeCSV(p.brand || '')}","${sanitizeCSV(p.status || 'active')}","${sanitizeCSV(p.uploaderId || '')}"`);
     });
     downloadCSV(csv.join('\n'), 'products.csv');
 }
@@ -1136,27 +1180,27 @@ function renderUsers(users = state.users) {
             <tr>
                 <td>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <img src="${u.profilePicUrl || 'https://placehold.co/32x32/e2e8f0/64748b?text=U'}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://placehold.co/32x32/e2e8f0/64748b?text=U'">
-                        <span>${u.name || 'N/A'} ${verifiedBadge}</span>
+                        <img src="${escapeAttr(u.profilePicUrl || 'https://placehold.co/32x32/e2e8f0/64748b?text=U')}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;" onerror="this.src='https://placehold.co/32x32/e2e8f0/64748b?text=U'">
+                        <span>${escapeHtml(u.name || 'N/A')} ${verifiedBadge}</span>
                     </div>
                 </td>
-                <td class="hide-sm">${u.email || 'N/A'}</td>
+                <td class="hide-sm">${escapeHtml(u.email || 'N/A')}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline" onclick="viewUserListings('${u.id}')">${listings} listings</button>
+                    <button class="btn btn-sm btn-outline" onclick="viewUserListings('${escapeAttr(u.id)}')">${listings} listings</button>
                 </td>
                 <td class="hide-sm">
-                    <button class="btn btn-sm ${u.verified ? 'btn-verified' : 'btn-unverified'}" onclick="toggleUserVerification('${u.id}', ${!u.verified})">
+                    <button class="btn btn-sm ${u.verified ? 'btn-verified' : 'btn-unverified'}" onclick="toggleUserVerification('${escapeAttr(u.id)}', ${!u.verified})">
                         <i class="fas fa-${u.verified ? 'check-circle' : 'circle'}"></i>
                         ${u.verified ? 'Verified' : 'Unverified'}
                     </button>
                 </td>
                 <td>
                     <div class="action-btns">
-                        <button class="action-btn ${u.verified ? 'unverify' : 'verify'}" onclick="toggleUserVerification('${u.id}', ${!u.verified})" title="${u.verified ? 'Remove Verification' : 'Verify User'}">
+                        <button class="action-btn ${u.verified ? 'unverify' : 'verify'}" onclick="toggleUserVerification('${escapeAttr(u.id)}', ${!u.verified})" title="${u.verified ? 'Remove Verification' : 'Verify User'}">
                             <i class="fas fa-${u.verified ? 'times-circle' : 'badge-check'}"></i>
                         </button>
-                        <button class="action-btn view" onclick="viewUserListings('${u.id}')" title="View Listings"><i class="fas fa-box"></i></button>
-                        <button class="action-btn msg" onclick="messageUser('${u.id}')" title="Message"><i class="fas fa-envelope"></i></button>
+                        <button class="action-btn view" onclick="viewUserListings('${escapeAttr(u.id)}')" title="View Listings"><i class="fas fa-box"></i></button>
+                        <button class="action-btn msg" onclick="messageUser('${escapeAttr(u.id)}')" title="Message"><i class="fas fa-envelope"></i></button>
                     </div>
                 </td>
             </tr>
@@ -1254,9 +1298,9 @@ function renderUserProductRow(p) {
     return `
         <tr>
             <td>
-                <img src="${img}" class="product-thumb" alt="${p.name || ''}" 
+                <img src="${escapeAttr(img)}" class="product-thumb" alt="${escapeAttr(p.name || '')}" 
                      onerror="this.src='https://placehold.co/44x44/e2e8f0/64748b?text=N/A'"
-                     onclick="window.open('product.html?id=${p.id}', '_blank')">
+                     onclick="window.open('product.html?id=${escapeAttr(p.id)}', '_blank')">
             </td>
             <td><strong>${escapeHtml(p.name || 'Unnamed')}</strong></td>
             <td>${escapeHtml(p.category || 'N/A')}</td>
@@ -1264,8 +1308,8 @@ function renderUserProductRow(p) {
             <td>${p.totalStock || 0}</td>
             <td>
                 <div class="action-btns">
-                    <button class="action-btn view" onclick="window.open('product.html?id=${p.id}', '_blank')" title="View"><i class="fas fa-eye"></i></button>
-                    <button class="action-btn edit" onclick="openEditModal('${p.id}')" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn view" onclick="window.open('product.html?id=${escapeAttr(p.id)}', '_blank')" title="View"><i class="fas fa-eye"></i></button>
+                    <button class="action-btn edit" onclick="openEditModal('${escapeAttr(p.id)}')" title="Edit"><i class="fas fa-edit"></i></button>
                 </div>
             </td>
         </tr>
@@ -1593,7 +1637,7 @@ function renderTransactions(txns) {
         const formattedDate = formatDateTime(t.createdAt);
         
         return `
-            <tr class="transaction-row" onclick="viewTransactionDetails('${t.id}', '${t.source}')">
+            <tr class="transaction-row" onclick="viewTransactionDetails('${escapeAttr(t.id)}', '${escapeAttr(t.source)}')">
                 <td>
                     <div style="display:flex;align-items:center;gap:8px;">
                         <i class="fas ${typeIcon}" style="color:var(--gray-400);font-size:12px;"></i>
@@ -1616,7 +1660,7 @@ function renderTransactions(txns) {
                     </div>
                 </td>
                 <td>
-                    <button class="action-btn view" onclick="event.stopPropagation(); viewTransactionDetails('${t.id}', '${t.source}')" title="View Details">
+                    <button class="action-btn view" onclick="event.stopPropagation(); viewTransactionDetails('${escapeAttr(t.id)}', '${escapeAttr(t.source)}')" title="View Details">
                         <i class="fas fa-eye"></i>
                     </button>
                 </td>
@@ -1653,16 +1697,16 @@ window.viewTransactionDetails = function(id, source) {
             <div class="order-info-grid">
                 <div class="order-info-box">
                     <h4>Transaction Info</h4>
-                    <p><strong>ID:</strong> ${transaction.id}</p>
+                    <p><strong>ID:</strong> ${escapeHtml(transaction.id)}</p>
                     <p><strong>Amount:</strong> KES ${(transaction.amount || 0).toLocaleString()}</p>
-                    <p><strong>Method:</strong> ${transaction.paymentMethod || 'N/A'}</p>
-                    ${transaction.mpesaCode ? `<p><strong>M-Pesa Code:</strong> ${transaction.mpesaCode}</p>` : ''}
+                    <p><strong>Method:</strong> ${escapeHtml(transaction.paymentMethod || 'N/A')}</p>
+                    ${transaction.mpesaCode ? `<p><strong>M-Pesa Code:</strong> ${escapeHtml(transaction.mpesaCode)}</p>` : ''}
                 </div>
                 <div class="order-info-box">
                     <h4>User Info</h4>
                     <p><strong>Name:</strong> ${escapeHtml(transaction.userName || 'N/A')}</p>
                     <p><strong>Email:</strong> ${escapeHtml(transaction.userEmail || 'N/A')}</p>
-                    ${transaction.userPhone ? `<p><strong>Phone:</strong> ${transaction.userPhone}</p>` : ''}
+                    ${transaction.userPhone ? `<p><strong>Phone:</strong> ${escapeHtml(transaction.userPhone)}</p>` : ''}
                 </div>
                 <div class="order-info-box">
                     <h4>Date & Time</h4>
@@ -1672,7 +1716,7 @@ window.viewTransactionDetails = function(id, source) {
                 <div class="order-info-box">
                     <h4>Source</h4>
                     <p>${transaction.source === 'wallet' ? 'Wallet Transaction' : transaction.source === 'order' ? 'Order Payment' : 'Transaction'}</p>
-                    ${transaction.orderStatus ? `<p><strong>Order Status:</strong> ${transaction.orderStatus}</p>` : ''}
+                    ${transaction.orderStatus ? `<p><strong>Order Status:</strong> ${escapeHtml(transaction.orderStatus)}</p>` : ''}
                 </div>
             </div>
         `;
@@ -1795,7 +1839,7 @@ function renderVerifications(items) {
                 <div class="verify-card-body">
                     <div class="verify-detail">
                         <label>User</label>
-                        <span>${v.userName || v.userEmail || 'Unknown'}</span>
+                        <span>${escapeHtml(v.userName || v.userEmail || 'Unknown')}</span>
                     </div>
                     <div class="verify-detail">
                         <label>Amount</label>
@@ -1803,7 +1847,7 @@ function renderVerifications(items) {
                     </div>
                     <div class="verify-detail">
                         <label>M-Pesa Code</label>
-                        <span class="mpesa-code">${v.mpesaCode || 'N/A'}</span>
+                        <span class="mpesa-code">${escapeHtml(v.mpesaCode || 'N/A')}</span>
                     </div>
                     <div class="verify-detail">
                         <label>Date</label>
@@ -1818,17 +1862,17 @@ function renderVerifications(items) {
                     ${v.receiptUrl ? `
                         <div class="verify-receipt-preview">
                             <label style="display:block;margin-bottom:6px;">Receipt</label>
-                            <img src="${v.receiptUrl}" alt="Receipt" onclick="window.open('${v.receiptUrl}', '_blank')">
+                            <img src="${escapeAttr(v.receiptUrl)}" alt="Receipt" onclick="window.open('${escapeAttr(v.receiptUrl)}', '_blank')">
                         </div>
                     ` : ''}
                 </div>
                 
                 ${v.status === 'pending' ? `
                     <div class="verify-actions">
-                        <button class="btn btn-success" onclick="approveVerification('${v.id}', '${v.type}', ${v.amount}, '${v.userId}', '${v.orderId || ''}')">
+                        <button class="btn btn-success" onclick="approveVerification('${escapeAttr(v.id)}', '${escapeAttr(v.type)}', ${Number(v.amount) || 0}, '${escapeAttr(v.userId)}', '${escapeAttr(v.orderId || '')}')">
                             <i class="fas fa-check"></i> Approve
                         </button>
-                        <button class="btn btn-danger" onclick="rejectVerification('${v.id}')">
+                        <button class="btn btn-danger" onclick="rejectVerification('${escapeAttr(v.id)}')">
                             <i class="fas fa-times"></i> Reject
                         </button>
                     </div>
@@ -1922,6 +1966,8 @@ async function loadSettings() {
     loadSurveySettings();
     loadShippingSettings();
     loadDeliveryAreas();
+    loadDeliveryStaff();
+    loadSystemToggles();
 }
 
 // ============= Delivery Areas Management =============
@@ -2043,6 +2089,62 @@ async function saveDeliveryAreas() {
     } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
+    }
+}
+
+// ============= System Toggles (Maintenance & Registrations) =============
+async function loadSystemToggles() {
+    try {
+        const settingsDoc = await getDoc(doc(db, "Settings", "appSettings"));
+        if (settingsDoc.exists()) {
+            const data = settingsDoc.data();
+            $('maintenanceMode').checked = data.maintenanceMode === true;
+            $('allowRegistrations').checked = data.allowRegistrations !== false; // default true
+        }
+        
+        // Wire up listeners
+        $('maintenanceMode')?.removeEventListener('change', handleMaintenanceToggle);
+        $('maintenanceMode')?.addEventListener('change', handleMaintenanceToggle);
+        $('allowRegistrations')?.removeEventListener('change', handleRegistrationToggle);
+        $('allowRegistrations')?.addEventListener('change', handleRegistrationToggle);
+    } catch (err) {
+        console.error('System toggles error:', err);
+    }
+}
+
+async function handleMaintenanceToggle(e) {
+    const enabled = e.target.checked;
+    if (enabled && !confirm('Enable maintenance mode? Users will see a maintenance page.')) {
+        e.target.checked = false;
+        return;
+    }
+    try {
+        await setDoc(doc(db, "Settings", "appSettings"), {
+            maintenanceMode: enabled,
+            updatedAt: Timestamp.now(),
+            updatedBy: state.user?.email
+        }, { merge: true });
+        showNotification(enabled ? 'Maintenance mode ON' : 'Maintenance mode OFF');
+    } catch (err) {
+        console.error('Toggle maintenance error:', err);
+        showNotification('Failed to update setting', 'error');
+        e.target.checked = !enabled;
+    }
+}
+
+async function handleRegistrationToggle(e) {
+    const enabled = e.target.checked;
+    try {
+        await setDoc(doc(db, "Settings", "appSettings"), {
+            allowRegistrations: enabled,
+            updatedAt: Timestamp.now(),
+            updatedBy: state.user?.email
+        }, { merge: true });
+        showNotification(enabled ? 'Registrations enabled' : 'Registrations disabled');
+    } catch (err) {
+        console.error('Toggle registrations error:', err);
+        showNotification('Failed to update setting', 'error');
+        e.target.checked = !enabled;
     }
 }
 
@@ -2196,13 +2298,13 @@ function renderHeroSlides() {
     }
     
     container.innerHTML = heroSlides.map((slide, idx) => `
-        <div class="hero-slide-item" draggable="true" data-id="${slide.id}" data-idx="${idx}">
-            <div class="hero-slide-preview ${slide.gradient || 'gradient-1'}" ${slide.bgImage ? `style="background-image:url(${slide.bgImage})"` : ''}>
-                <i class="fas ${slide.icon || 'fa-star'}"></i>
+        <div class="hero-slide-item" draggable="true" data-id="${escapeAttr(slide.id)}" data-idx="${idx}">
+            <div class="hero-slide-preview ${escapeAttr(slide.gradient || 'gradient-1')}" ${slide.bgImage ? `style="background-image:url(${escapeAttr(slide.bgImage)})"` : ''}>
+                <i class="fas ${escapeAttr(slide.icon || 'fa-star')}"></i>
             </div>
             <div class="hero-slide-info">
-                <h4>${slide.title || 'Untitled'}</h4>
-                <p>${slide.subtitle || 'No description'}</p>
+                <h4>${escapeHtml(slide.title || 'Untitled')}</h4>
+                <p>${escapeHtml(slide.subtitle || 'No description')}</p>
             </div>
             <span class="hero-slide-status ${slide.active !== false ? 'active' : 'inactive'}">
                 ${slide.active !== false ? 'Active' : 'Inactive'}
@@ -2462,13 +2564,13 @@ async function loadShippingSettings() {
         if (settingsDoc.exists()) {
             const data = settingsDoc.data();
             $('defaultShippingFee').value = data.defaultFee || 150;
-            $('freeShippingThreshold').value = data.freeThreshold || 0;
+            $('freeShippingThreshold').value = data.freeThreshold || 3000;
             shippingZones = data.zones || [];
         } else {
             // Initialize with defaults
             shippingZones = [];
             $('defaultShippingFee').value = 150;
-            $('freeShippingThreshold').value = 0;
+            $('freeShippingThreshold').value = 3000;
         }
         
         renderShippingZones();
@@ -2835,6 +2937,12 @@ async function handleSendNotification(e) {
     sendBtn.disabled = true;
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
+    if (!confirm(`Send notification "${title}" to ${target === 'all' ? 'all users' : target}?`)) {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalText;
+        return;
+    }
+    
     try {
         // Get all users to send notifications to
         const usersSnap = await getDocs(collection(db, 'Users'));
@@ -2846,10 +2954,23 @@ async function handleSendNotification(e) {
             return;
         }
         
+        // Filter users based on target audience
+        const sellerUserIds = new Set(state.products.map(p => p.uploaderId).filter(Boolean));
+        
         const userIds = [];
-        usersSnap.forEach(doc => {
-            userIds.push(doc.id);
+        usersSnap.forEach(docSnap => {
+            const uid = docSnap.id;
+            if (target === 'sellers' && !sellerUserIds.has(uid)) return;
+            if (target === 'buyers' && sellerUserIds.has(uid)) return;
+            userIds.push(uid);
         });
+        
+        if (!userIds.length) {
+            showNotification(`No ${target} found to send to`, 'warning');
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalText;
+            return;
+        }
         
         // Create notification record
         const notifData = {
@@ -2927,9 +3048,29 @@ async function handleSendNotification(e) {
 // HTML escape for user content
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>"']/g, m => ({
+    return String(str).replace(/[&<>"']/g, m => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
     }[m]));
+}
+
+// Escape for HTML attributes (src, onclick, etc.)
+function escapeAttr(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"'`\/]/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;',
+        "'": '&#039;', '`': '&#96;', '/': '&#47;', '\\': '&#92;'
+    }[m] || m));
+}
+
+// Sanitize CSV cell to prevent formula injection
+function sanitizeCSV(str) {
+    if (!str) return '';
+    str = String(str);
+    // Prefix dangerous chars to prevent Excel formula injection
+    if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+    }
+    return str;
 }
 function getDate(d) {
     if (!d) return new Date(0);
@@ -2950,3 +3091,88 @@ function downloadCSV(content, filename) {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+// ============= Delivery Staff Management =============
+async function loadDeliveryStaff() {
+    const list = $('deliveryStaffList');
+    if (!list) return;
+    try {
+        const snap = await getDocs(collection(db, 'DeliveryStaff'));
+        if (snap.empty) {
+            list.innerHTML = '<p style="color:#6b7280;font-size:13px;">No delivery staff added yet.</p>';
+            return;
+        }
+        list.innerHTML = '';
+        snap.forEach(docSnap => {
+            const data = docSnap.data();
+            const el = document.createElement('div');
+            el.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;';
+            el.innerHTML = `
+                <div>
+                    <strong style="font-size:13px;">${escapeHtml(data.name || data.email || 'Staff')}</strong>
+                    <br><small style="color:#6b7280;">${escapeHtml(data.email || '')} &bull; Added ${data.addedAt ? new Date(data.addedAt.toDate()).toLocaleDateString() : 'N/A'}</small>
+                </div>
+                <button class="btn btn-outline btn-sm" style="color:#ef4444;border-color:#ef4444;" onclick="removeDeliveryStaff('${docSnap.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>`;
+            list.appendChild(el);
+        });
+    } catch (error) {
+        console.error('Error loading delivery staff:', error);
+        list.innerHTML = '<p style="color:#ef4444;font-size:13px;">Error loading delivery staff.</p>';
+    }
+}
+
+$('addDeliveryStaffBtn')?.addEventListener('click', async () => {
+    const emailInput = $('deliveryStaffEmail');
+    const email = emailInput?.value?.trim();
+    if (!email) {
+        showNotification('Please enter an email', 'error');
+        return;
+    }
+    try {
+        // Find user by email
+        const userQuery = query(collection(db, 'Users'), where('email', '==', email));
+        const userSnap = await getDocs(userQuery);
+        
+        let staffUid = null;
+        let staffName = email;
+        
+        if (!userSnap.empty) {
+            const userDoc = userSnap.docs[0];
+            staffUid = userDoc.id;
+            staffName = userDoc.data().name || email;
+        } else {
+            showNotification('User not found. They must sign up first.', 'error');
+            return;
+        }
+        
+        // Add to DeliveryStaff collection with user's UID as doc ID
+        await setDoc(doc(db, 'DeliveryStaff', staffUid), {
+            email: email,
+            name: staffName,
+            addedBy: state.user.uid,
+            addedAt: Timestamp.now(),
+            active: true
+        });
+        
+        emailInput.value = '';
+        showNotification(`${staffName} added as delivery staff`, 'success');
+        loadDeliveryStaff();
+    } catch (error) {
+        console.error('Error adding delivery staff:', error);
+        showNotification('Error adding delivery staff', 'error');
+    }
+});
+
+window.removeDeliveryStaff = async function(staffId) {
+    if (!confirm('Remove this delivery staff member?')) return;
+    try {
+        await deleteDoc(doc(db, 'DeliveryStaff', staffId));
+        showNotification('Delivery staff removed', 'success');
+        loadDeliveryStaff();
+    } catch (error) {
+        console.error('Error removing delivery staff:', error);
+        showNotification('Error removing staff', 'error');
+    }
+};

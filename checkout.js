@@ -297,6 +297,11 @@ class CheckoutManager {
                 // Check if user's county is in enabled delivery areas
                 await this.checkDeliveryArea(county);
                 
+                // Pre-fill saved delivery address if available
+                if (this.userData.deliveryAddress && this.deliveryAddressEl) {
+                    this.deliveryAddressEl.value = this.userData.deliveryAddress;
+                }
+
                 // Pre-fill M-Pesa phone with user's phone (support both field names)
                 if (userPhone && this.mpesaPhoneInput) {
                     // Convert to local format for display
@@ -357,28 +362,48 @@ class CheckoutManager {
     async calculateShippingFee(county, subcounty, ward) {
         try {
             const fee = await getShippingFee(county, subcounty, ward);
+            this.baseShippingFee = fee; // Store base fee before free shipping check
             this.shippingFee = fee;
             
-            // Update UI
-            if (this.displayShippingFeeEl) {
-                this.displayShippingFeeEl.textContent = `KES ${fee.toLocaleString()}`;
-            }
+            // Check free shipping threshold from Firestore
+            try {
+                const isFree = await checkFreeShipping(this.subtotal || 0);
+                if (isFree) {
+                    this.shippingFee = 0;
+                }
+            } catch {}
             
-            if (this.shippingLocationEl) {
-                this.shippingLocationEl.textContent = subcounty ? `(${subcounty})` : '';
-            }
-            
-            if (this.shippingNoteEl) {
-                this.shippingNoteEl.textContent = county.toLowerCase().includes('mombasa') 
-                    ? `Delivery within ${subcounty || 'Mombasa'}` 
-                    : 'Delivery fee may vary';
-            }
-            
+            this.updateShippingUI(county, subcounty);
             this.updatePriceDisplay();
         } catch (error) {
             console.error('Error calculating shipping fee:', error);
-            this.shippingFee = 150; // Default fallback
+            this.baseShippingFee = 150;
+            this.shippingFee = 150;
             this.updatePriceDisplay();
+        }
+    }
+
+    updateShippingUI(county, subcounty) {
+        if (this.displayShippingFeeEl) {
+            if (this.shippingFee === 0 && this.baseShippingFee > 0) {
+                this.displayShippingFeeEl.innerHTML = `<span style="text-decoration:line-through;color:#9ca3af;">KES ${this.baseShippingFee.toLocaleString()}</span> <span style="color:#16a34a;font-weight:700;">FREE</span>`;
+            } else {
+                this.displayShippingFeeEl.textContent = `KES ${this.shippingFee.toLocaleString()}`;
+            }
+        }
+        
+        if (this.shippingLocationEl) {
+            this.shippingLocationEl.textContent = subcounty ? `(${subcounty})` : '';
+        }
+        
+        if (this.shippingNoteEl) {
+            if (this.shippingFee === 0) {
+                this.shippingNoteEl.innerHTML = `<span style="color:#16a34a;">🎉 Free delivery — order is over the free shipping threshold!</span>`;
+            } else if (county && county.toLowerCase().includes('mombasa')) {
+                this.shippingNoteEl.textContent = `Delivery within ${subcounty || 'Mombasa'}`;
+            } else {
+                this.shippingNoteEl.textContent = 'Delivery fee may vary';
+            }
         }
     }
 
@@ -548,14 +573,14 @@ class CheckoutManager {
             if (qtyBelowMin) itemEl.classList.add('qty-warning');
             
             itemEl.innerHTML = `
-                <img src="${item.imageUrl}" alt="${item.name}" class="order-item-image" onerror="this.src='images/placeholder.png'">
+                <img src="${item.imageUrl}" alt="${escapeHtml(item.name)}" class="order-item-image" onerror="this.src='images/placeholder.png'">
                 <div class="order-item-details">
-                    <h4>${item.name}</h4>
+                    <h4>${escapeHtml(item.name)}</h4>
                     <p class="item-meta">Qty: ${item.quantity}</p>
                     ${minQty > 1 ? `<p class="min-order-note" style="font-size: 0.75rem; color: ${qtyBelowMin ? '#e74c3c' : 'var(--text-muted)'};">Min order: ${minQty} units</p>` : ''}
                     ${item.selectedVariation ? `
                         <span class="item-variation">
-                            ${item.selectedVariation.title}: ${item.selectedVariation.attr_name}
+                            ${escapeHtml(item.selectedVariation.title || '')}: ${escapeHtml(item.selectedVariation.attr_name || '')}
                         </span>
                     ` : ''}
                 </div>
@@ -575,10 +600,35 @@ class CheckoutManager {
     }
 
     updatePriceDisplay() {
+        // Re-check free shipping when subtotal changes
+        if (this.baseShippingFee && this.subtotal > 0) {
+            checkFreeShipping(this.subtotal).then(isFree => {
+                if (isFree && this.shippingFee !== 0) {
+                    this.shippingFee = 0;
+                    this.updateShippingUI(this.userData?.county, this.userData?.subcounty);
+                    this.renderPriceValues();
+                } else if (!isFree && this.shippingFee === 0 && this.baseShippingFee > 0) {
+                    this.shippingFee = this.baseShippingFee;
+                    this.updateShippingUI(this.userData?.county, this.userData?.subcounty);
+                    this.renderPriceValues();
+                }
+            }).catch(() => {});
+        }
+        
+        this.renderPriceValues();
+    }
+
+    renderPriceValues() {
         this.total = this.subtotal + this.shippingFee - this.discount;
         
         if (this.subtotalEl) this.subtotalEl.textContent = `KES ${this.subtotal.toLocaleString()}`;
-        if (this.shippingEl) this.shippingEl.textContent = `KES ${this.shippingFee.toLocaleString()}`;
+        if (this.shippingEl) {
+            if (this.shippingFee === 0 && this.baseShippingFee > 0) {
+                this.shippingEl.innerHTML = `<span style="color:#16a34a;font-weight:600;">FREE</span>`;
+            } else {
+                this.shippingEl.textContent = `KES ${this.shippingFee.toLocaleString()}`;
+            }
+        }
         if (this.totalEl) this.totalEl.textContent = `KES ${this.total.toLocaleString()}`;
         if (this.btnTotalEl) this.btnTotalEl.textContent = `KES ${this.total.toLocaleString()}`;
         
@@ -1205,6 +1255,18 @@ class CheckoutManager {
 
             // Also save to user's orders subcollection for easy querying
             await addDoc(collection(db, `users/${this.user.uid}/orders`), orderData);
+
+            // Save delivery address to user profile for next checkout
+            if (deliveryAddress) {
+                try {
+                    await updateDoc(doc(db, "Users", this.user.uid), {
+                        deliveryAddress: deliveryAddress,
+                        updatedAt: serverTimestamp()
+                    });
+                } catch (e) {
+                    console.warn('Could not save delivery address to profile:', e);
+                }
+            }
 
             // Create notifications for sellers
             await this.notifySellerOfNewOrder(orderData);

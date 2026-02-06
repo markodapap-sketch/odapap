@@ -858,6 +858,7 @@
     import { app } from "./js/firebase.js";
     import { showNotification } from './notifications.js';
     import { counties } from './js/locationData.js';
+    import { escapeHtml } from './js/sanitize.js';
 
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -875,10 +876,13 @@
     function showToast(message, type = 'info') {
       const toast = document.createElement('div');
       toast.className = `toast-notification ${type}`;
-      toast.innerHTML = `
-        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
-        <span>${message}</span>
-      `;
+      const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+      const icon = document.createElement('i');
+      icon.className = `fas fa-${iconName}`;
+      const span = document.createElement('span');
+      span.textContent = message;
+      toast.appendChild(icon);
+      toast.appendChild(span);
       toast.style.cssText = `
         position: fixed;
         top: 80px;
@@ -991,6 +995,19 @@
     document.getElementById('profile-pic-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        showNotification("Only JPEG, PNG, WebP and GIF images are allowed", "warning");
+        e.target.value = '';
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showNotification("Image must be less than 5MB", "warning");
+        e.target.value = '';
+        return;
+      }
       try {
         const ref = storageRef(storage, `profile-pics/${currentUserId}`);
         await uploadBytes(ref, file);
@@ -1017,6 +1034,15 @@
       const val = document.getElementById('new-name-input').value.trim();
       if (!val) {
         showNotification("Please enter a name", "warning");
+        return;
+      }
+      if (val.length < 2 || val.length > 50) {
+        showNotification("Name must be 2-50 characters", "warning");
+        return;
+      }
+      // Block names with HTML/script injection patterns
+      if (/<|>|script|javascript/i.test(val)) {
+        showNotification("Invalid characters in name", "warning");
         return;
       }
       
@@ -1070,12 +1096,24 @@
 
     document.getElementById('save-phone-button').addEventListener('click', async () => {
       const val = document.getElementById('new-phone-input').value.trim();
-      if (val) {
+      if (!val) {
+        showNotification("Please enter a phone number", "warning");
+        return;
+      }
+      // Validate phone: must be a Kenyan number format
+      const phoneRegex = /^(?:\+?254|0)?[17]\d{8}$/;
+      if (!phoneRegex.test(val.replace(/\s+/g, ''))) {
+        showNotification("Enter a valid Kenyan phone number (e.g., 0712345678)", "warning");
+        return;
+      }
+      try {
         await updateDoc(doc(db, "Users", currentUserId), { phone: val });
         document.getElementById('user-phone').textContent = val;
         lockField('phone');
         document.getElementById('edit-phone-container').classList.remove('active');
         showNotification("Phone updated!");
+      } catch (e) {
+        showNotification("Error updating phone", "error");
       }
     });
 
@@ -1280,12 +1318,12 @@
 
         // Build items preview (show up to 3 items)
         const itemsHtml = items.slice(0, 3).map(item => {
-          const name = item.productName || item.name || 'Product';
+          const name = escapeHtml(item.productName || item.name || 'Product');
           const image = item.imageUrl || item.image || 'images/product-placeholder.png';
           const qty = item.quantity || 1;
           const price = item.pricePerUnit || item.price || 0;
           const variation = item.selectedVariation;
-          const variantText = variation ? (typeof variation === 'object' ? `${variation.title || ''}: ${variation.attr_name || variation.value || ''}` : variation) : '';
+          const variantText = variation ? escapeHtml(typeof variation === 'object' ? `${variation.title || ''}: ${variation.attr_name || variation.value || ''}` : variation) : '';
           
           return `
             <div class="order-item-row">
@@ -1303,10 +1341,10 @@
         const moreItems = items.length > 3 ? `<div style="font-size:0.7rem;color:#666;text-align:center;padding:4px;">+${items.length - 3} more item(s)</div>` : '';
 
         html += `
-          <div class="order-card" style="cursor: pointer;" onclick="showOrderDetails('${order.id}')">
+          <div class="order-card" style="cursor: pointer;" onclick="showOrderDetails('${escapeHtml(order.id)}')">
             <div class="order-card-header">
               <span class="order-id">#${orderId} • ${orderDate.toLocaleDateString()}</span>
-              <span class="order-status ${status.toLowerCase()}">${status}</span>
+              <span class="order-status ${status.toLowerCase()}">${escapeHtml(status)}</span>
             </div>
             <div class="order-card-body">
               <div class="order-items-preview">
@@ -1314,7 +1352,7 @@
                 ${moreItems}
               </div>
               <div class="order-summary-row">
-                <span class="order-buyer-info"><i class="fas fa-user"></i> ${buyerName} ${buyerPhone ? '• ' + buyerPhone : ''}</span>
+                <span class="order-buyer-info"><i class="fas fa-user"></i> ${escapeHtml(buyerName)} ${buyerPhone ? '• ' + escapeHtml(buyerPhone) : ''}</span>
                 <span class="order-total">${totalQty} item(s) • KES ${total.toLocaleString()}</span>
               </div>
             </div>
@@ -1337,39 +1375,48 @@
         btn.addEventListener('click', () => {
           // Show cancel confirmation modal
           const orderId = btn.dataset.orderId;
-          const modal = document.createElement('div');
-          modal.innerHTML = `
-            <div style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
-              <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
-                <i class=\"fas fa-times-circle\" style=\"font-size:48px;color:#f44336;margin-bottom:16px;\"></i>
-                <h3 style=\"margin:0 0 8px;color:#333;\">Cancel Order</h3>
-                <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Are you sure you want to cancel this order?</p>
-                <div style=\"display:flex;gap:12px;\">
-                  <button onclick=\"this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;\">No, Keep</button>
-                  <button onclick=\"updateOrderStatus('${orderId}', 'cancelled');this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:none;background:#f44336;color:white;border-radius:8px;cursor:pointer;\">Cancel Order</button>
-                </div>
-              </div>
+          const overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+          overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+          const box = document.createElement('div');
+          box.style.cssText = 'background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;';
+          box.innerHTML = `
+            <i class="fas fa-times-circle" style="font-size:48px;color:#f44336;margin-bottom:16px;"></i>
+            <h3 style="margin:0 0 8px;color:#333;">Cancel Order</h3>
+            <p style="color:#666;font-size:14px;margin:0 0 20px;">Are you sure you want to cancel this order?</p>
+            <div style="display:flex;gap:12px;">
+              <button class="cancel-no" style="flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;">No, Keep</button>
+              <button class="cancel-yes" style="flex:1;padding:12px;border:none;background:#f44336;color:white;border-radius:8px;cursor:pointer;">Cancel Order</button>
             </div>
           `;
-          document.body.appendChild(modal.firstElementChild);
+          box.querySelector('.cancel-no').addEventListener('click', () => overlay.remove());
+          box.querySelector('.cancel-yes').addEventListener('click', () => {
+            updateOrderStatus(orderId, 'cancelled');
+            overlay.remove();
+          });
+
+          overlay.appendChild(box);
+          document.body.appendChild(overlay);
         });
       });
     }
 
     function renderOrderActions(order) {
       const status = (order.status || order.orderStatus || 'pending').toLowerCase();
+      const safeId = escapeHtml(order.id);
       if (status === 'pending') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-accept" data-order-id="${order.id}" onclick="event.stopPropagation();">Accept</button>
-          <button class="order-action-btn btn-cancel-order" data-order-id="${order.id}" onclick="event.stopPropagation();">Cancel</button>
+          <button class="order-action-btn btn-accept" data-order-id="${safeId}" onclick="event.stopPropagation();">Accept</button>
+          <button class="order-action-btn btn-cancel-order" data-order-id="${safeId}" onclick="event.stopPropagation();">Cancel</button>
         </div>`;
       } else if (status === 'processing' || status === 'confirmed' || status === 'seller_confirmed') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-ship" data-order-id="${order.id}" onclick="event.stopPropagation();">Ship</button>
+          <button class="order-action-btn btn-ship" data-order-id="${safeId}" onclick="event.stopPropagation();">Ship</button>
         </div>`;
       } else if (status === 'shipped' || status === 'out_for_delivery') {
         return `<div class="order-actions">
-          <button class="order-action-btn btn-complete" data-order-id="${order.id}" onclick="event.stopPropagation();">Complete</button>
+          <button class="order-action-btn btn-complete" data-order-id="${safeId}" onclick="event.stopPropagation();">Complete</button>
         </div>`;
       }
       return '';
@@ -1385,30 +1432,30 @@
       modal.innerHTML = `
         <div class="order-modal-content">
           <div class="order-modal-header">
-            <h3><i class="fas fa-shopping-bag"></i> Order #${(order.orderId || order.id).slice(-8).toUpperCase()}</h3>
-            <button class="order-modal-close" onclick="this.closest('.order-modal-overlay').remove()"><i class="fas fa-times"></i></button>
+            <h3><i class="fas fa-shopping-bag"></i> Order #${escapeHtml((order.orderId || order.id).slice(-8).toUpperCase())}</h3>
+            <button class="order-modal-close"><i class="fas fa-times"></i></button>
           </div>
           <div class="order-modal-body">
             <div class="order-detail-section">
               <h4>Buyer Details</h4>
-              <p><strong>${order.buyerDetails?.name || 'N/A'}</strong></p>
-              <p><i class="fas fa-phone"></i> ${order.buyerDetails?.phone || order.mpesaPhone || 'N/A'}</p>
-              <p><i class="fas fa-map-marker-alt"></i> ${order.buyerDetails?.location || 'N/A'}</p>
-              <p><i class="fas fa-home"></i> ${order.buyerDetails?.deliveryAddress || 'N/A'}</p>
+              <p><strong>${escapeHtml(order.buyerDetails?.name || 'N/A')}</strong></p>
+              <p><i class="fas fa-phone"></i> ${escapeHtml(order.buyerDetails?.phone || order.mpesaPhone || 'N/A')}</p>
+              <p><i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.buyerDetails?.location || 'N/A')}</p>
+              <p><i class="fas fa-home"></i> ${escapeHtml(order.buyerDetails?.deliveryAddress || 'N/A')}</p>
             </div>
             <div class="order-detail-section">
               <h4>Items Sold (${order.items?.length || 0})</h4>
               ${order.items?.map(item => {
-                const name = item.productName || item.name || 'Product';
+                const name = escapeHtml(item.productName || item.name || 'Product');
                 const qty = item.quantity || 1;
                 const price = item.pricePerUnit || item.price || 0;
                 const variation = item.selectedVariation;
                 let variantDisplay = '';
                 if (variation) {
                   if (typeof variation === 'object') {
-                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${variation.title || 'Variant'}: ${variation.attr_name || variation.value || ''}</div>`;
+                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${escapeHtml(variation.title || 'Variant')}: ${escapeHtml(variation.attr_name || variation.value || '')}</div>`;
                   } else {
-                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${variation}</div>`;
+                    variantDisplay = `<div style="background:#fff3e0;color:#ff5722;padding:3px 8px;border-radius:4px;font-size:0.75rem;margin:4px 0;"><i class="fas fa-tag"></i> ${escapeHtml(variation)}</div>`;
                   }
                 }
                 return `
@@ -1426,9 +1473,9 @@
             </div>
             <div class="order-detail-section">
               <h4>Payment</h4>
-              <p>Method: <strong>${order.paymentMethod || 'N/A'}</strong></p>
-              <p>Status: <span class="order-status ${order.paymentStatus || 'pending'}">${order.paymentStatus || 'pending'}</span></p>
-              ${order.mpesaTransactionId ? `<p>M-Pesa: ${order.mpesaTransactionId}</p>` : ''}
+              <p>Method: <strong>${escapeHtml(order.paymentMethod || 'N/A')}</strong></p>
+              <p>Status: <span class="order-status ${escapeHtml(order.paymentStatus || 'pending')}">${escapeHtml(order.paymentStatus || 'pending')}</span></p>
+              ${order.mpesaTransactionId ? `<p>M-Pesa: ${escapeHtml(order.mpesaTransactionId)}</p>` : ''}
             </div>
             <div class="order-detail-totals">
               <div><span>Subtotal</span><span>KES ${(order.subtotal || 0).toLocaleString()}</span></div>
@@ -1439,6 +1486,7 @@
           </div>
         </div>
       `;
+      modal.querySelector('.order-modal-close').addEventListener('click', () => modal.remove());
       document.body.appendChild(modal);
       modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
     };

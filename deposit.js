@@ -694,6 +694,12 @@ class DepositManager {
                     minute: '2-digit'
                 });
                 
+                // Whitelist valid statuses to prevent class injection
+                const validStatuses = ['completed', 'pending', 'failed', 'cancelled'];
+                const rawStatus = String(data.status || 'pending');
+                const safeStatusClass = validStatuses.includes(rawStatus) ? rawStatus : 'pending';
+                const safeStatus = rawStatus.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                
                 return `
                     <div class="transaction-item">
                         <div class="transaction-info">
@@ -702,7 +708,7 @@ class DepositManager {
                         </div>
                         <div style="text-align: right;">
                             <div class="transaction-amount credit">KES ${data.amount?.toLocaleString() || 0}</div>
-                            <span class="transaction-status ${data.status}">${data.status}</span>
+                            <span class="transaction-status ${safeStatusClass}">${safeStatus}</span>
                         </div>
                     </div>
                 `;
@@ -726,9 +732,10 @@ class DepositManager {
         
         const toast = document.createElement('div');
         toast.className = `toast-notification toast-${type}`;
+        const safeMessage = message.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         toast.innerHTML = `
             <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-            <span>${message}</span>
+            <span>${safeMessage}</span>
         `;
         
         // Add toast styles if not present

@@ -92,7 +92,7 @@
     </main>
 
     <footer>
-        <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
+        <p>&copy; 2026 Oda Pap. All Rights Reserved.</p>
     </footer>
 
     <script type="module">
@@ -202,7 +202,7 @@
                 const faqItem = document.createElement('div');
                 faqItem.className = 'faq-item';
                 faqItem.innerHTML = `
-                    <div class="faq-question" onclick="toggleFAQ(${index})">
+                    <div class="faq-question" onclick="toggleFAQ(${index}, event)">
                         <h3>${faq.question}</h3>
                         <i class="fas fa-chevron-down"></i>
                     </div>
@@ -215,9 +215,9 @@
         }
 
         // Toggle FAQ answer
-        window.toggleFAQ = function(index) {
+        window.toggleFAQ = function(index, e) {
             const answer = document.getElementById(`answer-${index}`);
-            const question = event.target.closest('.faq-question');
+            const question = e.target.closest('.faq-question');
             const isOpen = answer.style.display === 'block';
             
             // Close all other FAQs
@@ -245,22 +245,32 @@
                 
                 window.location.href = `chat.html?sellerId=${supportId}`;
             } else {
-                // Show login modal instead of confirm
-                const modal = document.createElement('div');
-                modal.innerHTML = `
-                    <div style=\"position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;\" onclick=\"if(event.target===this)this.remove()\">
-                        <div style=\"background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;\">
-                            <i class=\"fas fa-user-lock\" style=\"font-size:48px;color:#ff5722;margin-bottom:16px;\"></i>
-                            <h3 style=\"margin:0 0 8px;color:#333;\">Login Required</h3>
-                            <p style=\"color:#666;font-size:14px;margin:0 0 20px;\">Please log in to chat with support</p>
-                            <div style=\"display:flex;gap:12px;\">
-                                <button onclick=\"this.closest('div[style]').parentElement.remove()\" style=\"flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;\">Cancel</button>
-                                <button onclick=\"window.location.href='login.html?redirect=customer_care.html'\" style=\"flex:1;padding:12px;border:none;background:#ff5722;color:white;border-radius:8px;cursor:pointer;\">Login</button>
-                            </div>
-                        </div>
-                    </div>
+                // Show login modal
+                const overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+                
+                const box = document.createElement('div');
+                box.style.cssText = 'background:white;padding:24px;border-radius:16px;max-width:320px;text-align:center;';
+                box.innerHTML = `
+                    <i class="fas fa-user-lock" style="font-size:48px;color:#ff5722;margin-bottom:16px;"></i>
+                    <h3 style="margin:0 0 8px;color:#333;">Login Required</h3>
+                    <p style="color:#666;font-size:14px;margin:0 0 20px;">Please log in to chat with support</p>
+                    <div style="display:flex;gap:12px;"></div>
                 `;
-                document.body.appendChild(modal.firstElementChild);
+                const btnRow = box.querySelector('div');
+                const cancelBtn = document.createElement('button');
+                cancelBtn.textContent = 'Cancel';
+                cancelBtn.style.cssText = 'flex:1;padding:12px;border:1px solid #ddd;background:white;border-radius:8px;cursor:pointer;';
+                cancelBtn.addEventListener('click', () => overlay.remove());
+                const loginBtn = document.createElement('button');
+                loginBtn.textContent = 'Login';
+                loginBtn.style.cssText = 'flex:1;padding:12px;border:none;background:#ff5722;color:white;border-radius:8px;cursor:pointer;';
+                loginBtn.addEventListener('click', () => { window.location.href = 'login.html?redirect=customer_care.html'; });
+                btnRow.appendChild(cancelBtn);
+                btnRow.appendChild(loginBtn);
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
             }
         });
 

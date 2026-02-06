@@ -143,8 +143,8 @@ function getMinPriceFromVariations(listing) {
           const attrPrice = a.price || a.originalPrice;
           if (attrPrice && attrPrice < minPrice) {
             minPrice = attrPrice;
-            // Check both retailPrice and retail field names
-            associatedRetail = a.retailPrice || a.retail || null;
+            // Prefer retailPack (total retail value of pack) over retailPrice (per-piece retail)
+            associatedRetail = a.retailPack || a.retailPrice || a.retail || null;
             packSize = a.packSize || null;
           }
         });
@@ -152,7 +152,7 @@ function getMinPriceFromVariations(listing) {
         const varPrice = v.price || v.originalPrice;
         if (varPrice && varPrice < minPrice) {
           minPrice = varPrice;
-          associatedRetail = v.retailPrice || v.retail || null;
+          associatedRetail = v.retailPack || v.retailPrice || v.retail || null;
           packSize = v.packSize || null;
         }
       }
@@ -165,9 +165,12 @@ function getMinPriceFromVariations(listing) {
     associatedRetail = listing.retailPrice || listing.retail || listing.initialPrice || null;
   }
   
+  // Only return retail if it's actually greater than wholesale (sanity check)
+  const finalRetail = (associatedRetail && associatedRetail > minPrice) ? associatedRetail : null;
+  
   return { 
     price: minPrice, 
-    retailPrice: associatedRetail,
+    retailPrice: finalRetail,
     packSize: packSize
   };
 }
@@ -247,7 +250,7 @@ async function updateAuthStatus(user) {
     
     el.innerHTML = `
       <div class="welcome">
-        <span class="greeting">👋 ${getGreeting()}, <strong>${name}</strong></span>
+        <span class="greeting">👋 ${getGreeting()}, <strong>${escapeHtml(name)}</strong></span>
         <div class="actions">
           <a href="listing.html" class="btn btn-primary"><i class="fas fa-plus"></i> Sell</a>
           <button class="btn btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
@@ -377,16 +380,16 @@ async function loadHeroSlides() {
       ];
     }
     
-    // Render slides
+    // Render slides (escape user-controlled content from Firestore)
     track.innerHTML = heroSlides.map((slide, idx) => `
       <div class="carousel-slide ${idx === 0 ? 'active' : ''}">
-        <div class="slide-content ${slide.gradient || 'gradient-1'}" ${slide.bgImage ? `style="background-image:linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(${slide.bgImage});background-size:cover;background-position:center;"` : ''}>
+        <div class="slide-content ${escapeHtml(slide.gradient || 'gradient-1')}" ${slide.bgImage ? `style="background-image:linear-gradient(rgba(0,0,0,0.3),rgba(0,0,0,0.3)),url(${sanitizeUrl(slide.bgImage)});background-size:cover;background-position:center;"` : ''}>
           <div class="slide-text">
-            <h2>${slide.title || ''}</h2>
-            <p>${slide.subtitle || ''}</p>
-            ${slide.btnText ? `<a href="${slide.btnLink || '#'}" class="slide-btn">${slide.btnText} <i class="fas fa-arrow-right"></i></a>` : ''}
+            <h2>${escapeHtml(slide.title || '')}</h2>
+            <p>${escapeHtml(slide.subtitle || '')}</p>
+            ${slide.btnText ? `<a href="${sanitizeUrl(slide.btnLink || '#', '#')}" class="slide-btn">${escapeHtml(slide.btnText)} <i class="fas fa-arrow-right"></i></a>` : ''}
           </div>
-          <div class="slide-icon"><i class="fas ${slide.icon || 'fa-star'}"></i></div>
+          <div class="slide-icon"><i class="fas ${escapeHtml(slide.icon || 'fa-star')}"></i></div>
         </div>
       </div>
     `).join('');
@@ -527,9 +530,9 @@ async function loadCategories() {
         const urlSafe = encodeURIComponent(cat);
         return `
           <a href="category.html?category=${urlSafe}" class="cat-card">
-            <i class="fas fa-${getCategoryIcon(cat)}"></i>
-            <span>${getShortLabel(cat)}</span>
-            <span class="count">${count}</span>
+            <i class="fas fa-${escapeHtml(getCategoryIcon(cat))}"></i>
+            <span>${escapeHtml(getShortLabel(cat))}</span>
+            <span class="count">${parseInt(count) || 0}</span>
           </a>
         `;
       }).join('');
@@ -543,8 +546,8 @@ async function loadCategories() {
         const isGeneral = cat.toLowerCase().includes('general');
         return `
           <a href="category.html?category=${urlSafe}" class="mega-cat${isGeneral ? ' featured' : ''}">
-            <i class="fas fa-${getCategoryIcon(cat)}"></i>
-            <span>${getShortLabel(cat)}</span>
+            <i class="fas fa-${escapeHtml(getCategoryIcon(cat))}"></i>
+            <span>${escapeHtml(getShortLabel(cat))}</span>
             ${isGeneral ? '<small>Curated picks</small>' : ''}
           </a>
         `;
@@ -940,17 +943,21 @@ function renderProducts() {
           </div>
           <div class="product-price">
             <div class="price-row">
-              <span class="price-label">Wholesale:</span>
+              <span class="price-label">Your Price:</span>
               <strong class="wholesale-amount">KES ${listing.minPrice.toLocaleString()}</strong>
             </div>
             ${listing.retailPrice && listing.retailPrice > listing.minPrice ? `
             <div class="price-row retail-row">
-              <span class="price-label">Retail:</span>
+              <span class="price-label" title="What shops typically sell this for">Retail Price:</span>
               <span class="retail-amount">KES ${listing.retailPrice.toLocaleString()}</span>
-              <span class="profit-badge">+${listing.margin}%</span>
+              <span class="profit-badge">Save ${listing.margin}%</span>
             </div>` : ''}
           </div>
           <p class="product-description">${safeDescription}</p>
+          <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:10px;color:#166534;background:#f0fdf4;border-radius:6px;margin:4px 8px;">
+            <i class="fas fa-truck" style="color:#16a34a;"></i> Fast delivery in Mombasa
+            <span style="margin-left:auto;color:#6b7280;"><i class="fas fa-shield-alt" style="color:#16a34a;"></i> Secure</span>
+          </div>
           <div class="product-actions">
             <div>
               <i class="fas fa-cart-plus" onclick="addToCart('${safeId}')"></i>
@@ -1123,11 +1130,11 @@ function showQuantityModal(id, listing, isCart) {
           <div class="variations-grid">
             ${options.map((o, i) => `
               <div class="variation-mini-card ${i === 0 ? 'selected' : ''}" data-idx="${i}">
-                ${o.photoUrl ? `<img src="${o.photoUrl}" alt="">` : '<i class="fas fa-box"></i>'}
-                <p><strong>${o.display}</strong></p>
-                <p class="variation-price">KES ${(o.price || o.originalPrice || listing.minPrice).toLocaleString()}</p>
-                ${o.retailPrice ? `<p class="variation-retail">Retail: KES ${o.retailPrice.toLocaleString()}</p>` : ''}
-                <p class="variation-stock">${o.stock || 0} units</p>
+                ${o.photoUrl ? `<img src="${sanitizeUrl(o.photoUrl)}" alt="">` : '<i class="fas fa-box"></i>'}
+                <p><strong>${escapeHtml(o.display)}</strong></p>
+                <p class="variation-price">KES ${(parseFloat(o.price || o.originalPrice || listing.minPrice) || 0).toLocaleString()}</p>
+                ${o.retailPrice ? `<p class="variation-retail">Retail: KES ${(parseFloat(o.retailPrice) || 0).toLocaleString()}</p>` : ''}
+                <p class="variation-stock">${parseInt(o.stock) || 0} units</p>
               </div>
             `).join('')}
           </div>
@@ -1376,6 +1383,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   onAuthStateChanged(auth, async user => {
     updateAuthStatus(user);
+    
+    // Show "How It Works" only for unlogged users
+    const howItWorks = document.getElementById('howItWorks');
+    if (howItWorks) {
+      howItWorks.style.display = user ? 'none' : 'block';
+    }
+    
     if (user) {
       updateCartCounter(db, user.uid);
       updateWishlistCounter(db, user.uid);

@@ -302,7 +302,12 @@
 <body>
     <div class="login-container">
         <h2>Welcome Back</h2>
-            <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin-bottom: 15px;">📱 Enter your email and password to access your account</p>
+        <p style="color: rgba(255,255,255,0.9); font-size: 13px; margin-bottom: 6px;">🔐 Sign in to your Oda Pap account</p>
+        <div style="display:flex; justify-content:center; gap:14px; margin-bottom:15px; font-size:11px; color:rgba(255,255,255,0.75);">
+            <span><i class="fas fa-shopping-bag"></i> Your orders</span>
+            <span><i class="fas fa-heart"></i> Wishlist</span>
+            <span><i class="fas fa-wallet"></i> Wallet</span>
+        </div>
 
         <!-- Email Login Form -->
         <form id="email-login-form">
@@ -448,7 +453,11 @@
                 errorDiv.style.cssText = 'background: rgba(244, 67, 54, 0.1); color: #f44336; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; display: flex; align-items: center; gap: 8px;';
                 emailForm.insertBefore(errorDiv, emailForm.firstChild);
             }
-            errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + message;
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-exclamation-circle';
+            errorDiv.textContent = '';
+            errorDiv.appendChild(icon);
+            errorDiv.appendChild(document.createTextNode(' ' + message));
             errorDiv.style.display = 'flex';
             
             // Auto-hide after 5 seconds

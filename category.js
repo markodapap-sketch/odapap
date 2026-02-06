@@ -214,16 +214,15 @@ function getMinPriceFromVariations(listing) {
                     const attrPrice = attr.price || attr.originalPrice;
                     if (attrPrice && attrPrice < minPrice) {
                         minPrice = attrPrice;
-                        // Check both retailPrice and retail field names
-                        associatedRetail = attr.retailPrice || attr.retail || null;
+                        // Prefer retailPack (total retail value of pack) over retailPrice (per-piece retail)
+                        associatedRetail = attr.retailPack || attr.retailPrice || attr.retail || null;
                     }
                 });
             } else {
                 const varPrice = variation.price || variation.originalPrice;
                 if (varPrice && varPrice < minPrice) {
                     minPrice = varPrice;
-                    // Check both retailPrice and retail field names
-                    associatedRetail = variation.retailPrice || variation.retail || null;
+                    associatedRetail = variation.retailPack || variation.retailPrice || variation.retail || null;
                 }
             }
         });
@@ -235,9 +234,12 @@ function getMinPriceFromVariations(listing) {
         associatedRetail = listing.retailPrice || listing.retail || listing.initialPrice || null;
     }
     
+    // Only return retail if it's actually greater than wholesale (sanity check)
+    const finalRetail = (associatedRetail && associatedRetail > minPrice) ? associatedRetail : null;
+    
     return {
         price: minPrice,
-        retailPrice: associatedRetail
+        retailPrice: finalRetail
     };
 }
 
@@ -283,7 +285,7 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
                     ${option.photoUrl || option.imageUrl ? `<img src="${option.photoUrl || option.imageUrl}" alt="${option.displayName}">` : '<i class="fas fa-box"></i>'}
                     <p><strong>${option.displayName}</strong></p>
                     <p class="variation-price">KES ${optionPrice.toLocaleString()}</p>
-                    ${optionRetail ? `<p class="variation-retail">Retail: KES ${optionRetail.toLocaleString()}</p>` : ''}
+                    ${optionRetail ? `<p class="variation-retail">Market: KES ${optionRetail.toLocaleString()}</p>` : ''}
                     <p class="variation-stock">${option.stock || 0} units</p>
                 </div>
             `;
@@ -471,21 +473,21 @@ function renderBreadcrumb() {
   
   // Category level
   breadcrumbHTML += `<span class="breadcrumb-item ${!currentSubcategory ? 'active' : ''}" onclick="resetToCategory()">
-    ${categoryHierarchy[currentCategory]?.label || currentCategory}
+    ${escapeHtml(categoryHierarchy[currentCategory]?.label || currentCategory)}
   </span>`;
   
   // Subcategory level
   if (currentSubcategory) {
     breadcrumbHTML += `<i class="fas fa-chevron-right breadcrumb-separator"></i>
     <span class="breadcrumb-item ${!currentBrand ? 'active' : ''}" onclick="resetToSubcategory()">
-      ${categoryHierarchy[currentCategory]?.subcategories[currentSubcategory]?.label || currentSubcategory}
+      ${escapeHtml(categoryHierarchy[currentCategory]?.subcategories[currentSubcategory]?.label || currentSubcategory)}
     </span>`;
   }
   
   // Brand level
   if (currentBrand) {
     breadcrumbHTML += `<i class="fas fa-chevron-right breadcrumb-separator"></i>
-    <span class="breadcrumb-item active">${currentBrand}</span>`;
+    <span class="breadcrumb-item active">${escapeHtml(currentBrand)}</span>`;
   }
   
   breadcrumbHTML += '</div>';
@@ -561,8 +563,8 @@ async function renderSubcategoryCards() {
     card.className = 'filter-card';
     card.innerHTML = `
       <i class="fas fa-folder"></i>
-      <p>${subcategory.label}</p>
-      <span class="filter-count">${productCount}</span>
+      <p>${escapeHtml(subcategory.label)}</p>
+      <span class="filter-count">${parseInt(productCount) || 0}</span>
     `;
     card.onclick = () => selectSubcategory(key);
     subcategoryContainer.appendChild(card);
@@ -613,8 +615,8 @@ async function renderBrandCards() {
       card.className = 'filter-card';
       card.innerHTML = `
         <i class="fas fa-tag"></i>
-        <p>${brand}</p>
-        <span class="filter-count">${count}</span>
+        <p>${escapeHtml(brand)}</p>
+        <span class="filter-count">${parseInt(count) || 0}</span>
       `;
       card.onclick = () => selectBrand(brand);
       brandContainer.appendChild(card);
@@ -633,7 +635,7 @@ async function renderBrandCards() {
         allBrands.slice(MAX_VISIBLE_BRANDS).forEach(([brand, count]) => {
           const card = document.createElement('div');
           card.className = 'filter-card extra-brand';
-          card.innerHTML = `<i class="fas fa-tag"></i><p>${brand}</p><span class="filter-count">${count}</span>`;
+          card.innerHTML = `<i class="fas fa-tag"></i><p>${escapeHtml(brand)}</p><span class="filter-count">${parseInt(count) || 0}</span>`;
           card.onclick = () => selectBrand(brand);
           brandContainer.insertBefore(card, expandBtn);
         });
@@ -866,18 +868,22 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
               const retailPrice = priceData.retailPrice;
               return `
               <div class="price-row">
-                <span class="price-label">Wholesale:</span>
+                <span class="price-label">Your Price:</span>
                 <strong class="wholesale-amount">KES ${minPrice.toLocaleString()}</strong>
               </div>
               ${retailPrice && retailPrice > minPrice ? `
               <div class="price-row retail-row">
-                <span class="price-label">Retail:</span>
+                <span class="price-label" title="What shops typically sell this for">Retail Price:</span>
                 <span class="retail-amount">KES ${retailPrice.toLocaleString()}</span>
-                <span class="profit-badge">+${Math.round(((retailPrice - minPrice) / retailPrice) * 100)}%</span>
+                <span class="profit-badge">Save ${Math.round(((retailPrice - minPrice) / retailPrice) * 100)}%</span>
               </div>` : ''}`;
             })()}
           </div>
           <p class="product-description">${escapeHtml(listing.description || 'No description available')}</p>
+          <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:10px;color:#166534;background:#f0fdf4;border-radius:6px;margin:4px 8px;">
+            <i class="fas fa-truck" style="color:#16a34a;"></i> Fast delivery in Mombasa
+            <span style="margin-left:auto;color:#6b7280;"><i class="fas fa-shield-alt" style="color:#16a34a;"></i> Secure</span>
+          </div>
           <div class="product-actions">
             <div>
               <i class="fas fa-cart-plus add-to-cart-btn" data-listing-id="${safeId}"></i>
@@ -1052,7 +1058,7 @@ window.goToUserProfile = function(userId) {
 
 // Function to share product
 window.shareProduct = function (listingId, name, description, imageUrl) {
-  const productUrl = `${window.location.origin}/public/product.html?id=${listingId}`;
+  const productUrl = `${window.location.origin}/product.html?id=${encodeURIComponent(listingId)}`;
   if (navigator.share) {
     navigator.share({
       title: name,
@@ -1062,13 +1068,11 @@ window.shareProduct = function (listingId, name, description, imageUrl) {
       console.log('Thanks for sharing!');
     }).catch(console.error);
   } else {
-    const tempInput = document.createElement('input');
-    document.body.appendChild(tempInput);
-    tempInput.value = productUrl;
-    tempInput.select();
-    document.execCommand('copy');
-    document.body.removeChild(tempInput);
-    showNotification('Product link copied to clipboard!');
+    navigator.clipboard.writeText(productUrl).then(() => {
+      showNotification('Product link copied to clipboard!');
+    }).catch(() => {
+      showNotification('Unable to copy link', 'error');
+    });
   }
 };
 
@@ -1122,12 +1126,12 @@ const performSearch = async (searchTerm) => {
       const div = document.createElement('div');
       div.className = 'suggestion-item';
       div.innerHTML = `
-        <img src="${listing.imageUrls[0] || 'images/product-placeholder.png'}" alt="${listing.name}">
-        <span>${listing.name}</span>
-        <span>KES ${listing.price}</span>
+        <img src="${sanitizeUrl(listing.imageUrls?.[0])}" alt="${escapeHtml(listing.name)}">
+        <span>${escapeHtml(listing.name)}</span>
+        <span>KES ${(parseFloat(listing.price) || 0).toLocaleString()}</span>
       `;
       div.addEventListener('click', () => {
-        window.location.href = `product.html?id=${doc.id}`;
+        window.location.href = `product.html?id=${encodeURIComponent(doc.id)}`;
       });
       searchSuggestions.appendChild(div);
     });
@@ -1205,7 +1209,7 @@ async function loadMegaMenuCategories() {
     megaMenuGrid.innerHTML = sortedCategories
       .map(([cat, count]) => {
         const urlSafe = encodeURIComponent(cat);
-        return `<a href="category.html?category=${urlSafe}"><i class="fas fa-${getCategoryIcon(cat)}"></i> ${getShortLabel(cat)}</a>`;
+        return `<a href="category.html?category=${urlSafe}"><i class="fas fa-${escapeHtml(getCategoryIcon(cat))}"></i> ${escapeHtml(getShortLabel(cat))}</a>`;
       }).join('');
       
   } catch (error) {

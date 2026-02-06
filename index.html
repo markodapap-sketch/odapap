@@ -169,6 +169,42 @@
     <!-- Auth Status -->
     <div id="auth-status" class="auth-bar"></div>
 
+    <!-- How It Works - Guide for new/unlogged users -->
+    <section id="howItWorks" style="display:none;padding:16px;margin:0 12px 8px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:12px;border:1px solid #bae6fd;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:15px;color:#0c4a6e;"><i class="fas fa-lightbulb" style="color:#f59e0b;"></i> How Oda Pap Works</h3>
+        <button onclick="this.closest('section').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:16px;cursor:pointer;" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+      <p style="font-size:12px;color:#475569;margin:0 0 12px;line-height:1.5;">Buy quality products at <strong>wholesale prices</strong> — delivered to your door in Mombasa. No minimum order, pay securely with M-Pesa.</p>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:center;">
+        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
+          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-search" style="color:#2563eb;font-size:14px;"></i></div>
+          <strong>Browse & Compare</strong><br><span style="color:#64748b;">Find products from verified sellers</span>
+        </div>
+        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
+          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-tags" style="color:#2563eb;font-size:14px;"></i></div>
+          <strong>Wholesale Prices</strong><br><span style="color:#64748b;">Pay less than shop retail prices</span>
+        </div>
+        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
+          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-mobile-alt" style="color:#2563eb;font-size:14px;"></i></div>
+          <strong>Pay via M-Pesa</strong><br><span style="color:#64748b;">Safe M-Pesa, wallet or COD</span>
+        </div>
+        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
+          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-truck" style="color:#2563eb;font-size:14px;"></i></div>
+          <strong>Fast Delivery</strong><br><span style="color:#64748b;">Delivered across Mombasa</span>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:11px;color:#166534;line-height:1.6;">
+        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Free delivery</strong> on orders over KES 3,000<br>
+        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Verified sellers</strong> — quality guaranteed<br>
+        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Buyer protection</strong> — secure payments & easy returns
+      </div>
+      <div style="text-align:center;margin-top:12px;">
+        <a href="signup.html" style="display:inline-block;background:#2563eb;color:#fff;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">Sign Up Free <i class="fas fa-arrow-right" style="margin-left:4px;"></i></a>
+        <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">Already have an account? <a href="login.html" style="color:#2563eb;">Log in</a></p>
+      </div>
+    </section>
+
     <!-- Prime Categories Pills -->
     <section class="prime-pills">
       <a href="category.html?prime=generalShop" class="prime-pill general"><i class="fas fa-store"></i> General</a>
@@ -224,11 +260,29 @@
   </main>
 
   <!-- Sell Button -->
-  <footer>
-    <button class="floating-button" onclick="location.href='listing.html'">
-      <i class="fas fa-plus"></i>
-    </button>
-    <p>&copy; 2024 Oda Pap Wholesale. All Rights Reserved.</p>
+  <button class="floating-button" onclick="location.href='listing.html'">
+    <i class="fas fa-plus"></i>
+  </button>
+
+  <!-- Trust Banner -->
+  <section class="trust-banner" style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:20px 16px 8px;background:#f9fafb;border-top:1px solid #eee;">
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-shield-alt" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Secure<br>Payments</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-truck" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Fast Delivery<br>in Mombasa</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-tags" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Wholesale<br>Prices</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-headset" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Customer<br>Support</div>
+  </section>
+
+  <footer style="background:#1a1a2e;color:rgba(255,255,255,0.8);padding:24px 16px 16px;font-size:12px;">
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px 20px;margin-bottom:12px;">
+      <a href="customer_care.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-headset"></i> Help Center</a>
+      <a href="orderTracking.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-truck"></i> Track Order</a>
+      <a href="listing.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-store"></i> Sell on Oda Pap</a>
+      <a href="profile.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-user"></i> My Account</a>
+    </div>
+    <div style="text-align:center;border-top:1px solid rgba(255,255,255,0.15);padding-top:12px;">
+      <p style="margin:0;">&copy; 2025 Oda Pap Wholesale. All Rights Reserved.</p>
+      <p style="margin:4px 0 0;font-size:11px;color:rgba(255,255,255,0.5);">Mombasa's trusted B2B wholesale marketplace</p>
+    </div>
   </footer>
 
   <script>

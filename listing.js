@@ -61,7 +61,10 @@ function toast(msg, type = 'info', dur = 3500) {
     const box = $('toast-box');
     const el = document.createElement('div');
     el.className = `toast ${type}`;
-    el.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i><span>${msg}</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+    el.innerHTML = `<i class="fas fa-${icon}"></i><span></span><button><i class="fas fa-times"></i></button>`;
+    el.querySelector('span').textContent = msg;
+    el.querySelector('button').addEventListener('click', () => el.remove());
     box.appendChild(el);
     setTimeout(() => el.remove(), dur);
 }
@@ -199,14 +202,14 @@ function updateContextPills() {
     // Show first image thumbnail + name
     if (state.images.length > 0) {
         const name = $('product-name').value.trim();
-        html += `<div class="ctx-pill"><img src="${state.images[0].dataUrl}" alt=""><span>${name || 'Product'}</span></div>`;
+        html += `<div class="ctx-pill"><img src="${state.images[0].dataUrl}" alt=""><span>${escapeHtml(name || 'Product')}</span></div>`;
     }
     
     // Show category
     if (state.step > 2) {
         const cat = $('category').selectedOptions[0]?.text;
         if (cat && cat !== 'Select category') {
-            html += `<div class="ctx-pill"><i class="fas fa-tag"></i><span>${cat}</span></div>`;
+            html += `<div class="ctx-pill"><i class="fas fa-tag"></i><span>${escapeHtml(cat)}</span></div>`;
         }
     }
     
@@ -763,7 +766,7 @@ function renderVariants() {
                     <option value="Material" ${v.type === 'Material' ? 'selected' : ''}>Material</option>
                     <option value="Custom" ${v.type === 'Custom' ? 'selected' : ''}>Custom</option>
                 </select>
-                ${v.type === 'Custom' ? `<input type="text" placeholder="Type name" value="${v.customType}" onchange="updateVarCustom(${v.id}, this.value)">` : ''}
+                ${v.type === 'Custom' ? `<input type="text" placeholder="Type name" value="${escapeHtml(v.customType)}" onchange="updateVarCustom(${v.id}, this.value)">` : ''}
                 ${state.variants.length > 1 ? `<button type="button" class="del-var" onclick="removeVar(${v.id})"><i class="fas fa-trash"></i></button>` : ''}
             </div>
             ${v.options.map((o, oi) => {
@@ -788,10 +791,10 @@ function renderVariants() {
                             <input type="file" class="opt-img-input" id="opt-img-${v.id}-${o.id}" accept="image/*" onchange="handleOptImgUpload(event, ${v.id}, ${o.id})">
                         </div>
                         <div class="opt-name-field">
-                            <input type="text" value="${o.name}" onchange="updateOpt(${v.id}, ${o.id}, 'name', this.value)" placeholder="Option name (e.g. Small, Red)">
+                            <input type="text" value="${escapeHtml(o.name)}" onchange="updateOpt(${v.id}, ${o.id}, 'name', this.value)" placeholder="Option name (e.g. Small, Red)">
                         </div>
                         <div class="opt-pack-field">
-                            <input type="text" value="${o.packSize || ''}" onchange="updateOpt(${v.id}, ${o.id}, 'packSize', this.value)" placeholder="pcs/doz" title="Pack size (e.g. pieces, dozen, carton)">
+                            <input type="text" value="${escapeHtml(o.packSize || '')}" onchange="updateOpt(${v.id}, ${o.id}, 'packSize', this.value)" placeholder="pcs/doz" title="Pack size (e.g. pieces, dozen, carton)">
                         </div>
                         ${v.options.length > 1 ? `<button type="button" class="opt-del" onclick="removeOpt(${v.id}, ${o.id})"><i class="fas fa-times"></i></button>` : ''}
                     </div>
@@ -1029,14 +1032,14 @@ function generateReview() {
     $('review-box').innerHTML = `
         <div class="review-section">
             <h4>Category</h4>
-            <p>${catText}${subText ? ' › ' + subText : ''}</p>
+            <p>${escapeHtml(catText)}${subText ? ' › ' + escapeHtml(subText) : ''}</p>
         </div>
         <div class="review-section">
             <h4>Product</h4>
-            <p><strong>${$('product-name').value}</strong></p>
-            <p>Brand: ${brandVal}</p>
+            <p><strong>${escapeHtml($('product-name').value)}</strong></p>
+            <p>Brand: ${escapeHtml(brandVal)}</p>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">
-                ${$('description').value.slice(0, 150)}${$('description').value.length > 150 ? '...' : ''}
+                ${escapeHtml($('description').value.slice(0, 150))}${$('description').value.length > 150 ? '...' : ''}
             </p>
         </div>
         <div class="review-section">
@@ -1049,11 +1052,11 @@ function generateReview() {
             <h4>Variants & Pricing</h4>
             ${state.variants.map(v => `
                 <div class="review-var">
-                    <strong>${v.type === 'Custom' ? v.customType : v.type}</strong>
+                    <strong>${escapeHtml(v.type === 'Custom' ? v.customType : v.type)}</strong>
                     ${v.options.map(o => `
                         <div class="review-opt">
                             ${o.image ? `<img src="${o.image}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;margin-right:8px;">` : ''}
-                            <span>${o.name}</span>
+                            <span>${escapeHtml(o.name)}</span>
                             <span>Stock: ${o.stock} · ${formatPrice(o.price)}${o.retail ? ` <small>(Retail: ${formatPrice(o.retail)})</small>` : ''}</span>
                         </div>
                     `).join('')}
@@ -1366,7 +1369,7 @@ function showUploadProgress(job) {
     progressEl.className = 'upload-progress-item';
     progressEl.innerHTML = `
         <div class="upload-info">
-            <strong class="upload-name">${job.productName}</strong>
+            <strong class="upload-name">${escapeHtml(job.productName)}</strong>
             <span class="upload-status">Queued...</span>
         </div>
         <div class="upload-bar">
@@ -1488,12 +1491,12 @@ function renderListings() {
             <div class="listing-card">
                 <div class="img"><img src="${l.imageUrls?.[0] || 'https://placehold.co/200x150/e2e8f0/64748b?text=No+Image'}" alt=""><span class="stock-badge ${stockClass}">${stockText}</span></div>
                 <div class="body">
-                    <h3>${l.name}</h3>
-                    <div class="meta"><span>${l.brand || '-'}</span><span class="price">${formatPrice(l.originalPrice || l.price)}</span></div>
+                    <h3>${escapeHtml(l.name)}</h3>
+                    <div class="meta"><span>${escapeHtml(l.brand || '-')}</span><span class="price">${formatPrice(l.originalPrice || l.price)}</span></div>
                     <div class="actions">
-                        <button class="edit-btn" onclick="editListing('${l.id}')"><i class="fas fa-edit"></i> Edit</button>
-                        <button class="img-btn" onclick="openImageManager('${l.id}')" title="Manage images"><i class="fas fa-images"></i> ${imgCount}</button>
-                        <button class="del-btn" onclick="deleteListing('${l.id}')"><i class="fas fa-trash"></i></button>
+                        <button class="edit-btn" data-id="${escapeHtml(l.id)}" onclick="editListing(this.dataset.id)"><i class="fas fa-edit"></i> Edit</button>
+                        <button class="img-btn" data-id="${escapeHtml(l.id)}" onclick="openImageManager(this.dataset.id)" title="Manage images"><i class="fas fa-images"></i> ${imgCount}</button>
+                        <button class="del-btn" data-id="${escapeHtml(l.id)}" onclick="deleteListing(this.dataset.id)"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>
@@ -1657,33 +1660,33 @@ function renderTableView() {
         const extraImgs = imgCount > 1 ? imgCount - 1 : 0;
         
         return `
-            <tr data-id="${l.id}" class="${modified}">
+            <tr data-id="${escapeHtml(l.id)}" class="${modified}">
                 <td>
                     <div class="table-img-group">
-                        <img src="${l.imageUrls?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=N/A'}" class="table-img" alt="" onclick="openImageManager('${l.id}')">
+                        <img src="${l.imageUrls?.[0] || 'https://placehold.co/50x50/e2e8f0/64748b?text=N/A'}" class="table-img" alt="" data-id="${escapeHtml(l.id)}" onclick="openImageManager(this.dataset.id)">
                         ${extraImgs > 0 ? `<span class="table-img-more">+${extraImgs}</span>` : ''}
-                        <button class="table-img-btn" onclick="openImageManager('${l.id}')" title="Manage images"><i class="fas fa-edit"></i></button>
+                        <button class="table-img-btn" data-id="${escapeHtml(l.id)}" onclick="openImageManager(this.dataset.id)" title="Manage images"><i class="fas fa-edit"></i></button>
                     </div>
                 </td>
                 <td class="table-cell">
-                    <div class="table-cell-content" data-field="name" data-id="${l.id}" onclick="startCellEdit(this)">${escapeHtml(l.name)}</div>
+                    <div class="table-cell-content" data-field="name" data-id="${escapeHtml(l.id)}" onclick="startCellEdit(this)">${escapeHtml(l.name)}</div>
                 </td>
                 <td class="table-cell">
-                    <div class="table-cell-content" data-field="description" data-id="${l.id}" onclick="startCellEdit(this)">${escapeHtml(truncate(l.description, 60))}</div>
+                    <div class="table-cell-content" data-field="description" data-id="${escapeHtml(l.id)}" onclick="startCellEdit(this)">${escapeHtml(truncate(l.description, 60))}</div>
                 </td>
                 <td class="table-cell var-cell">
                     ${renderVariationsCell(l)}
                 </td>
                 <td class="table-cell">
-                    <div class="table-cell-content" data-field="price" data-id="${l.id}" onclick="startCellEdit(this)">${formatPrice(lowestPrice)}</div>
+                    <div class="table-cell-content" data-field="price" data-id="${escapeHtml(l.id)}" onclick="startCellEdit(this)">${formatPrice(lowestPrice)}</div>
                 </td>
                 <td class="table-cell">
-                    <div class="table-cell-content" data-field="stock" data-id="${l.id}" onclick="startCellEdit(this)">${totalStock}</div>
+                    <div class="table-cell-content" data-field="stock" data-id="${escapeHtml(l.id)}" onclick="startCellEdit(this)">${totalStock}</div>
                 </td>
                 <td class="table-actions">
-                    <button class="btn-full-edit" onclick="editListing('${l.id}')" title="Full Edit"><i class="fas fa-expand"></i></button>
-                    <button class="btn-var-edit" onclick="openVariationEditor('${l.id}')" title="Edit Variations"><i class="fas fa-layer-group"></i></button>
-                    <button class="btn-del" onclick="deleteListing('${l.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                    <button class="btn-full-edit" data-id="${escapeHtml(l.id)}" onclick="editListing(this.dataset.id)" title="Full Edit"><i class="fas fa-expand"></i></button>
+                    <button class="btn-var-edit" data-id="${escapeHtml(l.id)}" onclick="openVariationEditor(this.dataset.id)" title="Edit Variations"><i class="fas fa-layer-group"></i></button>
+                    <button class="btn-del" data-id="${escapeHtml(l.id)}" onclick="deleteListing(this.dataset.id)" title="Delete"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
         `;
@@ -1693,7 +1696,7 @@ function renderTableView() {
 // Render variations cell with editable inline options
 function renderVariationsCell(l) {
     if (!l.variations || l.variations.length === 0) {
-        return `<div class="var-empty" onclick="openVariationEditor('${l.id}')"><i class="fas fa-plus"></i> Add Variants</div>`;
+        return `<div class="var-empty" data-id="${escapeHtml(l.id)}" onclick="openVariationEditor(this.dataset.id)"><i class="fas fa-plus"></i> Add Variants</div>`;
     }
     
     const items = [];
@@ -1701,11 +1704,11 @@ function renderVariationsCell(l) {
         items.push(`<div class="var-type-label">${escapeHtml(v.title)}</div>`);
         v.attributes?.forEach(a => {
             items.push(`
-                <div class="var-row" data-id="${l.id}" data-var="${escapeHtml(v.title)}" data-attr="${escapeHtml(a.attr_name)}">
+                <div class="var-row" data-id="${escapeHtml(l.id)}" data-var="${escapeHtml(v.title)}" data-attr="${escapeHtml(a.attr_name)}">
                     <span class="var-name">${escapeHtml(a.attr_name)}</span>
                     <input type="number" class="var-price-input" value="${a.originalPrice || a.price || 0}" data-field="varPrice" onchange="updateVariantField(this)" placeholder="Price" title="Price">
                     <input type="number" class="var-stock-input" value="${a.stock || 0}" data-field="varStock" onchange="updateVariantField(this)" placeholder="Qty" title="Stock">
-                    <button class="var-del-btn" onclick="deleteVariantOption('${l.id}', '${escapeHtml(v.title)}', '${escapeHtml(a.attr_name)}')" title="Remove"><i class="fas fa-times"></i></button>
+                    <button class="var-del-btn" onclick="deleteVariantOption(this.closest('.var-row').dataset.id, this.closest('.var-row').dataset.var, this.closest('.var-row').dataset.attr)" title="Remove"><i class="fas fa-times"></i></button>
                 </div>
             `);
         });
@@ -1714,7 +1717,7 @@ function renderVariationsCell(l) {
     return `
         <div class="var-cell-content">
             ${items.join('')}
-            <button class="var-add-btn" onclick="openVariationEditor('${l.id}')" title="Add/Edit Variations"><i class="fas fa-plus"></i> Add</button>
+            <button class="var-add-btn" data-id="${escapeHtml(l.id)}" onclick="openVariationEditor(this.dataset.id)" title="Add/Edit Variations"><i class="fas fa-plus"></i> Add</button>
         </div>
     `;
 }
@@ -1725,8 +1728,8 @@ function renderVariantsMini(l) {
     const items = [];
     l.variations.forEach(v => {
         v.attributes?.forEach(a => {
-            items.push(`<div class="variant-mini-row" data-id="${l.id}" data-var="${v.title}" data-attr="${a.attr_name}">
-                <span>${a.attr_name}</span>
+            items.push(`<div class="variant-mini-row" data-id="${escapeHtml(l.id)}" data-var="${escapeHtml(v.title)}" data-attr="${escapeHtml(a.attr_name)}">
+                <span>${escapeHtml(a.attr_name)}</span>
                 <input type="number" value="${a.originalPrice || a.price}" data-field="varPrice" onchange="updateVariantField(this)" placeholder="Price">
             </div>`);
         });
@@ -1741,8 +1744,8 @@ function renderStockMini(l) {
     const items = [];
     l.variations.forEach(v => {
         v.attributes?.forEach(a => {
-            items.push(`<div class="variant-mini-row" data-id="${l.id}" data-var="${v.title}" data-attr="${a.attr_name}">
-                <span>${a.attr_name}</span>
+            items.push(`<div class="variant-mini-row" data-id="${escapeHtml(l.id)}" data-var="${escapeHtml(v.title)}" data-attr="${escapeHtml(a.attr_name)}">
+                <span>${escapeHtml(a.attr_name)}</span>
                 <input type="number" value="${a.stock}" data-field="varStock" onchange="updateVariantField(this)" placeholder="Qty">
             </div>`);
         });
@@ -1792,13 +1795,15 @@ window.startCellEdit = function(el) {
     else if (field === 'stock') value = getTotalStock(listing);
     
     if (field === 'description') {
-        el.innerHTML = `<textarea data-field="${field}" onblur="endCellEdit(this, '${id}')" onkeydown="handleCellKey(event, this, '${id}')">${escapeHtml(value)}</textarea>`;
+        el.innerHTML = `<textarea data-field="${field}" data-listing-id="${escapeHtml(id)}">${escapeHtml(value)}</textarea>`;
     } else {
         const type = (field === 'price' || field === 'stock') ? 'number' : 'text';
-        el.innerHTML = `<input type="${type}" value="${escapeHtml(String(value))}" data-field="${field}" onblur="endCellEdit(this, '${id}')" onkeydown="handleCellKey(event, this, '${id}')">`;
+        el.innerHTML = `<input type="${type}" value="${escapeHtml(String(value))}" data-field="${field}" data-listing-id="${escapeHtml(id)}">`;
     }
     
     const input = el.querySelector('input, textarea');
+    input.addEventListener('blur', () => endCellEdit(input, input.dataset.listingId));
+    input.addEventListener('keydown', (e) => handleCellKey(e, input, input.dataset.listingId));
     input.focus();
     input.select();
 };
@@ -1826,10 +1831,10 @@ window.endCellEdit = async function(input, id) {
     const updates = {};
     
     if (field === 'name' && newValue !== listing.name) {
-        updates.name = newValue;
+        updates.name = sanitizeText(newValue, 200);
         changed = true;
     } else if (field === 'description' && newValue !== listing.description) {
-        updates.description = newValue;
+        updates.description = sanitizeText(newValue, 5000);
         changed = true;
     } else if (field === 'price' && listing.variations?.length <= 1) {
         // For single variant, update directly

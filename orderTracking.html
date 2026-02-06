@@ -339,7 +339,7 @@
     </div>
 
     <footer>
-        <p>&copy; 2024 Oda Pap. All Rights Reserved.</p>
+        <p>&copy; 2025 Oda Pap Wholesale. All Rights Reserved.</p>
     </footer>
 
     <script type="module">
@@ -349,6 +349,7 @@
         import { showNotification } from './notifications.js';
         import { updateNavCounters } from './js/utils.js';
         import { OdaModal } from './js/odaModal.js';
+        import { escapeHtml } from './js/sanitize.js';
 
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -476,10 +477,10 @@
                     <div class="order-items">
                         <div class="item">
                             <img src="${firstItem.imageUrl || firstItem.photoUrl || (firstItem.imageUrls && firstItem.imageUrls[0]) || 'images/product-placeholder.png'}" 
-                                 alt="${firstItem.productName || firstItem.name || 'Product'}" onerror="this.src='images/product-placeholder.png'">
+                                 alt="${escapeHtml(firstItem.productName || firstItem.name || 'Product')}" onerror="this.src='images/product-placeholder.png'">
                             <div class="item-details">
-                                <h4>${firstItem.productName || firstItem.name || 'Product'}</h4>
-                                <p class="brand">${firstItem.brand || ''}</p>
+                                <h4>${escapeHtml(firstItem.productName || firstItem.name || 'Product')}</h4>
+                                <p class="brand">${escapeHtml(firstItem.brand || '')}</p>
                                 <p class="quantity">Qty: ${firstItem.quantity || 1}${itemCount > 1 ? ` (+${itemCount - 1} more items)` : ''}</p>
                             </div>
                             <div class="item-price">
@@ -492,6 +493,13 @@
                     <div class="order-timeline">
                         ${generateTimeline(status)}
                     </div>
+
+                    ${status !== 'delivered' && status !== 'cancelled' && status !== 'refunded' ? `
+                    <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#eff6ff;border-radius:8px;margin-bottom:10px;font-size:12px;color:#1e40af;">
+                        <i class="fas fa-info-circle"></i>
+                        <span>${status === 'out_for_delivery' ? 'Your order is on the way! Expected within a few hours.' : 'Orders are typically delivered same day within Mombasa for orders placed before 3 PM.'}</span>
+                    </div>
+                    ` : ''}
 
                     <div class="order-footer">
                         <button class="btn-view-details" onclick="viewOrderDetails('${order.id}')">
@@ -608,14 +616,14 @@
                     <div class="detail-row">
                         <span class="detail-label">Status:</span>
                         <span class="status-badge" style="background: ${config.color}20; color: ${config.color}">
-                            <i class="fas fa-${config.icon}"></i> ${config.label}
+                            <i class="fas fa-${config.icon}"></i> ${escapeHtml(config.label)}
                         </span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Payment:</span>
                         <span class="status-badge ${order.paymentStatus === 'completed' ? 'success' : 'warning'}">
                             <i class="fas fa-${order.paymentStatus === 'completed' ? 'check' : 'clock'}"></i>
-                            ${order.paymentStatus === 'completed' ? 'Paid' : order.paymentStatus || 'Pending'}
+                            ${escapeHtml(order.paymentStatus === 'completed' ? 'Paid' : order.paymentStatus || 'Pending')}
                         </span>
                     </div>
                     ${order.sellerConfirmed ? `
@@ -645,16 +653,16 @@
                 <h3>Items</h3>
                 <div class="detail-items">
                     ${items.map(item => {
-                        const itemName = item.productName || item.name || 'Product';
+                        const itemName = escapeHtml(item.productName || item.name || 'Product');
                         const itemPrice = item.pricePerUnit || item.price || 0;
                         const itemImage = item.imageUrl || item.photoUrl || 'images/product-placeholder.png';
                         const variation = item.selectedVariation;
                         let variationHtml = '';
                         if (variation) {
                             if (typeof variation === 'object') {
-                                variationHtml = `<p style="background:#fff3e0;color:#ff5722;padding:2px 6px;border-radius:4px;display:inline-block;font-size:12px;"><i class="fas fa-tag"></i> ${variation.title || ''}: ${variation.attr_name || variation.value || ''}</p>`;
+                                variationHtml = `<p style="background:#fff3e0;color:#ff5722;padding:2px 6px;border-radius:4px;display:inline-block;font-size:12px;"><i class="fas fa-tag"></i> ${escapeHtml(variation.title || '')}: ${escapeHtml(variation.attr_name || variation.value || '')}</p>`;
                             } else {
-                                variationHtml = `<p style="background:#fff3e0;color:#ff5722;padding:2px 6px;border-radius:4px;display:inline-block;font-size:12px;"><i class="fas fa-tag"></i> ${variation}</p>`;
+                                variationHtml = `<p style="background:#fff3e0;color:#ff5722;padding:2px 6px;border-radius:4px;display:inline-block;font-size:12px;"><i class="fas fa-tag"></i> ${escapeHtml(variation)}</p>`;
                             }
                         }
                         return `
@@ -680,9 +688,9 @@
                 ${order.shippingAddress ? `
                     <h3>Shipping Address</h3>
                     <div class="shipping-info">
-                        <p><i class="fas fa-user"></i> ${order.shippingAddress.name || 'N/A'}</p>
-                        <p><i class="fas fa-phone"></i> ${order.shippingAddress.phone || 'N/A'}</p>
-                        <p><i class="fas fa-map-marker-alt"></i> ${order.shippingAddress.address || 'N/A'}</p>
+                        <p><i class="fas fa-user"></i> ${escapeHtml(order.shippingAddress.name || 'N/A')}</p>
+                        <p><i class="fas fa-phone"></i> ${escapeHtml(order.shippingAddress.phone || 'N/A')}</p>
+                        <p><i class="fas fa-map-marker-alt"></i> ${escapeHtml(order.shippingAddress.address || 'N/A')}</p>
                     </div>
                 ` : ''}
             `;
@@ -700,7 +708,7 @@
             if (!selectedOrder) return;
 
             const firstItem = selectedOrder.items?.[0] || selectedOrder;
-            const itemName = firstItem.productName || firstItem.name || 'Product';
+            const itemName = escapeHtml(firstItem.productName || firstItem.name || 'Product');
             const itemImage = firstItem.imageUrl || firstItem.photoUrl || 'images/product-placeholder.png';
             document.getElementById('reviewProductInfo').innerHTML = `
                 <img src="${itemImage}" alt="${itemName}" onerror="this.src='images/product-placeholder.png'">
@@ -1077,9 +1085,9 @@
             document.getElementById('deliveryConfirmOrderId').innerHTML = `<strong>Order #${orderId.slice(-8).toUpperCase()}</strong>`;
             document.getElementById('deliveryConfirmProduct').innerHTML = `
                 <img src="${firstItem.photoUrl || firstItem.imageUrl || 'images/product-placeholder.png'}" 
-                     alt="${firstItem.name}" onerror="this.src='images/product-placeholder.png'">
+                     alt="${escapeHtml(firstItem.name || 'Product')}" onerror="this.src='images/product-placeholder.png'">
                 <div>
-                    <h4>${firstItem.name || 'Product'}</h4>
+                    <h4>${escapeHtml(firstItem.name || 'Product')}</h4>
                     <p>Qty: ${firstItem.quantity || 1}${(selectedOrder.items?.length || 1) > 1 ? ` (+${selectedOrder.items.length - 1} more)` : ''}</p>
                 </div>
             `;

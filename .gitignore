@@ -1,4 +1,10 @@
 # ⚠️ SECURITY - NEVER COMMIT THESE
+# Firebase service account keys - CRITICAL SECURITY
+serviceAccountKey.json
+serviceAccountKey2.json
+**/serviceAccountKey*.json
+firebase-adminsdk*.json
+
 # Environment files (SECRETS - ALL VARIANTS)
 .env
 .env.local
@@ -81,3 +87,6 @@ cookies.json
 dist/
 build/
 out/
+
+# Unused/archived files folder
+_unused/

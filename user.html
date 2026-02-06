@@ -626,27 +626,34 @@
           return;
         }
 
-        let html = '';
-        snapshot.forEach(doc => {
-          const item = doc.data();
+        itemsContainer.innerHTML = '';
+        snapshot.forEach(docSnap => {
+          const item = docSnap.data();
           const price = item.sellingPrice || item.price || 0;
-          // Fix: Check all possible image field names
           const image = item.photoTraceUrl || item.imageUrls?.[0] || item.images?.[0] || item.imageUrl || 'images/product-placeholder.png';
           const stock = item.totalStock || item.stock || 0;
+          const safeName = (item.name || 'Unnamed Item').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          const safeId = encodeURIComponent(docSnap.id);
+          const safeImage = /^(https?:\/\/|images\/)/i.test(image) ? image : 'images/product-placeholder.png';
           
-          html += `
-            <a href="product.html?id=${doc.id}" class="item-card">
-              <img src="${image}" alt="${item.name}" onerror="this.src='images/product-placeholder.png'">
-              <div class="item-info">
-                <div class="item-title">${item.name || 'Unnamed Item'}</div>
-                <div class="item-price">KES ${price.toLocaleString()}</div>
-                <div class="item-stock">${stock > 0 ? `${stock} in stock` : 'Out of stock'}</div>
-              </div>
-            </a>
+          const card = document.createElement('a');
+          card.href = `product.html?id=${safeId}`;
+          card.className = 'item-card';
+          const img = document.createElement('img');
+          img.src = safeImage;
+          img.alt = item.name || 'Unnamed Item';
+          img.onerror = function() { this.src = 'images/product-placeholder.png'; };
+          const info = document.createElement('div');
+          info.className = 'item-info';
+          info.innerHTML = `
+            <div class="item-title">${safeName}</div>
+            <div class="item-price">KES ${price.toLocaleString()}</div>
+            <div class="item-stock">${stock > 0 ? `${stock} in stock` : 'Out of stock'}</div>
           `;
+          card.appendChild(img);
+          card.appendChild(info);
+          itemsContainer.appendChild(card);
         });
-
-        itemsContainer.innerHTML = html;
       } catch (error) {
         console.error('Error loading items:', error);
         document.getElementById('userItemsList').innerHTML = `

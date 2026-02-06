@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
+    <link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+    <title>Delivery Dashboard - Oda Pap</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #ff5722;
+            --primary-dark: #e64a19;
+            --blue: #3b82f6;
+            --green: #10b981;
+            --orange: #f59e0b;
+            --red: #ef4444;
+            --dark: #1f2937;
+            --gray-500: #6b7280;
+            --gray-300: #d1d5db;
+            --gray-100: #f3f4f6;
+            --gray-50: #f9fafb;
+            --white: #fff;
+            --radius: 10px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--gray-50);
+            color: var(--dark);
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .delivery-header {
+            background: var(--white);
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--gray-300);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .delivery-header .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .delivery-header .logo img {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+        }
+        .delivery-header .logo span {
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--primary);
+        }
+        .delivery-header .badge {
+            background: var(--blue);
+            color: #fff;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .header-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .refresh-btn {
+            background: var(--gray-100);
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--dark);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .refresh-btn:hover { background: var(--gray-300); }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            padding: 14px 16px;
+        }
+        .stat-card {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 14px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 1px solid #e5e7eb;
+        }
+        .stat-card .stat-num {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--dark);
+        }
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--gray-500);
+            margin-top: 2px;
+        }
+        .stat-card.ready .stat-num { color: var(--orange); }
+        .stat-card.transit .stat-num { color: var(--blue); }
+        .stat-card.done .stat-num { color: var(--green); }
+
+        /* Filters */
+        .filters {
+            padding: 0 16px 12px;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+        .filter-pill {
+            padding: 7px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--gray-300);
+            background: var(--white);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+            color: var(--gray-500);
+        }
+        .filter-pill.active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        /* Order Cards */
+        .orders-container {
+            padding: 0 16px 100px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .order-card {
+            background: var(--white);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+        .order-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        .order-id {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--dark);
+        }
+        .order-time {
+            font-size: 11px;
+            color: var(--gray-500);
+        }
+        .status-badge {
+            font-size: 10px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .status-badge.confirmed { background: #fef3c7; color: #92400e; }
+        .status-badge.out_for_delivery { background: #dbeafe; color: #1e40af; }
+        .status-badge.delivered { background: #d1fae5; color: #065f46; }
+
+        .order-card-body { padding: 12px 14px; }
+
+        .info-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        .info-row i {
+            width: 16px;
+            text-align: center;
+            color: var(--gray-500);
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+        .info-row .info-content {
+            flex: 1;
+        }
+        .info-row .info-label {
+            font-weight: 600;
+            color: var(--dark);
+            display: block;
+        }
+        .info-row .info-value {
+            color: var(--gray-500);
+            line-height: 1.4;
+        }
+
+        .items-summary {
+            background: var(--gray-50);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 8px;
+        }
+        .items-summary-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .item-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            font-size: 12px;
+        }
+        .item-row img {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid #e5e7eb;
+        }
+        .item-row .item-name {
+            flex: 1;
+            font-weight: 500;
+            color: var(--dark);
+        }
+        .item-row .item-qty {
+            color: var(--gray-500);
+            font-weight: 600;
+        }
+
+        .order-card-footer {
+            display: flex;
+            gap: 8px;
+            padding: 10px 14px;
+            border-top: 1px solid var(--gray-100);
+        }
+        .action-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .action-btn.call {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .action-btn.call:hover { background: #a7f3d0; }
+        .action-btn.navigate {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .action-btn.navigate:hover { background: #bfdbfe; }
+        .action-btn.mark-transit {
+            background: var(--orange);
+            color: #fff;
+        }
+        .action-btn.mark-transit:hover { background: #d97706; }
+        .action-btn.mark-delivered {
+            background: var(--green);
+            color: #fff;
+        }
+        .action-btn.mark-delivered:hover { background: #059669; }
+
+        /* Total amount */
+        .order-total {
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-top: 6px;
+        }
+        .payment-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            margin-left: 6px;
+        }
+        .payment-badge.paid { background: #d1fae5; color: #065f46; }
+        .payment-badge.cod { background: #fef3c7; color: #92400e; }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-500);
+        }
+        .empty-state i {
+            font-size: 48px;
+            color: var(--gray-300);
+            margin-bottom: 12px;
+        }
+        .empty-state h3 {
+            font-size: 16px;
+            color: var(--dark);
+            margin-bottom: 6px;
+        }
+        .empty-state p { font-size: 13px; }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-500);
+        }
+        .loading i {
+            font-size: 28px;
+            color: var(--primary);
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Auth gate */
+        .auth-gate {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 80vh;
+            padding: 20px;
+            text-align: center;
+        }
+        .auth-gate i {
+            font-size: 48px;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+        .auth-gate h2 {
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        .auth-gate p {
+            color: var(--gray-500);
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .auth-gate a {
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        /* Notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--dark);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* Order detail modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            justify-content: center;
+            align-items: flex-end;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--white);
+            border-radius: 16px 16px 0 0;
+            width: 100%;
+            max-width: 500px;
+            max-height: 85vh;
+            overflow-y: auto;
+            padding: 20px;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .modal-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--gray-500);
+            padding: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="delivery-header">
+        <div class="logo">
+            <img src="images/logo.png" alt="Oda Pap">
+            <span>Oda Pap</span>
+        </div>
+        <span class="badge"><i class="fas fa-truck"></i> Delivery</span>
+        <div class="header-right">
+            <button class="refresh-btn" id="refreshBtn">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
+    </header>
+
+    <!-- Auth Gate (shown if not logged in) -->
+    <div class="auth-gate" id="authGate" style="display:none;">
+        <i class="fas fa-truck"></i>
+        <h2>Delivery Dashboard</h2>
+        <p>Log in with your delivery account to view and manage orders.</p>
+        <a href="login.html">Log In</a>
+    </div>
+
+    <!-- Main Content (shown when authenticated) -->
+    <div id="mainContent" style="display:none;">
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat-card ready">
+                <div class="stat-num" id="readyCount">0</div>
+                <div class="stat-label">Ready for Pickup</div>
+            </div>
+            <div class="stat-card transit">
+                <div class="stat-num" id="transitCount">0</div>
+                <div class="stat-label">In Transit</div>
+            </div>
+            <div class="stat-card done">
+                <div class="stat-num" id="deliveredCount">0</div>
+                <div class="stat-label">Delivered Today</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <button class="filter-pill active" data-filter="active">Active Orders</button>
+            <button class="filter-pill" data-filter="confirmed">Ready for Pickup</button>
+            <button class="filter-pill" data-filter="out_for_delivery">In Transit</button>
+            <button class="filter-pill" data-filter="delivered">Delivered Today</button>
+            <button class="filter-pill" data-filter="all">All Orders</button>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loadingState">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading orders...</p>
+        </div>
+
+        <!-- Orders -->
+        <div class="orders-container" id="ordersContainer" style="display:none;"></div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display:none;">
+            <i class="fas fa-box-open"></i>
+            <h3>No orders found</h3>
+            <p>When orders are ready for delivery, they'll appear here.</p>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Order Detail Modal -->
+    <div class="modal-overlay" id="orderModal">
+        <div class="modal-content" id="orderModalContent"></div>
+    </div>
+
+    <script type="module" src="delivery.js"></script>
+</body>
+</html>

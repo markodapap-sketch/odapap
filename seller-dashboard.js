@@ -182,6 +182,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Notification bell
     $('notifBtn')?.addEventListener('click', toggleNotifications);
+    $('closeNotifBtn')?.addEventListener('click', () => {
+        $('notificationDropdown')?.classList.remove('active');
+    });
     document.addEventListener('click', (e) => {
         const dropdown = $('notificationDropdown');
         const bell = $('notifBtn');
@@ -735,7 +738,7 @@ window.viewOrder = function(orderId) {
         ${order.dispatchPhoto ? `
             <div style="margin-top: 16px;">
                 <h4 style="font-size: 14px; margin-bottom: 8px;">Dispatch Proof</h4>
-                <img src="${order.dispatchPhoto}" alt="Dispatch" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px;">
+                <img src="${sanitizeUrl(order.dispatchPhoto)}" alt="Dispatch" style="width: 100%; max-height: 200px; object-fit: cover; border-radius: 8px;">
                 ${order.dispatchNote ? `<p style="font-size: 13px; color: var(--gray-500); margin-top: 8px;">${escapeHtml(order.dispatchNote)}</p>` : ''}
             </div>
         ` : ''}
@@ -751,26 +754,27 @@ window.viewOrder = function(orderId) {
 function getOrderActions(order) {
     // Get status (checkout saves as 'status', some legacy as 'orderStatus')
     const orderStatus = order.status || order.orderStatus || 'pending';
+    const safeId = escapeHtml(order.id);
     
     switch (orderStatus) {
         case 'pending':
             return `
-                <button class="btn btn-primary" onclick="confirmUpdateOrderStatus('${order.id}', 'confirmed')">
+                <button class="btn btn-primary" data-oid="${safeId}" onclick="confirmUpdateOrderStatus(this.dataset.oid, 'confirmed')">
                     <i class="fas fa-check"></i> Accept Order
                 </button>
-                <button class="btn btn-secondary" onclick="confirmUpdateOrderStatus('${order.id}', 'cancelled')">
+                <button class="btn btn-secondary" data-oid="${safeId}" onclick="confirmUpdateOrderStatus(this.dataset.oid, 'cancelled')">
                     Cancel
                 </button>
             `;
         case 'confirmed':
             return `
-                <button class="btn btn-primary" onclick="openDispatchModal('${order.id}')">
+                <button class="btn btn-primary" data-oid="${safeId}" onclick="openDispatchModal(this.dataset.oid)">
                     <i class="fas fa-truck"></i> Mark Ready for Dispatch
                 </button>
             `;
         case 'out_for_delivery':
             return `
-                <button class="btn btn-success" onclick="confirmUpdateOrderStatus('${order.id}', 'delivered')">
+                <button class="btn btn-success" data-oid="${safeId}" onclick="confirmUpdateOrderStatus(this.dataset.oid, 'delivered')">
                     <i class="fas fa-check-double"></i> Mark as Delivered
                 </button>
             `;
@@ -819,21 +823,27 @@ window.confirmUpdateOrderStatus = function(orderId, newStatus) {
     modal.innerHTML = `
         <div class="confirm-modal">
             <div class="confirm-modal-header">
-                <h3><i class="fas fa-exclamation-circle"></i> ${config.title}</h3>
+                <h3><i class="fas fa-exclamation-circle"></i> ${escapeHtml(config.title)}</h3>
             </div>
             <div class="confirm-modal-body">
-                <p>${config.message}</p>
+                <p>${escapeHtml(config.message)}</p>
             </div>
             <div class="confirm-modal-actions">
-                <button class="btn btn-secondary" onclick="this.closest('.confirm-modal-overlay').remove()">
+                <button class="btn btn-secondary cancel-btn">
                     <i class="fas fa-times"></i> Cancel
                 </button>
-                <button class="btn ${config.confirmClass}" onclick="updateOrderStatus('${orderId}', '${newStatus}'); this.closest('.confirm-modal-overlay').remove();">
-                    <i class="fas fa-check"></i> ${config.confirmText}
+                <button class="btn ${config.confirmClass} confirm-btn">
+                    <i class="fas fa-check"></i> ${escapeHtml(config.confirmText)}
                 </button>
             </div>
         </div>
     `;
+    
+    modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
+    modal.querySelector('.confirm-btn').addEventListener('click', () => {
+        updateOrderStatus(orderId, newStatus);
+        modal.remove();
+    });
     
     document.body.appendChild(modal);
     
@@ -1081,15 +1091,15 @@ function renderProducts() {
         return `
             <div class="product-card">
                 <div class="img">
-                    <img src="${getImageUrl(p.imageUrls?.[0], 'product')}" alt="${p.name}" data-fallback="product">
+                    <img src="${getImageUrl(p.imageUrls?.[0], 'product')}" alt="${escapeHtml(p.name)}" data-fallback="product">
                     <span class="stock-badge ${stockClass}">${stockText}</span>
                 </div>
                 <div class="body">
-                    <h4>${p.name}</h4>
+                    <h4>${escapeHtml(p.name)}</h4>
                     <span class="price">KES ${(p.originalPrice || p.price || 0).toLocaleString()}</span>
                     <div class="actions">
-                        <button onclick="window.location.href='product.html?id=${p.id}'"><i class="fas fa-eye"></i></button>
-                        <button onclick="window.location.href='listing.html?edit=${p.id}'"><i class="fas fa-edit"></i></button>
+                        <button data-pid="${escapeHtml(p.id)}" onclick="window.location.href='product.html?id='+encodeURIComponent(this.dataset.pid)"><i class="fas fa-eye"></i></button>
+                        <button data-pid="${escapeHtml(p.id)}" onclick="window.location.href='listing.html?edit='+encodeURIComponent(this.dataset.pid)"><i class="fas fa-edit"></i></button>
                     </div>
                 </div>
             </div>
@@ -1177,12 +1187,32 @@ async function handleStoreSettingsSave(e) {
     btn.textContent = 'Saving...';
     
     try {
+        const storeName = $('storeName').value.trim();
+        const storeDescription = $('storeDescription').value.trim();
+        const location = $('storeLocation').value.trim();
+        const phone = $('storePhone').value.trim();
+        const processingTime = $('processingTime').value;
+
+        // Validate
+        if (storeName.length > 100) {
+            toast('Store name too long (max 100 characters)', 'error');
+            return;
+        }
+        if (storeDescription.length > 500) {
+            toast('Description too long (max 500 characters)', 'error');
+            return;
+        }
+        if (phone && !/^(?:\+?254|0)?[17]\d{8}$/.test(phone.replace(/\s/g, ''))) {
+            toast('Enter a valid Kenyan phone number', 'error');
+            return;
+        }
+
         await updateDoc(doc(db, "Users", state.user.uid), {
-            storeName: $('storeName').value.trim(),
-            storeDescription: $('storeDescription').value.trim(),
-            location: $('storeLocation').value.trim(),
-            phone: $('storePhone').value.trim(),
-            processingTime: $('processingTime').value
+            storeName,
+            storeDescription,
+            location,
+            phone,
+            processingTime
         });
         
         toast('Store settings saved!', 'success');
@@ -1269,9 +1299,8 @@ function renderNotifications() {
     
     list.innerHTML = state.notifications.map(notif => `
         <div class="notification-item ${!notif.read ? 'unread' : ''}" 
-             data-id="${notif.id}" 
-             data-order-id="${notif.orderId || ''}"
-             onclick="handleNotificationClick('${notif.id}', '${notif.orderId || ''}')">
+             data-id="${escapeHtml(notif.id)}" 
+             data-order-id="${escapeHtml(notif.orderId || '')}">
             <div class="notification-content">
                 <div class="notification-title">${escapeHtml(notif.title || '')}</div>
                 <div class="notification-message">${escapeHtml(notif.message || '')}</div>
@@ -1280,6 +1309,13 @@ function renderNotifications() {
             ${!notif.read ? '<div class="notification-indicator"></div>' : ''}
         </div>
     `).join('');
+
+    // Attach click listeners via event delegation
+    list.querySelectorAll('.notification-item').forEach(item => {
+        item.addEventListener('click', () => {
+            handleNotificationClick(item.dataset.id, item.dataset.orderId);
+        });
+    });
 }
 
 async function handleNotificationClick(notifId, orderId) {
@@ -1297,13 +1333,16 @@ async function handleNotificationClick(notifId, orderId) {
     // Navigate to orders if order notification
     if (orderId) {
         switchSection('orders');
-        // Highlight the order briefly
+        // Highlight the order briefly (safely match via data attribute)
         setTimeout(() => {
-            const orderCard = document.querySelector(`[data-order-id="${orderId}"]`);
-            if (orderCard) {
-                orderCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                orderCard.style.animation = 'highlight 1s ease-out';
-            }
+            const orderCard = document.querySelector('.notification-item[data-order-id]');
+            const allCards = document.querySelectorAll('[data-order-id]');
+            allCards.forEach(card => {
+                if (card.dataset.orderId === orderId) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.style.animation = 'highlight 1s ease-out';
+                }
+            });
         }, 300);
     }
 }

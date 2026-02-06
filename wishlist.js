@@ -107,7 +107,7 @@ const loadWishlistItems = async (user) => {
                     <p class="price">KES ${price.toLocaleString()}</p>
                     ${originalPrice ? `<p class="original-price">KES ${originalPrice.toLocaleString()}</p>` : ''}
                     <div class="wishlist-actions">
-                        <button class="add-to-cart-btn" onclick="addToCart('${safeDocId}', '${safeListingId}')">
+                        <button class="add-to-cart-btn" data-doc-id="${safeDocId}" data-listing-id="${safeListingId}">
                             <i class="fas fa-shopping-cart"></i> Add to Cart
                         </button>
                         <button class="remove-button" data-id="${safeDocId}">
@@ -179,6 +179,18 @@ onAuthStateChanged(auth, (user) => {
             allowCancel: true,
             cancelRedirect: 'index.html'
         });
+    }
+});
+
+// Handle add-to-cart clicks via event delegation
+wishlistItemsContainer.addEventListener('click', (event) => {
+    const cartBtn = event.target.closest('.add-to-cart-btn');
+    if (cartBtn) {
+        const docId = cartBtn.dataset.docId;
+        const listingId = cartBtn.dataset.listingId;
+        if (docId && listingId) {
+            window.addToCart(docId, listingId);
+        }
     }
 });
 

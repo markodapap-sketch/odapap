@@ -79,20 +79,33 @@ service cloud.firestore {
       }
     }
     
-    // Orders collection - Users can read their own, admins can read/write all
+    // Helper function to check if user is delivery staff
+    function isDeliveryStaff() {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/DeliveryStaff/$(request.auth.uid));
+    }
+    
+    // Orders collection - Users can read their own, admins & delivery staff can read/write all
     match /Orders/{orderId} {
       allow read: if request.auth != null && 
                     (resource.data.userId == request.auth.uid || 
                      resource.data.buyerId == request.auth.uid || 
                      resource.data.sellerId == request.auth.uid || 
-                     isAdmin());
+                     isAdmin() || isDeliveryStaff());
       allow create: if request.auth != null;
       allow update: if request.auth != null && 
                       (resource.data.userId == request.auth.uid ||
                        resource.data.buyerId == request.auth.uid || 
                        resource.data.sellerId == request.auth.uid || 
-                       isAdmin());
+                       isAdmin() || isDeliveryStaff());
       allow delete: if isAdmin();
+    }
+    
+    // DeliveryStaff collection - Admin manages delivery accounts
+    match /DeliveryStaff/{staffId} {
+      allow read: if request.auth != null && 
+                    (request.auth.uid == staffId || isAdmin());
+      allow write: if isAdmin();
     }
     
     // Chats collection
@@ -240,18 +253,47 @@ service cloud.firestore {
                       (resource.data.userId == request.auth.uid || isAdmin());
     }
     
-    // Notifications collection - Global notifications from admins
+    // Notifications collection - Global + order notifications
     match /Notifications/{notifId} {
-      // All authenticated users can read global notifications
+      // All authenticated users can read notifications
       allow read: if request.auth != null;
-      // Only admins can create, update, or delete notifications
-      allow create, update, delete: if isAdmin();
+      // Any authenticated user can create (order notifications from buyer/seller)
+      allow create: if request.auth != null;
+      // Only admins can update or delete notifications
+      allow update, delete: if request.auth != null && 
+                              (resource.data.userId == request.auth.uid || isAdmin());
     }
     
     // SentNotifications collection - Admin notification history
     match /SentNotifications/{notifId} {
       allow read: if isAdmin();
       allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+    
+    // DeliveryConfirmations collection - Buyers confirm receipt of orders
+    match /DeliveryConfirmations/{confirmId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || 
+                     resource.data.sellerId == request.auth.uid || 
+                     isAdmin() || isDeliveryStaff());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // WalletTransactions collection - Admin can read all
+    match /WalletTransactions/{transId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // WithdrawalRequests collection - Users create, admins manage
+    match /WithdrawalRequests/{requestId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
       allow update, delete: if isAdmin();
     }
   }

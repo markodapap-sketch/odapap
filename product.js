@@ -8,8 +8,8 @@ import {
     where, 
     getDocs, 
     addDoc,
-    orderBy,
     limit,
+    orderBy,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./js/firebase.js";
@@ -41,21 +41,26 @@ function getMinPriceFromVariations(product) {
                 variation.attributes.forEach(attr => {
                     if (attr.price && attr.price < minPrice) {
                         minPrice = attr.price;
-                        associatedRetail = attr.retailPrice || null;
+                        // Prefer retailPack (total retail value of pack) over retailPrice (per-piece retail)
+                        associatedRetail = attr.retailPack || attr.retailPrice || null;
                     }
                 });
             } else {
                 if (variation.price && variation.price < minPrice) {
                     minPrice = variation.price;
-                    associatedRetail = variation.retailPrice || null;
+                    associatedRetail = variation.retailPack || variation.retailPrice || null;
                 }
             }
         });
     }
     
+    const finalPrice = minPrice === Infinity ? (product.price || 0) : minPrice;
+    // Only return retail if it's actually greater than wholesale (sanity check)
+    const finalRetail = (associatedRetail && associatedRetail > finalPrice) ? associatedRetail : (product.initialPrice || null);
+    
     return {
-        price: minPrice === Infinity ? (product.price || 0) : minPrice,
-        retailPrice: associatedRetail || product.initialPrice || null
+        price: finalPrice,
+        retailPrice: finalRetail
     };
 }
 
@@ -143,6 +148,7 @@ class ProductPage {
             
             await this.loadProduct();
             await this.loadSimilarProducts();
+            await this.loadReviews();
             if (this.auth.currentUser) {
                 await this.updateCartCounter();
                 await this.updateWishlistCounter();
@@ -189,185 +195,9 @@ class ProductPage {
         this.setupImageGallery();
         this.displayVariations();
         this.displayBulkPricing();
-        this.loadReviews(); // Load reviews from Firestore
-        this.setupReviewButton(); // Setup write review functionality
         
         // Track product view for recently viewed
         this.trackProductView();
-    }
-
-    // Load and display reviews from Firestore
-    async loadReviews() {
-        try {
-            const reviewsQuery = query(
-                collection(this.db, "Reviews"),
-                where("productId", "==", this.productId),
-                orderBy("createdAt", "desc"),
-                limit(10)
-            );
-            
-            const reviewsSnap = await getDocs(reviewsQuery);
-            const reviews = reviewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            
-            this.displayReviews(reviews);
-        } catch (error) {
-            console.error('Error loading reviews:', error);
-            // Show default 5-star rating when no reviews
-            this.displayReviews([]);
-        }
-    }
-
-    displayReviews(reviews) {
-        const reviewsList = document.getElementById('reviewsList');
-        const averageStars = document.getElementById('averageRatingStars');
-        const averageText = document.getElementById('averageRatingText');
-        const reviewCount = document.getElementById('reviewCount');
-        
-        if (!reviewsList) return;
-        
-        if (reviews.length === 0) {
-            // Default to 5 stars when no reviews
-            reviewsList.innerHTML = '<p class="no-reviews">No reviews yet. Be the first to review!</p>';
-            if (averageStars) averageStars.innerHTML = '<i class="fas fa-star"></i>'.repeat(5);
-            if (averageText) averageText.textContent = '5.0';
-            if (reviewCount) reviewCount.textContent = '(0 reviews)';
-            return;
-        }
-        
-        // Calculate average rating
-        const avgRating = reviews.reduce((sum, r) => sum + (r.rating || 5), 0) / reviews.length;
-        const roundedRating = Math.round(avgRating * 10) / 10;
-        
-        // Update average display
-        if (averageStars) {
-            const fullStars = Math.floor(avgRating);
-            const hasHalf = avgRating - fullStars >= 0.5;
-            let starsHtml = '';
-            for (let i = 0; i < 5; i++) {
-                if (i < fullStars) {
-                    starsHtml += '<i class="fas fa-star"></i>';
-                } else if (i === fullStars && hasHalf) {
-                    starsHtml += '<i class="fas fa-star-half-alt"></i>';
-                } else {
-                    starsHtml += '<i class="far fa-star"></i>';
-                }
-            }
-            averageStars.innerHTML = starsHtml;
-        }
-        if (averageText) averageText.textContent = roundedRating.toFixed(1);
-        if (reviewCount) reviewCount.textContent = `(${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'})`;
-        
-        // Display individual reviews
-        reviewsList.innerHTML = reviews.map(review => `
-            <div class="review-item">
-                <div class="review-header">
-                    <img src="${review.userPhoto || PLACEHOLDERS.user}" alt="${escapeHtml(review.userName || 'User')}" class="review-avatar" onerror="this.src='${PLACEHOLDERS.user}'">
-                    <div class="review-info">
-                        <span class="review-name">${escapeHtml(review.userName || 'Anonymous')}</span>
-                        <div class="review-rating">
-                            ${'<i class="fas fa-star"></i>'.repeat(review.rating || 5)}${'<i class="far fa-star"></i>'.repeat(5 - (review.rating || 5))}
-                        </div>
-                    </div>
-                    <span class="review-date">${this.formatReviewDate(review.createdAt)}</span>
-                </div>
-                <p class="review-text">${escapeHtml(review.comment || '')}</p>
-            </div>
-        `).join('');
-    }
-
-    formatReviewDate(timestamp) {
-        if (!timestamp) return '';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        const now = new Date();
-        const diff = now - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        
-        if (days === 0) return 'Today';
-        if (days === 1) return 'Yesterday';
-        if (days < 7) return `${days} days ago`;
-        if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
-        return date.toLocaleDateString();
-    }
-
-    setupReviewButton() {
-        const writeReviewBtn = document.getElementById('writeReviewBtn');
-        if (writeReviewBtn) {
-            writeReviewBtn.addEventListener('click', () => this.showReviewModal());
-        }
-    }
-
-    showReviewModal() {
-        if (!this.auth.currentUser) {
-            showNotification('Please login to write a review', 'warning');
-            return;
-        }
-
-        const modal = document.createElement('div');
-        modal.className = 'review-modal';
-        modal.innerHTML = `
-            <div class="review-modal-content">
-                <h3>Write a Review</h3>
-                <div class="rating-selector">
-                    <span>Your Rating:</span>
-                    <div class="star-select">
-                        ${[1,2,3,4,5].map(i => `<i class="far fa-star" data-rating="${i}"></i>`).join('')}
-                    </div>
-                </div>
-                <textarea id="reviewText" placeholder="Share your experience with this product..." rows="4"></textarea>
-                <div class="review-actions">
-                    <button class="cancel-btn">Cancel</button>
-                    <button class="submit-btn">Submit Review</button>
-                </div>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        let selectedRating = 5;
-        const stars = modal.querySelectorAll('.star-select i');
-        
-        const updateStars = (rating) => {
-            stars.forEach((star, idx) => {
-                star.className = idx < rating ? 'fas fa-star' : 'far fa-star';
-            });
-        };
-
-        stars.forEach((star, idx) => {
-            star.addEventListener('click', () => {
-                selectedRating = idx + 1;
-                updateStars(selectedRating);
-            });
-            star.addEventListener('mouseenter', () => updateStars(idx + 1));
-        });
-
-        modal.querySelector('.star-select').addEventListener('mouseleave', () => updateStars(selectedRating));
-        updateStars(selectedRating);
-
-        modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-        modal.querySelector('.submit-btn').addEventListener('click', async () => {
-            const comment = modal.querySelector('#reviewText').value.trim();
-            
-            try {
-                await addDoc(collection(this.db, "Reviews"), {
-                    productId: this.productId,
-                    userId: this.auth.currentUser.uid,
-                    userName: this.auth.currentUser.displayName || 'Anonymous',
-                    userPhoto: this.auth.currentUser.photoURL || '',
-                    rating: selectedRating,
-                    comment: comment,
-                    createdAt: serverTimestamp()
-                });
-                
-                showNotification('Review submitted successfully!', 'success');
-                modal.remove();
-                this.loadReviews(); // Reload reviews
-            } catch (error) {
-                console.error('Error submitting review:', error);
-                showNotification('Failed to submit review', 'error');
-            }
-        });
     }
 
     // Track product view in localStorage for recently viewed page
@@ -482,16 +312,19 @@ class ProductPage {
         this.productDateEl.textContent = new Date(this.product.createdAt).toLocaleDateString();
 
         // Handle initial/retail price and discount - use the associated retail for min price option
+        const pricingExplainer = document.getElementById('pricingExplainer');
         if (retailPrice && retailPrice > minPrice) {
             this.initialPriceContainer.style.display = 'flex';
             this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
             
             const discount = ((retailPrice - minPrice) / retailPrice * 100).toFixed(0);
-            this.discountBadge.textContent = `-${discount}%`;
+            this.discountBadge.textContent = `Save ${discount}%`;
             this.discountBadge.style.display = 'inline-block';
+            if (pricingExplainer) pricingExplainer.style.display = 'block';
         } else {
             this.initialPriceContainer.style.display = 'none';
             this.discountBadge.style.display = 'none';
+            if (pricingExplainer) pricingExplainer.style.display = 'none';
         }
 
         this.productContent.style.display = 'grid';
@@ -622,16 +455,19 @@ class ProductPage {
         this.productPriceEl.textContent = `KES ${displayPrice.toLocaleString()}`;
         
         // Update retail price and discount if available
-        const retailPrice = this.selectedVariation.retailPrice || this.product.initialPrice;
+        const retailPrice = this.selectedVariation.retailPack || this.selectedVariation.retailPrice || this.product.initialPrice;
+        const pricingExplainer2 = document.getElementById('pricingExplainer');
         if (retailPrice && retailPrice > displayPrice) {
             this.initialPriceContainer.style.display = 'flex';
             this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
             const discount = ((retailPrice - displayPrice) / retailPrice * 100).toFixed(0);
             this.discountBadge.textContent = `-${discount}%`;
             this.discountBadge.style.display = 'inline-block';
+            if (pricingExplainer2) pricingExplainer2.style.display = 'block';
         } else {
             this.initialPriceContainer.style.display = 'none';
             this.discountBadge.style.display = 'none';
+            if (pricingExplainer2) pricingExplainer2.style.display = 'none';
         }
         
         // Reset quantity to 1
@@ -690,6 +526,124 @@ class ProductPage {
                 verifiedBadge.style.display = isVerified ? 'inline-flex' : 'none';
             }
         }
+    }
+
+    async loadReviews() {
+        try {
+            const reviewsSection = document.getElementById('reviewsSection');
+            const reviewsList = document.getElementById('reviewsList');
+            const reviewsEmpty = document.getElementById('reviewsEmpty');
+            if (!reviewsSection) return;
+
+            const q = query(
+                collection(this.db, 'Reviews'),
+                where('listingId', '==', this.productId),
+                orderBy('createdAt', 'desc'),
+                limit(20)
+            );
+
+            const snapshot = await getDocs(q);
+
+            if (snapshot.empty) {
+                reviewsSection.style.display = 'block';
+                reviewsEmpty.style.display = 'block';
+                document.getElementById('reviewsSummary').style.display = 'none';
+                return;
+            }
+
+            const reviews = [];
+            const ratingCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            let totalRating = 0;
+
+            snapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                reviews.push(data);
+                const r = Math.min(5, Math.max(1, Math.round(data.rating || 0)));
+                ratingCounts[r]++;
+                totalRating += data.rating || 0;
+            });
+
+            const avgRating = (totalRating / reviews.length).toFixed(1);
+            const totalCount = reviews.length;
+
+            // Update summary
+            document.getElementById('avgRating').textContent = avgRating;
+            document.getElementById('totalReviews').textContent = `${totalCount} review${totalCount !== 1 ? 's' : ''}`;
+
+            // Render stars for average
+            const avgStars = document.getElementById('avgStars');
+            avgStars.innerHTML = this.renderStars(Math.round(parseFloat(avgRating)));
+
+            // Rating bars
+            const ratingBars = document.getElementById('ratingBars');
+            ratingBars.innerHTML = '';
+            for (let i = 5; i >= 1; i--) {
+                const count = ratingCounts[i];
+                const pct = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+                ratingBars.innerHTML += `
+                    <div class="rating-bar-row">
+                        <span class="bar-label">${i}</span>
+                        <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+                        <span class="bar-count">${count}</span>
+                    </div>`;
+            }
+
+            // Render individual reviews
+            reviewsList.innerHTML = '';
+            const tagLabels = {
+                great_quality: 'Great Quality',
+                fast_delivery: 'Fast Delivery',
+                good_value: 'Good Value',
+                as_described: 'As Described',
+                great_packaging: 'Great Packaging',
+                responsive_seller: 'Responsive Seller'
+            };
+
+            reviews.forEach(review => {
+                const initial = (review.userName || 'A').charAt(0).toUpperCase();
+                const dateStr = review.createdAt?.toDate ? 
+                    review.createdAt.toDate().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : 
+                    'Recently';
+                const verifiedBadge = review.verified ? '<span class="verified-purchase"><i class="fas fa-check-circle"></i> Verified</span>' : '';
+
+                const tagsHtml = (review.tags || []).map(tag => 
+                    `<span class="review-tag">${escapeHtml(tagLabels[tag] || tag)}</span>`
+                ).join('');
+
+                const photosHtml = (review.photos || []).map(url => 
+                    `<img src="${escapeHtml(url)}" alt="Review photo" loading="lazy" onclick="window.open('${escapeHtml(url)}','_blank')">`
+                ).join('');
+
+                reviewsList.innerHTML += `
+                    <div class="review-card">
+                        <div class="review-card-header">
+                            <div class="review-avatar">${initial}</div>
+                            <div class="review-meta">
+                                <div class="reviewer-name">${escapeHtml(review.userName || 'Anonymous')}${verifiedBadge}</div>
+                                <div class="review-date">${dateStr}</div>
+                            </div>
+                            <div class="review-stars">${this.renderStars(review.rating || 0)}</div>
+                        </div>
+                        ${review.review ? `<p class="review-text">${escapeHtml(review.review)}</p>` : ''}
+                        ${tagsHtml ? `<div class="review-tags">${tagsHtml}</div>` : ''}
+                        ${photosHtml ? `<div class="review-photos">${photosHtml}</div>` : ''}
+                    </div>`;
+            });
+
+            reviewsSection.style.display = 'block';
+            reviewsEmpty.style.display = 'none';
+
+        } catch (error) {
+            console.error('Error loading reviews:', error);
+        }
+    }
+
+    renderStars(rating) {
+        let html = '';
+        for (let i = 1; i <= 5; i++) {
+            html += `<i class="fas fa-star" style="color:${i <= rating ? '#f59e0b' : '#e2e8f0'};"></i>`;
+        }
+        return html;
     }
 
     setupImageGallery() {

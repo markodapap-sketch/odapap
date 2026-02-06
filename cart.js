@@ -442,17 +442,18 @@ const performSearch = async (searchTerm) => {
             return;
         }
 
-        querySnapshot.forEach((doc) => {
-            const listing = doc.data();
+        querySnapshot.forEach((docSnap) => {
+            const listing = docSnap.data();
             const div = document.createElement('div');
             div.className = 'suggestion-item';
+            const safeImg = sanitizeUrl(listing.imageUrls?.[0] || 'images/product-placeholder.png', 'images/product-placeholder.png');
             div.innerHTML = `
-                <img src="${listing.imageUrls?.[0] || 'images/product-placeholder.png'}" alt="${listing.name}">
-                <span>${listing.name}</span>
+                <img src="${safeImg}" alt="${escapeHtml(listing.name || 'Product')}">
+                <span>${escapeHtml(listing.name || 'Product')}</span>
                 <span style="margin-left: auto; color: #ff5722; font-weight: 600;">KES ${(listing.price || 0).toLocaleString()}</span>
             `;
             div.addEventListener('click', () => {
-                window.location.href = `product.html?id=${doc.id}`;
+                window.location.href = `product.html?id=${encodeURIComponent(docSnap.id)}`;
             });
             searchSuggestions.appendChild(div);
         });
