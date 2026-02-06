@@ -8,17 +8,27 @@ import {
     where, 
     getDocs, 
     addDoc,
-    limit 
+    orderBy,
+    limit,
+    serverTimestamp
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { app } from "./js/firebase.js";
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter, invalidateCartCache, invalidateWishlistCache } from './js/utils.js';
-import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
 import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
 import authModal from './js/authModal.js';
 
-// Setup global image error handling on load
-setupGlobalImageErrorHandler();
+// Simple placeholder for images
+const PLACEHOLDERS = {
+    product: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"%3E%3Crect fill="%23f5f5f5" width="200" height="200"/%3E%3Cpath fill="%23ddd" d="M100 40c-33.137 0-60 26.863-60 60s26.863 60 60 60 60-26.863 60-60-26.863-60-60-60zm0 10c27.614 0 50 22.386 50 50s-22.386 50-50 50-50-22.386-50-50 22.386-50 50-50z"/%3E%3C/svg%3E',
+    user: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle fill="%23e2e8f0" cx="50" cy="50" r="50"/%3E%3Ccircle fill="%2394a3b8" cx="50" cy="40" r="20"/%3E%3Cellipse fill="%2394a3b8" cx="50" cy="85" rx="35" ry="25"/%3E%3C/svg%3E'
+};
+
+// Simple function to get image URL without caching
+function getImageUrl(src, type = 'product') {
+    if (!src || typeof src !== 'string') return PLACEHOLDERS[type] || PLACEHOLDERS.product;
+    return src;
+}
 
 // Get the minimum price from variations/attributes and its associated retail price
 function getMinPriceFromVariations(product) {
@@ -179,9 +189,185 @@ class ProductPage {
         this.setupImageGallery();
         this.displayVariations();
         this.displayBulkPricing();
+        this.loadReviews(); // Load reviews from Firestore
+        this.setupReviewButton(); // Setup write review functionality
         
         // Track product view for recently viewed
         this.trackProductView();
+    }
+
+    // Load and display reviews from Firestore
+    async loadReviews() {
+        try {
+            const reviewsQuery = query(
+                collection(this.db, "Reviews"),
+                where("productId", "==", this.productId),
+                orderBy("createdAt", "desc"),
+                limit(10)
+            );
+            
+            const reviewsSnap = await getDocs(reviewsQuery);
+            const reviews = reviewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            this.displayReviews(reviews);
+        } catch (error) {
+            console.error('Error loading reviews:', error);
+            // Show default 5-star rating when no reviews
+            this.displayReviews([]);
+        }
+    }
+
+    displayReviews(reviews) {
+        const reviewsList = document.getElementById('reviewsList');
+        const averageStars = document.getElementById('averageRatingStars');
+        const averageText = document.getElementById('averageRatingText');
+        const reviewCount = document.getElementById('reviewCount');
+        
+        if (!reviewsList) return;
+        
+        if (reviews.length === 0) {
+            // Default to 5 stars when no reviews
+            reviewsList.innerHTML = '<p class="no-reviews">No reviews yet. Be the first to review!</p>';
+            if (averageStars) averageStars.innerHTML = '<i class="fas fa-star"></i>'.repeat(5);
+            if (averageText) averageText.textContent = '5.0';
+            if (reviewCount) reviewCount.textContent = '(0 reviews)';
+            return;
+        }
+        
+        // Calculate average rating
+        const avgRating = reviews.reduce((sum, r) => sum + (r.rating || 5), 0) / reviews.length;
+        const roundedRating = Math.round(avgRating * 10) / 10;
+        
+        // Update average display
+        if (averageStars) {
+            const fullStars = Math.floor(avgRating);
+            const hasHalf = avgRating - fullStars >= 0.5;
+            let starsHtml = '';
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    starsHtml += '<i class="fas fa-star"></i>';
+                } else if (i === fullStars && hasHalf) {
+                    starsHtml += '<i class="fas fa-star-half-alt"></i>';
+                } else {
+                    starsHtml += '<i class="far fa-star"></i>';
+                }
+            }
+            averageStars.innerHTML = starsHtml;
+        }
+        if (averageText) averageText.textContent = roundedRating.toFixed(1);
+        if (reviewCount) reviewCount.textContent = `(${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'})`;
+        
+        // Display individual reviews
+        reviewsList.innerHTML = reviews.map(review => `
+            <div class="review-item">
+                <div class="review-header">
+                    <img src="${review.userPhoto || PLACEHOLDERS.user}" alt="${escapeHtml(review.userName || 'User')}" class="review-avatar" onerror="this.src='${PLACEHOLDERS.user}'">
+                    <div class="review-info">
+                        <span class="review-name">${escapeHtml(review.userName || 'Anonymous')}</span>
+                        <div class="review-rating">
+                            ${'<i class="fas fa-star"></i>'.repeat(review.rating || 5)}${'<i class="far fa-star"></i>'.repeat(5 - (review.rating || 5))}
+                        </div>
+                    </div>
+                    <span class="review-date">${this.formatReviewDate(review.createdAt)}</span>
+                </div>
+                <p class="review-text">${escapeHtml(review.comment || '')}</p>
+            </div>
+        `).join('');
+    }
+
+    formatReviewDate(timestamp) {
+        if (!timestamp) return '';
+        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        
+        if (days === 0) return 'Today';
+        if (days === 1) return 'Yesterday';
+        if (days < 7) return `${days} days ago`;
+        if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+        return date.toLocaleDateString();
+    }
+
+    setupReviewButton() {
+        const writeReviewBtn = document.getElementById('writeReviewBtn');
+        if (writeReviewBtn) {
+            writeReviewBtn.addEventListener('click', () => this.showReviewModal());
+        }
+    }
+
+    showReviewModal() {
+        if (!this.auth.currentUser) {
+            showNotification('Please login to write a review', 'warning');
+            return;
+        }
+
+        const modal = document.createElement('div');
+        modal.className = 'review-modal';
+        modal.innerHTML = `
+            <div class="review-modal-content">
+                <h3>Write a Review</h3>
+                <div class="rating-selector">
+                    <span>Your Rating:</span>
+                    <div class="star-select">
+                        ${[1,2,3,4,5].map(i => `<i class="far fa-star" data-rating="${i}"></i>`).join('')}
+                    </div>
+                </div>
+                <textarea id="reviewText" placeholder="Share your experience with this product..." rows="4"></textarea>
+                <div class="review-actions">
+                    <button class="cancel-btn">Cancel</button>
+                    <button class="submit-btn">Submit Review</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        let selectedRating = 5;
+        const stars = modal.querySelectorAll('.star-select i');
+        
+        const updateStars = (rating) => {
+            stars.forEach((star, idx) => {
+                star.className = idx < rating ? 'fas fa-star' : 'far fa-star';
+            });
+        };
+
+        stars.forEach((star, idx) => {
+            star.addEventListener('click', () => {
+                selectedRating = idx + 1;
+                updateStars(selectedRating);
+            });
+            star.addEventListener('mouseenter', () => updateStars(idx + 1));
+        });
+
+        modal.querySelector('.star-select').addEventListener('mouseleave', () => updateStars(selectedRating));
+        updateStars(selectedRating);
+
+        modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+        modal.querySelector('.submit-btn').addEventListener('click', async () => {
+            const comment = modal.querySelector('#reviewText').value.trim();
+            
+            try {
+                await addDoc(collection(this.db, "Reviews"), {
+                    productId: this.productId,
+                    userId: this.auth.currentUser.uid,
+                    userName: this.auth.currentUser.displayName || 'Anonymous',
+                    userPhoto: this.auth.currentUser.photoURL || '',
+                    rating: selectedRating,
+                    comment: comment,
+                    createdAt: serverTimestamp()
+                });
+                
+                showNotification('Review submitted successfully!', 'success');
+                modal.remove();
+                this.loadReviews(); // Reload reviews
+            } catch (error) {
+                console.error('Error submitting review:', error);
+                showNotification('Failed to submit review', 'error');
+            }
+        });
     }
 
     // Track product view in localStorage for recently viewed page
@@ -260,6 +446,17 @@ class ProductPage {
         // Display price with "From:" prefix if multiple variations exist
         const pricePrefix = hasVariations ? 'From: ' : '';
         this.productPriceEl.textContent = `${pricePrefix}KES ${minPrice.toLocaleString()}`;
+        
+        // Calculate and display price per item
+        const pieceCount = this.product.pieceCount || this.product.piece_count || 1;
+        const pricePerItem = document.getElementById('pricePerItem');
+        if (pricePerItem && pieceCount > 1) {
+            const perItemPrice = Math.ceil(minPrice / pieceCount);
+            pricePerItem.textContent = `(KES ${perItemPrice.toLocaleString()}/item × ${pieceCount})`;
+            pricePerItem.style.display = 'block';
+        } else if (pricePerItem) {
+            pricePerItem.style.display = 'none';
+        }
         
         this.productDescriptionEl.textContent = this.product.description;
         
@@ -485,6 +682,13 @@ class ProductPage {
             this.sellerImageEl.addEventListener('click', () => {
                 window.location.href = `user.html?userId=${this.seller.id}`;
             });
+            
+            // Show verified badge if seller is verified
+            const isVerified = this.seller.isVerified === true || this.seller.verified === true;
+            const verifiedBadge = document.getElementById('sellerVerifiedBadge');
+            if (verifiedBadge) {
+                verifiedBadge.style.display = isVerified ? 'inline-flex' : 'none';
+            }
         }
     }
 
@@ -498,10 +702,10 @@ class ProductPage {
 
         this.imageUrls.forEach((url, index) => {
             const thumbnail = document.createElement('img');
-            thumbnail.src = getImageUrl(url, 'product');
+            thumbnail.src = url || PLACEHOLDERS.product;
             thumbnail.classList.add('thumbnail');
             thumbnail.loading = 'lazy';
-            thumbnail.dataset.fallback = 'product';
+            thumbnail.onerror = () => { thumbnail.src = PLACEHOLDERS.product; };
             thumbnail.addEventListener('click', () => this.setMainImage(index));
             this.thumbnailContainer.appendChild(thumbnail);
         });
@@ -510,12 +714,14 @@ class ProductPage {
         
         // Add click handler to main image for fullscreen view
         this.mainImage.addEventListener('click', () => this.openFullscreenImage());
+        
+        // Add error handler for main image
+        this.mainImage.onerror = () => { this.mainImage.src = PLACEHOLDERS.product; };
     }
 
     setMainImage(index) {
         this.currentImageIndex = index;
-        this.mainImage.src = getImageUrl(this.imageUrls[index], 'product');
-        this.mainImage.dataset.fallback = 'product';
+        this.mainImage.src = this.imageUrls[index] || PLACEHOLDERS.product;
         this.currentImageIndexEl.textContent = index + 1;
 
         document.querySelectorAll('.thumbnail').forEach((thumb, i) => {
@@ -636,12 +842,7 @@ class ProductPage {
         const productCard = document.createElement('div');
         productCard.classList.add('similar-product-card');
         
-        const firstImage = sanitizeUrl(getImageUrl(
-            product.photoTraceUrl || 
-            (product.imageUrls && product.imageUrls[0]) || 
-            null, 
-            'product'
-        ));
+        const firstImage = product.photoTraceUrl || (product.imageUrls && product.imageUrls[0]) || PLACEHOLDERS.product;
         
         const safeName = escapeHtml(product.name);
         const safeBrand = escapeHtml(product.brand || '');
@@ -650,7 +851,7 @@ class ProductPage {
         productCard.innerHTML = `
             <div class="product-link" data-product-id="${safeId}">
                 <div class="product-image">
-                    <img src="${firstImage}" alt="${safeName}" loading="lazy" data-fallback="product">
+                    <img src="${firstImage}" alt="${safeName}" loading="lazy" onerror="this.src='${PLACEHOLDERS.product}'">
                 </div>
                 <div class="product-info">
                     <h4 class="product-name">${safeName}</h4>
@@ -679,7 +880,7 @@ class ProductPage {
                 <button class="fullscreen-nav-btn fullscreen-prev" ${this.currentImageIndex === 0 ? 'disabled' : ''}>
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <img src="${getImageUrl(this.imageUrls[this.currentImageIndex], 'product')}" alt="Fullscreen Product Image" data-fallback="product">
+                <img src="${this.imageUrls[this.currentImageIndex] || PLACEHOLDERS.product}" alt="Fullscreen Product Image" onerror="this.src='${PLACEHOLDERS.product}'">
                 <button class="fullscreen-nav-btn fullscreen-next" ${this.currentImageIndex === this.imageUrls.length - 1 ? 'disabled' : ''}>
                     <i class="fas fa-chevron-right"></i>
                 </button>

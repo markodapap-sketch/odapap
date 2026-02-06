@@ -728,11 +728,35 @@ main {
   .prime-pill { padding: 5px 10px; font-size: 0.65rem; }
 }
 
-/* ===== VERIFIED BADGE ===== */
+/* ===== VERIFIED BADGE (Twitter-style) ===== */
 .verified-badge {
   color: #1976d2;
   font-size: 12px;
   margin-left: 4px;
+}
+
+.verified-tick {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  display: inline-block;
+  margin-left: 2px;
+}
+
+.uploader-name .verified-tick {
+  width: 14px;
+  height: 14px;
+}
+
+.featured-seller .verified-tick {
+  width: 12px;
+  height: 12px;
+}
+
+.seller-badge .verified-tick {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
 }
 
 .featured-seller .verified-badge {

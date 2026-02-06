@@ -90,12 +90,13 @@
                     </div>
                     <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('transactions')">
                     <div class="metric-icon green"><i class="fas fa-money-bill-wave"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricRevenue">KES 0</span>
                         <span class="metric-label">Revenue</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
                 <div class="metric-card clickable" onclick="switchSection('users')">
                     <div class="metric-icon purple"><i class="fas fa-users"></i></div>
@@ -113,19 +114,21 @@
                     </div>
                     <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
-                <div class="metric-card">
+                <div class="metric-card clickable" onclick="switchSection('analytics')">
                     <div class="metric-icon pink"><i class="fas fa-store"></i></div>
                     <div class="metric-info">
                         <span class="metric-value" id="metricStoreValue">KES 0</span>
                         <span class="metric-label">Store Value</span>
                     </div>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
             </div>
 
             <!-- Sales Statistics Card -->
-            <div class="sales-stats-card">
+            <div class="sales-stats-card clickable" onclick="switchSection('analytics')" style="cursor: pointer;">
                 <div class="sales-stats-header">
                     <h3><i class="fas fa-chart-line"></i> Sales Statistics</h3>
+                    <i class="fas fa-chevron-right metric-arrow"></i>
                 </div>
                 <div class="sales-grid">
                     <div class="sales-stat">
@@ -404,12 +407,18 @@
         <section class="page" id="transactions-page">
             <div class="page-header">
                 <h2>Transactions</h2>
-                <select id="transactionFilter" class="filter-select">
-                    <option value="all">All</option>
-                    <option value="completed">Completed</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
-                </select>
+                <div class="header-controls">
+                    <div class="search-input">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="transactionSearch" placeholder="Search by ID, user, M-Pesa code...">
+                    </div>
+                    <select id="transactionFilter" class="filter-select">
+                        <option value="all">All Transactions</option>
+                        <option value="completed">Completed</option>
+                        <option value="pending">Pending</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
@@ -418,8 +427,10 @@
                             <th>Transaction ID</th>
                             <th class="hide-sm">User</th>
                             <th>Amount</th>
+                            <th class="hide-sm">Method</th>
                             <th>Status</th>
-                            <th>Date</th>
+                            <th>Date & Time</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsTable"></tbody>

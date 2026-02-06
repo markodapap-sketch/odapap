@@ -6,16 +6,27 @@ import { showNotification } from './notifications.js';
 import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 import { categoryHierarchy } from './js/categoryData.js';
 import { initializeImageSliders } from './imageSlider.js';
-import { setupGlobalImageErrorHandler, getImageUrl, PLACEHOLDERS, initLazyLoading } from './js/imageCache.js';
 import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
 import { initializePWA, requestNotificationPermission } from './js/pwa.js';
 import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons, getSkeletonCards } from './loader.js';
+
+// Simple placeholder images (no caching)
+const PLACEHOLDERS = {
+    product: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"%3E%3Crect fill="%23f5f5f5" width="200" height="200"/%3E%3Cpath fill="%23ddd" d="M100 40c-33.137 0-60 26.863-60 60s26.863 60 60 60 60-26.863 60-60-26.863-60-60-60zm0 10c27.614 0 50 22.386 50 50s-22.386 50-50 50-50-22.386-50-50 22.386-50 50-50z"/%3E%3C/svg%3E',
+    profile: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle fill="%23e2e8f0" cx="50" cy="50" r="50"/%3E%3Ccircle fill="%2394a3b8" cx="50" cy="40" r="20"/%3E%3Cellipse fill="%2394a3b8" cx="50" cy="85" rx="35" ry="25"/%3E%3C/svg%3E'
+};
+
+// Simple getImageUrl without caching
+function getImageUrl(src, type = 'product') {
+    if (!src || typeof src !== 'string') return PLACEHOLDERS[type] || PLACEHOLDERS.product;
+    return src;
+}
 
 // Firebase
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ===== ENHANCED CACHING SYSTEM =====
+// ===== ENHANCED CACHING SYSTEM (TEXT DATA ONLY) =====
 const CACHE_KEYS = {
   LISTINGS: 'oda_listings_cache',
   USERS: 'oda_users_cache',
@@ -576,14 +587,16 @@ async function loadFeaturedItems() {
       const imageUrls = data.imageUrls || [];
       const mainImg = sanitizeUrl(getImageUrl(imageUrls[0], 'product'));
       const sellerImg = sanitizeUrl(getImageUrl(seller.profilePicUrl, 'profile'));
-      const isVerified = seller.isVerified === true;
+      const isVerified = seller.isVerified === true || seller.verified === true;
       
       const margin = priceData.retailPrice && priceData.retailPrice > priceData.price 
         ? Math.round(((priceData.retailPrice - priceData.price) / priceData.retailPrice) * 100) 
         : 0;
       
       const safeName = escapeHtml(data.name);
+      // Add verification badge to seller name so it appears everywhere
       const safeSellerName = escapeHtml(seller.name || 'Seller');
+      const verifiedBadge = isVerified ? ' <svg class="verified-tick" viewBox="0 0 22 22" aria-label="Verified account" role="img"><g><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></g></svg>' : '';
       const safeId = escapeHtml(data.id);
       
       return `
@@ -596,7 +609,7 @@ async function loadFeaturedItems() {
             <h3>${safeName}</h3>
             <div class="featured-seller">
               <img src="${sellerImg}" alt="" data-fallback="profile">
-              <span>${safeSellerName}${isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</span>
+              <span>${safeSellerName}${verifiedBadge}</span>
             </div>
             <div class="featured-price">
               <span class="price">Ksh ${priceData.price?.toLocaleString() || '0'}</span>
@@ -832,7 +845,7 @@ async function loadProducts() {
         sellerName: seller.name || seller.username || 'Seller',
         sellerPic: seller.profilePicUrl || 'images/profile-placeholder.png',
         sellerUid: seller.uid || sellerId,
-        isVerified: seller.isVerified === true,
+        isVerified: seller.isVerified === true || seller.verified === true,
         minPrice: priceData.price,
         retailPrice: priceData.retailPrice,
         packInfo: packInfo,
@@ -853,6 +866,11 @@ async function loadProducts() {
     console.error('Load error:', err);
     showNotification('Failed to load products', 'error');
   }
+}
+
+// Twitter-like verified badge SVG
+function getVerifiedBadge() {
+  return `<svg class="verified-tick" viewBox="0 0 22 22" aria-label="Verified account" role="img"><g><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></g></svg>`;
 }
 
 function renderProducts() {
@@ -885,13 +903,16 @@ function renderProducts() {
     const safeSellerUid = escapeHtml(listing.sellerUid);
     const safePackInfo = escapeHtml(listing.packInfo || '');
     
+    // Use Twitter-style verified badge
+    const verifiedBadge = listing.isVerified ? getVerifiedBadge() : '';
+    
     return `
       <div class="listing-item">
         <div class="product-item">
           <div class="profile">
             <img src="${sellerPic}" alt="${safeSellerName}" onclick="goToUserProfile('${safeSellerUid}')" loading="lazy" data-fallback="profile">
             <div class="uploader-info">
-              <p class="uploader-name"><strong>${safeSellerName}</strong>${listing.isVerified ? ' <i class="fas fa-check-circle verified-badge"></i>' : ''}</p>
+              <p class="uploader-name"><strong>${safeSellerName}</strong>${verifiedBadge}</p>
               <p class="product-name">${safeName}</p>
               ${safePackInfo ? `<p class="pack-size"><i class="fas fa-box"></i> ${safePackInfo}</p>` : ''}
             </div>
@@ -1317,9 +1338,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }).catch(err => {
     console.warn('[App] PWA init failed:', err);
   });
-  
-  // Setup global image error handling to prevent excessive Firestore reads
-  setupGlobalImageErrorHandler();
   
   // Setup search handlers
   setupSearch();

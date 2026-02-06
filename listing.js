@@ -10,10 +10,12 @@ import { app } from "./js/firebase.js";
 import { categoryHierarchy, brandsByCategory } from './js/categoryData.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 import { escapeHtml, sanitizeText, validatePrice, validateQuantity, validateListing } from './js/sanitize.js';
+import { ImageOptimizer, formatFileSize } from './js/imageOptimizer.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const imageOptimizer = new ImageOptimizer();
 
 // Setup global image error handling
 setupGlobalImageErrorHandler();
@@ -484,7 +486,6 @@ function initImageUpload() {
 
 async function handleFiles(e) {
     const files = Array.from(e.target.files);
-    const maxSize = 2 * 1024 * 1024; // 2MB
     const maxImages = 5;
     
     if (state.images.length >= maxImages) {
@@ -512,11 +513,13 @@ async function handleFiles(e) {
             
             let processedFile = file;
             
-            // Convert HEIC
+            // Convert HEIC if needed
             if (isHeic || file.type.includes('heic')) {
                 try {
-                    const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
-                    processedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
+                    if (typeof heic2any !== 'undefined') {
+                        const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+                        processedFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
+                    }
                 } catch (err) {
                     console.warn('HEIC conversion failed:', err);
                     toast('Could not convert HEIC image', 'error');
@@ -526,18 +529,41 @@ async function handleFiles(e) {
                 }
             }
             
-            // Compress if > 2MB
-            if (processedFile.size > maxSize) {
-                processedFile = await compressImage(processedFile, maxSize);
+            // Use advanced optimizer for ALL images
+            const originalSize = processedFile.size;
+            const optimized = await imageOptimizer.optimizeImage(processedFile);
+            
+            // Get best format (WebP if supported, else JPEG)
+            const format = optimized.formats.webp ? 'webp' : 'jpeg';
+            const optimizedData = optimized.formats[format];
+            
+            // Use medium size for preview (perfect balance)
+            const mediumData = optimizedData.medium;
+            
+            // Show savings notification
+            const saved = originalSize - mediumData.size;
+            const savedPercent = ((saved / originalSize) * 100).toFixed(0);
+            if (saved > 0) {
+                toast(`✨ Image optimized: ${formatFileSize(originalSize)} → ${formatFileSize(mediumData.size)} (${savedPercent}% smaller)`, 'success');
             }
             
-            // Create data URL
-            const dataUrl = await readAsDataURL(processedFile);
-            
-            // Update state
+            // Update state with all sizes
             const idx = state.images.findIndex(img => img.id === tempId);
             if (idx !== -1) {
-                state.images[idx] = { id: tempId, file: processedFile, dataUrl, loading: false };
+                state.images[idx] = {
+                    id: tempId,
+                    // Store all sizes for upload
+                    thumbnail: optimizedData.thumbnail.blob,
+                    medium: optimizedData.medium.blob,
+                    large: optimizedData.large.blob,
+                    format: format, // 'webp' or 'jpeg'
+                    dataUrl: mediumData.dataUrl, // For preview
+                    loading: false,
+                    // Keep stats
+                    originalSize,
+                    optimizedSize: mediumData.size,
+                    saved
+                };
             }
             
             renderImages();
@@ -545,7 +571,10 @@ async function handleFiles(e) {
             
         } catch (err) {
             console.error('Error processing image:', err);
-            toast('Error processing image', 'error');
+            toast(`Error optimizing image: ${err.message}`, 'error');
+            // Remove failed image
+            state.images = state.images.filter(img => img.id !== tempId);
+            renderImages();
         }
     }
     
@@ -1139,8 +1168,10 @@ async function processUploadQueue() {
     try {
         updateUploadProgress(job.id, 'uploading', 0);
         
-        // Upload images
+        // Upload images with all optimized sizes
         const imageUrls = [];
+        const imageUrlsOptimized = []; // Store all size variants
+        
         for (let i = 0; i < job.images.length; i++) {
             const img = job.images[i];
             
@@ -1151,12 +1182,47 @@ async function processUploadQueue() {
             }
             
             const progress = Math.floor((i / job.images.length) * 40);
-            updateUploadProgress(job.id, 'uploading', progress, `Uploading photo ${i + 1}/${job.images.length}`);
+            updateUploadProgress(job.id, 'uploading', progress, `Uploading photo ${i + 1}/${job.images.length}...`);
             
-            const fileRef = storageRef(storage, `listings/${user.uid}/${Date.now()}_${i}.jpg`);
-            const blob = await fetch(img.dataUrl).then(r => r.blob());
-            await uploadBytes(fileRef, blob);
-            imageUrls.push(await getDownloadURL(fileRef));
+            // Upload all three sizes (thumbnail, medium, large)
+            const basePath = `listings/${user.uid}/${Date.now()}_${i}`;
+            const extension = img.format === 'webp' ? 'webp' : 'jpg';
+            
+            try {
+                // Upload thumbnail
+                const thumbRef = storageRef(storage, `${basePath}_thumb.${extension}`);
+                await uploadBytes(thumbRef, img.thumbnail);
+                const thumbUrl = await getDownloadURL(thumbRef);
+                
+                // Upload medium (main)
+                const mediumRef = storageRef(storage, `${basePath}_medium.${extension}`);
+                await uploadBytes(mediumRef, img.medium);
+                const mediumUrl = await getDownloadURL(mediumRef);
+                
+                // Upload large (full quality)
+                const largeRef = storageRef(storage, `${basePath}_large.${extension}`);
+                await uploadBytes(largeRef, img.large);
+                const largeUrl = await getDownloadURL(largeRef);
+                
+                // Use medium as default URL for compatibility
+                imageUrls.push(mediumUrl);
+                
+                // Store all sizes
+                imageUrlsOptimized.push({
+                    thumbnail: thumbUrl,
+                    medium: mediumUrl,
+                    large: largeUrl,
+                    format: img.format
+                });
+                
+            } catch (uploadErr) {
+                console.error('Error uploading image sizes:', uploadErr);
+                // Fallback: try uploading just medium if multi-size fails
+                const fallbackRef = storageRef(storage, `${basePath}.${extension}`);
+                await uploadBytes(fallbackRef, img.medium);
+                const fallbackUrl = await getDownloadURL(fallbackRef);
+                imageUrls.push(fallbackUrl);
+            }
         }
         
         // Process variants and upload variant images
@@ -1234,6 +1300,7 @@ async function processUploadQueue() {
             brand: sanitizeText(brand, 100),
             description: sanitizeText(job.formData.description, 5000),
             imageUrls,
+            imageUrlsOptimized: imageUrlsOptimized.length > 0 ? imageUrlsOptimized : null, // Store all sizes
             variations,
             bulkPricing: job.bulkTiers.length > 0 ? job.bulkTiers.map(t => ({ 
                 minQuantity: validateQuantity(t.qty) || 1, 

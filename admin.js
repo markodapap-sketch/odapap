@@ -174,6 +174,7 @@ function setupEventListeners() {
     $('productSearch')?.addEventListener('input', e => searchProducts(e.target.value));
     $('userSearch')?.addEventListener('input', e => searchUsers(e.target.value));
     $('transactionFilter')?.addEventListener('change', filterTransactions);
+    $('transactionSearch')?.addEventListener('input', filterTransactions);
     $('analyticsPeriod')?.addEventListener('change', loadAnalytics);
     
     // Products load more
@@ -1129,7 +1130,7 @@ function renderUsers(users = state.users) {
     tbody.innerHTML = users.map(u => {
         const listings = state.products.filter(p => p.uploaderId === u.id).length;
         const verifiedBadge = u.verified 
-            ? '<span class="verified-badge" title="Verified Seller"><i class="fas fa-check-circle"></i></span>'
+            ? '<svg class="verified-tick" viewBox="0 0 22 22" style="width:14px;height:14px;vertical-align:middle;margin-left:2px;"><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.852-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681.132-.637.075-1.299-.165-1.903.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"></path></svg>'
             : '';
         return `
             <tr>
@@ -1500,55 +1501,214 @@ function exportReport() {
 }
 
 // ============= Transactions =============
+let allTransactions = [];
+
 async function loadTransactions() {
     const tbody = $('transactionsTable');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;"><div class="loading-spinner"></div></td></tr>';
+    
     try {
+        // Try to load from Transactions collection first
         const snap = await getDocs(collection(db, "Transactions"));
-        const transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        renderTransactions(transactions);
+        allTransactions = snap.docs.map(d => ({ id: d.id, ...d.data(), source: 'transaction' }));
+        
+        // Also add all orders as transactions for a complete view
+        state.orders.forEach(o => {
+            // Check if this order isn't already in transactions
+            const exists = allTransactions.some(t => t.orderId === o.id || t.id === o.id);
+            if (!exists) {
+                allTransactions.push({
+                    id: o.id,
+                    orderId: o.orderId || o.id,
+                    userEmail: o.buyerDetails?.email || 'N/A',
+                    userName: o.buyerDetails?.name || 'N/A',
+                    userPhone: o.buyerDetails?.phone || '',
+                    amount: o.totalAmount || 0,
+                    status: o.paymentStatus || (o.orderStatus === 'delivered' ? 'completed' : o.orderStatus === 'cancelled' ? 'failed' : 'pending'),
+                    paymentMethod: o.paymentMethod || 'N/A',
+                    mpesaCode: o.mpesaTransactionId || '',
+                    createdAt: o.orderDate || o.createdAt,
+                    orderStatus: o.orderStatus,
+                    source: 'order'
+                });
+            }
+        });
+        
+        // Also load wallet transactions if available
+        try {
+            const walletSnap = await getDocs(collection(db, "WalletTransactions"));
+            walletSnap.docs.forEach(d => {
+                const data = d.data();
+                allTransactions.push({
+                    id: d.id,
+                    userEmail: data.userEmail || 'N/A',
+                    userName: data.userName || 'N/A',
+                    amount: data.amount || 0,
+                    status: data.status || 'completed',
+                    type: data.type || 'wallet',
+                    paymentMethod: data.type === 'deposit' ? 'Deposit' : data.type === 'withdrawal' ? 'Withdrawal' : 'Wallet',
+                    createdAt: data.createdAt,
+                    source: 'wallet'
+                });
+            });
+        } catch (e) {
+            // WalletTransactions collection might not exist
+        }
+        
+        renderTransactions(allTransactions);
     } catch (err) {
         console.error('Transactions error:', err);
         // Show transactions from orders as fallback
-        const orderTransactions = state.orders.map(o => ({
+        allTransactions = state.orders.map(o => ({
             id: o.id,
+            orderId: o.orderId || o.id,
             userEmail: o.buyerDetails?.email || 'N/A',
+            userName: o.buyerDetails?.name || 'N/A',
+            userPhone: o.buyerDetails?.phone || '',
             amount: o.totalAmount || 0,
-            status: o.paymentStatus || (o.orderStatus === 'delivered' ? 'completed' : 'pending'),
-            createdAt: o.orderDate
+            status: o.paymentStatus || (o.orderStatus === 'delivered' ? 'completed' : o.orderStatus === 'cancelled' ? 'failed' : 'pending'),
+            paymentMethod: o.paymentMethod || 'N/A',
+            mpesaCode: o.mpesaTransactionId || '',
+            createdAt: o.orderDate || o.createdAt,
+            orderStatus: o.orderStatus,
+            source: 'order'
         }));
-        renderTransactions(orderTransactions);
+        renderTransactions(allTransactions);
     }
 }
 
 function renderTransactions(txns) {
     const tbody = $('transactionsTable');
     if (!txns.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;">No transactions</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;">No transactions</td></tr>';
         return;
     }
     
-    tbody.innerHTML = txns.sort((a, b) => getDate(b.createdAt) - getDate(a.createdAt)).map(t => `
-        <tr>
-            <td>${t.id.slice(0, 12)}...</td>
-            <td class="hide-sm">${t.userEmail || 'N/A'}</td>
-            <td>KES ${(t.amount || 0).toLocaleString()}</td>
-            <td><span class="status ${t.status || 'pending'}">${t.status || 'pending'}</span></td>
-            <td>${formatDate(t.createdAt)}</td>
-        </tr>
-    `).join('');
+    // Sort by date descending (most recent first)
+    const sorted = txns.sort((a, b) => getDate(b.createdAt) - getDate(a.createdAt));
+    
+    tbody.innerHTML = sorted.map(t => {
+        const statusClass = t.status === 'completed' ? 'delivered' : t.status === 'failed' ? 'cancelled' : 'pending';
+        const typeIcon = t.source === 'wallet' ? 'fa-wallet' : t.source === 'order' ? 'fa-shopping-cart' : 'fa-exchange-alt';
+        const formattedDate = formatDateTime(t.createdAt);
+        
+        return `
+            <tr class="transaction-row" onclick="viewTransactionDetails('${t.id}', '${t.source}')">
+                <td>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class="fas ${typeIcon}" style="color:var(--gray-400);font-size:12px;"></i>
+                        <span>${(t.orderId || t.id).toString().slice(0, 10)}${(t.orderId || t.id).toString().length > 10 ? '...' : ''}</span>
+                    </div>
+                </td>
+                <td class="hide-sm">
+                    <div>
+                        <strong>${escapeHtml(t.userName || 'N/A')}</strong>
+                        <br><small style="color:var(--gray-500);">${escapeHtml(t.userEmail || '')}</small>
+                    </div>
+                </td>
+                <td><strong style="color:${t.status === 'completed' ? 'var(--green)' : t.status === 'failed' ? 'var(--red)' : 'var(--orange)'}">KES ${(t.amount || 0).toLocaleString()}</strong></td>
+                <td class="hide-sm">${escapeHtml(t.paymentMethod || 'N/A')}</td>
+                <td><span class="status ${statusClass}">${t.status || 'pending'}</span></td>
+                <td>
+                    <div style="font-size:12px;">
+                        <div>${formattedDate.date}</div>
+                        <small style="color:var(--gray-500);">${formattedDate.time}</small>
+                    </div>
+                </td>
+                <td>
+                    <button class="action-btn view" onclick="event.stopPropagation(); viewTransactionDetails('${t.id}', '${t.source}')" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
+
+// Format date and time separately for better display
+function formatDateTime(d) {
+    const date = getDate(d);
+    return {
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        time: date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    };
+}
+
+// View transaction details
+window.viewTransactionDetails = function(id, source) {
+    const transaction = allTransactions.find(t => t.id === id);
+    if (!transaction) return;
+    
+    if (source === 'order' && transaction.orderId) {
+        // Open order modal for order transactions
+        viewOrder(transaction.id);
+    } else {
+        // Show transaction details modal
+        const content = $('orderModalContent');
+        content.innerHTML = `
+            <div class="order-detail-header">
+                <h3>Transaction Details</h3>
+                <span class="status ${transaction.status === 'completed' ? 'delivered' : transaction.status === 'failed' ? 'cancelled' : 'pending'}">${transaction.status || 'pending'}</span>
+            </div>
+            <div class="order-info-grid">
+                <div class="order-info-box">
+                    <h4>Transaction Info</h4>
+                    <p><strong>ID:</strong> ${transaction.id}</p>
+                    <p><strong>Amount:</strong> KES ${(transaction.amount || 0).toLocaleString()}</p>
+                    <p><strong>Method:</strong> ${transaction.paymentMethod || 'N/A'}</p>
+                    ${transaction.mpesaCode ? `<p><strong>M-Pesa Code:</strong> ${transaction.mpesaCode}</p>` : ''}
+                </div>
+                <div class="order-info-box">
+                    <h4>User Info</h4>
+                    <p><strong>Name:</strong> ${escapeHtml(transaction.userName || 'N/A')}</p>
+                    <p><strong>Email:</strong> ${escapeHtml(transaction.userEmail || 'N/A')}</p>
+                    ${transaction.userPhone ? `<p><strong>Phone:</strong> ${transaction.userPhone}</p>` : ''}
+                </div>
+                <div class="order-info-box">
+                    <h4>Date & Time</h4>
+                    <p>${formatDate(transaction.createdAt)}</p>
+                    <p>${getDate(transaction.createdAt).toLocaleTimeString()}</p>
+                </div>
+                <div class="order-info-box">
+                    <h4>Source</h4>
+                    <p>${transaction.source === 'wallet' ? 'Wallet Transaction' : transaction.source === 'order' ? 'Order Payment' : 'Transaction'}</p>
+                    ${transaction.orderStatus ? `<p><strong>Order Status:</strong> ${transaction.orderStatus}</p>` : ''}
+                </div>
+            </div>
+        `;
+        $('orderModal').classList.add('active');
+    }
+};
 
 function filterTransactions() {
     const status = $('transactionFilter').value;
-    loadTransactions().then(() => {
-        if (status !== 'all') {
-            const rows = $$('#transactionsTable tr');
-            rows.forEach(r => {
-                const s = r.querySelector('.status')?.textContent;
-                r.style.display = s === status ? '' : 'none';
-            });
-        }
-    });
+    const searchVal = $('transactionSearch')?.value?.toLowerCase() || '';
+    
+    let filtered = allTransactions;
+    
+    // Filter by status
+    if (status !== 'all') {
+        filtered = filtered.filter(t => t.status === status);
+    }
+    
+    // Filter by search
+    if (searchVal) {
+        filtered = filtered.filter(t => 
+            t.id?.toLowerCase().includes(searchVal) ||
+            t.orderId?.toLowerCase().includes(searchVal) ||
+            t.userName?.toLowerCase().includes(searchVal) ||
+            t.userEmail?.toLowerCase().includes(searchVal) ||
+            t.mpesaCode?.toLowerCase().includes(searchVal) ||
+            t.userPhone?.includes(searchVal)
+        );
+    }
+    
+    renderTransactions(filtered);
+}
+
+// Setup transaction search
+function setupTransactionSearch() {
+    $('transactionSearch')?.addEventListener('input', filterTransactions);
 }
 
 // ============= Verifications =============
@@ -1792,10 +1952,15 @@ function setupDeliveryAreasEventListeners() {
     // Save delivery areas button
     $('saveDeliveryAreasBtn')?.addEventListener('click', saveDeliveryAreas);
     
-    // County toggle changes
-    document.querySelectorAll('.county-toggle input[type="checkbox"]').forEach(checkbox => {
-        checkbox.addEventListener('change', updateActiveAreasCount);
-    });
+    // Use event delegation for county toggle changes (handles hidden regions too)
+    const deliveryConfig = document.querySelector('.delivery-areas-config');
+    if (deliveryConfig) {
+        deliveryConfig.addEventListener('change', (e) => {
+            if (e.target.matches('.county-toggle input[type="checkbox"]')) {
+                updateActiveAreasCount();
+            }
+        });
+    }
     
     // Expand more regions button
     $('expandRegionsBtn')?.addEventListener('click', () => {
@@ -1817,6 +1982,20 @@ function updateActiveAreasCount() {
     if (countEl) {
         countEl.textContent = checkedCount;
     }
+    
+    // Update all badge texts based on checkbox state
+    document.querySelectorAll('.county-toggle input[type="checkbox"]').forEach(checkbox => {
+        const badge = checkbox.closest('.county-toggle').querySelector('.county-badge');
+        if (badge) {
+            if (checkbox.checked) {
+                badge.textContent = 'Active';
+                badge.classList.add('active');
+            } else {
+                badge.textContent = 'Inactive';
+                badge.classList.remove('active');
+            }
+        }
+    });
     
     // Update banner color based on count
     const banner = $('areaStatusBanner');
@@ -2542,18 +2721,18 @@ function setupNotificationListeners() {
 
 async function loadNotificationStats() {
     try {
-        // Get total FCM token subscribers
-        const tokensSnap = await getDocs(query(collection(db, 'FCMTokens'), where('active', '==', true)));
-        $('totalSubscribers').textContent = tokensSnap.size;
+        // Get total users (subscribers)
+        const usersSnap = await getDocs(collection(db, 'Users'));
+        $('totalSubscribers').textContent = usersSnap.size;
         
-        // Count mobile users
+        // Count users with FCM tokens (mobile users estimate)
         let mobileCount = 0;
-        tokensSnap.forEach(doc => {
-            const data = doc.data();
-            if (data.platform?.platform === 'android' || data.platform?.platform === 'ios') {
-                mobileCount++;
-            }
-        });
+        try {
+            const tokensSnap = await getDocs(query(collection(db, 'FCMTokens'), where('active', '==', true)));
+            mobileCount = tokensSnap.size;
+        } catch (e) {
+            mobileCount = 0;
+        }
         $('mobileSubscribers').textContent = mobileCount;
         
         // Get today's sent notifications
@@ -2561,13 +2740,18 @@ async function loadNotificationStats() {
         today.setHours(0, 0, 0, 0);
         const todayTimestamp = Timestamp.fromDate(today);
         
-        const sentTodaySnap = await getDocs(
-            query(collection(db, 'SentNotifications'), 
-                where('sentAt', '>=', todayTimestamp),
-                orderBy('sentAt', 'desc')
-            )
-        );
-        $('notifsSent').textContent = sentTodaySnap.size;
+        try {
+            const sentTodaySnap = await getDocs(
+                query(collection(db, 'SentNotifications'), 
+                    where('sentAt', '>=', todayTimestamp),
+                    orderBy('sentAt', 'desc')
+                )
+            );
+            $('notifsSent').textContent = sentTodaySnap.size;
+        } catch (e) {
+            // Index might not exist yet
+            $('notifsSent').textContent = '0';
+        }
         
     } catch (err) {
         console.error('Error loading notification stats:', err);
@@ -2652,18 +2836,19 @@ async function handleSendNotification(e) {
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     
     try {
-        // Get all active FCM tokens
-        let tokensQuery = query(collection(db, 'FCMTokens'), where('active', '==', true));
-        const tokensSnap = await getDocs(tokensQuery);
+        // Get all users to send notifications to
+        const usersSnap = await getDocs(collection(db, 'Users'));
         
-        if (tokensSnap.empty) {
-            showNotification('No subscribers to send to', 'warning');
+        if (usersSnap.empty) {
+            showNotification('No users to send to', 'warning');
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = originalText;
             return;
         }
         
-        const tokens = [];
-        tokensSnap.forEach(doc => {
-            tokens.push(doc.data().token);
+        const userIds = [];
+        usersSnap.forEach(doc => {
+            userIds.push(doc.id);
         });
         
         // Create notification record
@@ -2673,39 +2858,35 @@ async function handleSendNotification(e) {
             url,
             target,
             type,
-            tokens: tokens,
-            recipientCount: tokens.length,
+            recipientCount: userIds.length,
             sentAt: Timestamp.now(),
             sentBy: state.user?.email || 'Admin',
-            status: 'queued'
+            status: 'sent'
         };
         
-        // Save to SentNotifications collection
+        // Save to SentNotifications collection for history
         const notifRef = await addDoc(collection(db, 'SentNotifications'), notifData);
         
-        // Also create individual notification records for users who have tokens
+        // Create individual notification records for ALL users
         // This allows them to see it in their notification center
-        const userTokensSnap = await getDocs(collection(db, 'FCMTokens'));
         const batch = [];
         
-        userTokensSnap.forEach(tokenDoc => {
-            const tokenData = tokenDoc.data();
-            if (tokenData.userId && tokenData.active) {
-                batch.push(
-                    addDoc(collection(db, 'Users', tokenData.userId, 'Notifications'), {
-                        title,
-                        body,
-                        url,
-                        type,
-                        read: false,
-                        createdAt: Timestamp.now(),
-                        notificationId: notifRef.id
-                    })
-                );
-            }
+        userIds.forEach(userId => {
+            batch.push(
+                addDoc(collection(db, 'Users', userId, 'Notifications'), {
+                    title,
+                    body,
+                    url,
+                    type,
+                    read: false,
+                    createdAt: Timestamp.now(),
+                    notificationId: notifRef.id,
+                    isGlobal: true
+                })
+            );
         });
         
-        // Also add to a global Notifications collection for the notification page
+        // Also add to global Notifications collection for the notification page
         await addDoc(collection(db, 'Notifications'), {
             title,
             body,
@@ -2719,10 +2900,7 @@ async function handleSendNotification(e) {
         
         await Promise.all(batch);
         
-        // Note: Actual FCM sending would require a server-side function
-        // For now, we're creating the notification records that the app can display
-        
-        showNotification(`Notification sent to ${tokens.length} subscribers!`, 'success');
+        showNotification(`Notification sent to ${userIds.length} users!`, 'success');
         
         // Clear form
         $('notifTitle').value = '';

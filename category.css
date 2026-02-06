@@ -465,6 +465,16 @@ main {
   margin-left: 4px;
 }
 
+/* Twitter-style Verified Tick */
+.verified-tick {
+  width: 14px;
+  height: 14px;
+  margin-left: 3px;
+  vertical-align: middle;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 @media (max-width: 600px) {
   .filter-cards-grid {
     grid-template-columns: repeat(3, 1fr);
