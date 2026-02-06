@@ -9,15 +9,16 @@
   left: 0;
   right: 0;
   background: white;
-  border-radius: 0 0 12px 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
   max-height: 70vh;
   overflow-y: auto;
-  z-index: 1000;
+  z-index: 9999;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px);
+  transform: translateY(-8px);
   transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+  overscroll-behavior: contain;
 }
 
 .search-suggestions.active {
@@ -317,20 +318,42 @@
   font-size: 0.85rem;
 }
 
-/* Mobile responsive */
+/* Mobile responsive — suggestions drop from TOP, not bottom (keyboard hides bottom) */
 @media (max-width: 768px) {
   .search-suggestions {
     position: fixed;
-    top: auto;
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    max-height: 60vh;
-    border-radius: 16px 16px 0 0;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    z-index: 9999;
+    padding-top: 60px;
+    background: #fff;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  
+
+  /* Floating close hint at top of mobile overlay */
+  .search-suggestions.active::before {
+    content: '← Back to close';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 16px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    color: #999;
+    z-index: 10000;
+    text-align: center;
+  }
+
   .search-suggestion-item {
-    padding: 12px 16px;
+    padding: 14px 16px;
   }
   
   .suggestion-image {
@@ -340,6 +363,8 @@
   
   .search-view-all {
     border-radius: 0;
+    position: sticky;
+    bottom: 0;
   }
 }
 
