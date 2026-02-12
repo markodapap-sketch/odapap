@@ -22,6 +22,7 @@ import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons
 import { showNotification } from './notifications.js';
 import { animateButton, animateIconToCart, updateCartCounter, updateWishlistCounter, updateChatCounter } from './js/utils.js';
 import { escapeHtml, sanitizeUrl } from './js/sanitize.js';
+import { initLazyLoading } from './js/imageCache.js';
 
 // Simple placeholder images (no caching)
 const PLACEHOLDERS = {
@@ -43,6 +44,35 @@ const firestore = getFirestore(app);
 // Caching for Firestore reads
 const userCache = new Map();
 const USER_CACHE_DURATION = 10 * 60 * 1000; // 10 minutes
+
+// Product display settings from admin
+let displaySettings = { showStockCount: false, showStockLowOnly: false, lowStockThreshold: 5 };
+
+async function loadDisplaySettings() {
+  try {
+    const snap = await getDoc(doc(firestore, 'Settings', 'appSettings'));
+    if (snap.exists()) {
+      const d = snap.data();
+      displaySettings.showStockCount = d.showStockCount === true;
+      displaySettings.showStockLowOnly = d.showStockLowOnly === true;
+      displaySettings.lowStockThreshold = parseInt(d.lowStockThreshold) || 5;
+    }
+  } catch (e) { console.warn('Display settings load failed:', e); }
+}
+
+function shouldShowStock(stockCount) {
+  if (!displaySettings.showStockCount) return false;
+  if (displaySettings.showStockLowOnly) {
+    return stockCount > 0 && stockCount <= displaySettings.lowStockThreshold;
+  }
+  return true;
+}
+
+function getRetailPerPiece(retailPrice, packQuantity) {
+  if (!retailPrice || !packQuantity || packQuantity <= 1) return '';
+  const perPiece = Math.ceil(retailPrice / packQuantity);
+  return ` (KES ${perPiece.toLocaleString()}/pc)`;
+}
 
 // Cached user fetch function
 async function getCachedUser(userId) {
@@ -206,6 +236,7 @@ function setCookie(name, value, days = 1) {
 function getMinPriceFromVariations(listing) {
     let minPrice = Infinity;
     let associatedRetail = null;
+    let packQuantity = 0;
     
     if (listing.variations && listing.variations.length > 0) {
         listing.variations.forEach(variation => {
@@ -214,8 +245,8 @@ function getMinPriceFromVariations(listing) {
                     const attrPrice = attr.price || attr.originalPrice;
                     if (attrPrice && attrPrice < minPrice) {
                         minPrice = attrPrice;
-                        // Prefer retailPack (total retail value of pack) over retailPrice (per-piece retail)
                         associatedRetail = attr.retailPack || attr.retailPrice || attr.retail || null;
+                        packQuantity = parseInt(attr.packQuantity) || 0;
                     }
                 });
             } else {
@@ -223,6 +254,7 @@ function getMinPriceFromVariations(listing) {
                 if (varPrice && varPrice < minPrice) {
                     minPrice = varPrice;
                     associatedRetail = variation.retailPack || variation.retailPrice || variation.retail || null;
+                    packQuantity = parseInt(variation.packQuantity) || 0;
                 }
             }
         });
@@ -239,7 +271,8 @@ function getMinPriceFromVariations(listing) {
     
     return {
         price: minPrice,
-        retailPrice: finalRetail
+        retailPrice: finalRetail,
+        packQuantity: packQuantity
     };
 }
 
@@ -252,8 +285,11 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
 
     // Flatten variations with attributes into selectable options
     let allOptions = [];
+    const listingImg = listing.imageUrls?.[0] || listing.photoTraceUrl || '';
     if (listing.variations && listing.variations.length > 0) {
         listing.variations.forEach((variation, vIdx) => {
+            // Variation-level image (photoUrls array from bulk upload)
+            const varImg = variation.photoUrls?.[0] || variation.photoUrl || '';
             if (variation.attributes && variation.attributes.length > 0) {
                 variation.attributes.forEach((attr, aIdx) => {
                     allOptions.push({
@@ -261,14 +297,20 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
                         variationTitle: variation.title,
                         variationIndex: vIdx,
                         attributeIndex: aIdx,
-                        displayName: `${variation.title}: ${attr.attr_name}`
+                        displayName: `${variation.title}: ${attr.attr_name}`,
+                        photoUrl: attr.photoUrl || attr.imageUrl || varImg || listingImg,
+                        packQuantity: attr.packQuantity || null,
+                        unitLabel: attr.unitLabel || 'pieces'
                     });
                 });
             } else {
                 allOptions.push({
                     ...variation,
                     variationIndex: vIdx,
-                    displayName: variation.title || variation.attr_name || `Option ${vIdx + 1}`
+                    displayName: variation.title || variation.attr_name || `Option ${vIdx + 1}`,
+                    photoUrl: variation.photoUrl || variation.imageUrl || varImg || listingImg,
+                    packQuantity: variation.packQuantity || null,
+                    unitLabel: variation.unitLabel || 'pieces'
                 });
             }
         });
@@ -279,14 +321,19 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
         variationsHTML = '<div class="modal-variations"><h4>Select Option:</h4><div class="variations-grid">';
         allOptions.forEach((option, idx) => {
             const optionPrice = option.price || option.originalPrice || listing.price;
-            const optionRetail = option.retailPrice || option.retail;
+            const optionRetail = parseFloat(option.retailPrice || option.retail) || 0;
+            const pqty = parseInt(option.packQuantity) || 0;
+            const pLabel = pqty ? `<p class="variation-pack"><i class="fas fa-cubes"></i> ${pqty} ${escapeHtml(option.unitLabel || 'pieces')} per unit</p>` : '';
+            const retailPP = optionRetail && pqty > 1 ? getRetailPerPiece(optionRetail, pqty) : '';
+            const oStock = parseInt(option.stock) || 0;
             variationsHTML += `
                 <div class="variation-mini-card ${idx === 0 ? 'selected' : ''}" data-option-index="${idx}">
-                    ${option.photoUrl || option.imageUrl ? `<img src="${option.photoUrl || option.imageUrl}" alt="${option.displayName}">` : '<i class="fas fa-box"></i>'}
-                    <p><strong>${option.displayName}</strong></p>
-                    <p class="variation-price">KES ${optionPrice.toLocaleString()}</p>
-                    ${optionRetail ? `<p class="variation-retail">Market: KES ${optionRetail.toLocaleString()}</p>` : ''}
-                    <p class="variation-stock">${option.stock || 0} units</p>
+                    ${option.photoUrl ? `<img src="${option.photoUrl}" alt="${escapeHtml(option.displayName)}">` : '<i class="fas fa-box"></i>'}
+                    <p><strong>${escapeHtml(option.displayName)}</strong></p>
+                    ${pLabel}
+                    <p class="variation-price">KES ${optionPrice.toLocaleString()}${pqty > 1 ? ` <span class="var-per-pc">(KES ${Math.ceil(optionPrice / pqty).toLocaleString()}/pc)</span>` : ''}</p>
+                    ${optionRetail ? `<p class="variation-retail">~Retail KES ${optionRetail.toLocaleString()}${retailPP}</p>` : ''}
+                    ${shouldShowStock(oStock) ? `<p class="variation-stock">${oStock} in stock</p>` : ''}
                 </div>
             `;
         });
@@ -301,7 +348,7 @@ function showQuantityModal(listingId, listing, isAddToCart = false) {
     modal.innerHTML = `
         <div class="quantity-modal-content">
             <h3>Select Quantity</h3>
-            <p>Available stock: <span id="modalStock">${maxStock}</span> units</p>
+            ${shouldShowStock(maxStock) ? `<p>Available stock: <span id="modalStock">${maxStock}</span> units</p>` : '<span id="modalStock" style="display:none;"></span>'}
             ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
             ${variationsHTML}
             <div class="quantity-selector">
@@ -866,15 +913,16 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
               const priceData = getMinPriceFromVariations(listing);
               const minPrice = priceData.price;
               const retailPrice = priceData.retailPrice;
+              const pq = priceData.packQuantity || 0;
               return `
               <div class="price-row">
                 <span class="price-label">Your Price:</span>
                 <strong class="wholesale-amount">KES ${minPrice.toLocaleString()}</strong>
+                ${pq > 1 ? `<span class="wholesale-per-pc">(KES ${Math.ceil(minPrice / pq).toLocaleString()}/pc)</span>` : ''}
               </div>
               ${retailPrice && retailPrice > minPrice ? `
               <div class="price-row retail-row">
-                <span class="price-label" title="What shops typically sell this for">Retail Price:</span>
-                <span class="retail-amount">KES ${retailPrice.toLocaleString()}</span>
+                <span class="retail-hint">Est. Retail ~KES ${retailPrice.toLocaleString()}${pq > 1 ? ` (KES ${Math.ceil(retailPrice / pq).toLocaleString()}/pc)` : ''}</span>
                 <span class="profit-badge">Save ${Math.round(((retailPrice - minPrice) / retailPrice) * 100)}%</span>
               </div>` : ''}`;
             })()}
@@ -1228,6 +1276,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   showLoader('category');
   updateLoaderMessage('Loading category...', 'folder-open');
+  
+  // Load display settings (non-blocking)
+  loadDisplaySettings();
   
   // Load mega menu categories dynamically
   loadMegaMenuCategories();

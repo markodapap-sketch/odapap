@@ -9,6 +9,7 @@ import { initializeImageSliders } from './imageSlider.js';
 import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
 import { initializePWA, requestNotificationPermission } from './js/pwa.js';
 import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons, getSkeletonCards } from './loader.js';
+import { initLazyLoading } from './js/imageCache.js';
 
 // Simple placeholder images (no caching)
 const PLACEHOLDERS = {
@@ -46,6 +47,9 @@ let allListings = [];
 let listingsCache = null;
 let listingsCacheTime = 0;
 
+// Product display settings from admin
+let displaySettings = { showStockCount: false, showStockLowOnly: false, lowStockThreshold: 5 };
+
 // Memory cache for users
 const userCache = new Map();
 
@@ -54,10 +58,18 @@ function getLocalCache(key) {
   try {
     const cached = localStorage.getItem(key);
     if (cached) {
-      const { data, timestamp } = JSON.parse(cached);
-      return { data, timestamp, valid: true };
+      const parsed = JSON.parse(cached);
+      // Validate structure
+      if (parsed && typeof parsed.timestamp === 'number' && parsed.data !== undefined) {
+        return { data: parsed.data, timestamp: parsed.timestamp, valid: true };
+      }
+      // Corrupt entry – remove it
+      localStorage.removeItem(key);
     }
-  } catch (e) {}
+  } catch (e) {
+    // JSON parse failed – remove corrupt entry
+    try { localStorage.removeItem(key); } catch (_) {}
+  }
   return { data: null, timestamp: 0, valid: false };
 }
 
@@ -130,11 +142,39 @@ function addToGuestCart(listingId, listing, qty = 1, variation = null) {
   saveGuestCart(cart);
 }
 
+// ===== PRODUCT DISPLAY SETTINGS =====
+async function loadDisplaySettings() {
+  try {
+    const snap = await getDoc(doc(db, 'Settings', 'appSettings'));
+    if (snap.exists()) {
+      const d = snap.data();
+      displaySettings.showStockCount = d.showStockCount === true;
+      displaySettings.showStockLowOnly = d.showStockLowOnly === true;
+      displaySettings.lowStockThreshold = parseInt(d.lowStockThreshold) || 5;
+    }
+  } catch (e) { console.warn('Display settings load failed:', e); }
+}
+
+function shouldShowStock(stockCount) {
+  if (!displaySettings.showStockCount) return false;
+  if (displaySettings.showStockLowOnly) {
+    return stockCount > 0 && stockCount <= displaySettings.lowStockThreshold;
+  }
+  return true;
+}
+
+function getRetailPerPiece(retailPrice, packQuantity) {
+  if (!retailPrice || !packQuantity || packQuantity <= 1) return '';
+  const perPiece = Math.ceil(retailPrice / packQuantity);
+  return ` (KES ${perPiece.toLocaleString()}/pc)`;
+}
+
 // Get minimum price from variations - retail stored as retailPrice in DB
 function getMinPriceFromVariations(listing) {
   let minPrice = Infinity;
   let associatedRetail = null;
   let packSize = null;
+  let packQuantity = 0;
   
   if (listing.variations?.length) {
     listing.variations.forEach(v => {
@@ -146,6 +186,7 @@ function getMinPriceFromVariations(listing) {
             // Prefer retailPack (total retail value of pack) over retailPrice (per-piece retail)
             associatedRetail = a.retailPack || a.retailPrice || a.retail || null;
             packSize = a.packSize || null;
+            packQuantity = parseInt(a.packQuantity) || 0;
           }
         });
       } else {
@@ -154,6 +195,7 @@ function getMinPriceFromVariations(listing) {
           minPrice = varPrice;
           associatedRetail = v.retailPack || v.retailPrice || v.retail || null;
           packSize = v.packSize || null;
+          packQuantity = parseInt(v.packQuantity) || 0;
         }
       }
     });
@@ -171,7 +213,8 @@ function getMinPriceFromVariations(listing) {
   return { 
     price: minPrice, 
     retailPrice: finalRetail,
-    packSize: packSize
+    packSize: packSize,
+    packQuantity: packQuantity
   };
 }
 
@@ -238,11 +281,9 @@ async function updateAuthStatus(user) {
     let name = user.email?.split('@')[0] || 'User';
     let userData = {};
     try {
-      const userDoc = await getDoc(doc(db, "Users", user.uid));
-      if (userDoc.exists()) {
-        userData = userDoc.data();
-        name = userData.name || userData.username || name;
-      }
+      // Use the cached user fetch to avoid duplicate Firestore reads
+      userData = await getCachedUser(user.uid);
+      name = userData.name || userData.username || name;
     } catch {}
     
     // Update mega menu
@@ -318,13 +359,13 @@ async function getCachedUser(userId) {
 // ===== CACHED LISTINGS FETCH =====
 async function getCachedListings() {
   // Check memory cache first
-  if (listingsCache && isCacheValid(listingsCacheTime, CACHE_DURATIONS.LISTINGS)) {
+  if (listingsCache && Array.isArray(listingsCache) && isCacheValid(listingsCacheTime, CACHE_DURATIONS.LISTINGS)) {
     return listingsCache;
   }
   
   // Check localStorage cache
   const localCache = getLocalCache(CACHE_KEYS.LISTINGS);
-  if (localCache.valid && localCache.data && isCacheValid(localCache.timestamp, CACHE_DURATIONS.LISTINGS)) {
+  if (localCache.valid && Array.isArray(localCache.data) && localCache.data.length > 0 && isCacheValid(localCache.timestamp, CACHE_DURATIONS.LISTINGS)) {
     listingsCache = localCache.data;
     listingsCacheTime = localCache.timestamp;
     return listingsCache;
@@ -332,8 +373,8 @@ async function getCachedListings() {
   
   // Check if we're offline
   if (!navigator.onLine) {
-    // Return stale cache if available
-    if (localCache.data) {
+    // Return stale cache if available (even expired)
+    if (localCache.data && Array.isArray(localCache.data) && localCache.data.length > 0) {
       listingsCache = localCache.data;
       listingsCacheTime = localCache.timestamp;
       return listingsCache;
@@ -351,8 +392,8 @@ async function getCachedListings() {
     
     return listingsCache;
   } catch (e) {
-    // Return stale cache on error
-    if (localCache.data) {
+    // Return stale cache on error (even expired)
+    if (localCache.data && Array.isArray(localCache.data) && localCache.data.length > 0) {
       listingsCache = localCache.data;
       listingsCacheTime = localCache.timestamp;
       return listingsCache;
@@ -368,8 +409,20 @@ async function loadHeroSlides() {
   if (!track || !dotsContainer) return;
   
   try {
-    const snap = await getDocs(query(collection(db, "HeroSlides"), orderBy("order", "asc")));
-    heroSlides = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.active !== false);
+    // Try sessionStorage cache first (hero slides rarely change)
+    let heroData = null;
+    const cached = sessionStorage.getItem('oda_hero_slides');
+    if (cached) {
+      try { heroData = JSON.parse(cached); } catch(e) {}
+    }
+    
+    if (!heroData) {
+      const snap = await getDocs(query(collection(db, "HeroSlides"), orderBy("order", "asc")));
+      heroData = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(s => s.active !== false);
+      if (heroData.length > 0) sessionStorage.setItem('oda_hero_slides', JSON.stringify(heroData));
+    }
+    
+    heroSlides = heroData;
     
     // Fallback default slides if none exist
     if (heroSlides.length === 0) {
@@ -852,6 +905,7 @@ async function loadProducts() {
         minPrice: priceData.price,
         retailPrice: priceData.retailPrice,
         packInfo: packInfo,
+        packQuantity: priceData.packQuantity || 0,
         margin: priceData.retailPrice && priceData.retailPrice > priceData.price 
           ? Math.round(((priceData.retailPrice - priceData.price) / priceData.retailPrice) * 100) 
           : 0,
@@ -909,6 +963,14 @@ function renderProducts() {
     // Use Twitter-style verified badge
     const verifiedBadge = listing.isVerified ? getVerifiedBadge() : '';
     
+    // Product badges
+    const badges = [];
+    if (listing.primeCategories?.bestSeller) badges.push('<span class="product-badge badge-bestseller"><i class="fas fa-fire"></i> Bestseller</span>');
+    if (listing.primeCategories?.offers) badges.push('<span class="product-badge badge-deal"><i class="fas fa-bolt"></i> Deal</span>');
+    const stock = listing.stock || listing.variations?.reduce((s, v) => s + (parseInt(v.stock) || v.attributes?.reduce((a, at) => a + (parseInt(at.stock) || 0), 0) || 0), 0) || 0;
+    if (stock > 0 && stock <= (displaySettings.lowStockThreshold || 5)) badges.push('<span class="product-badge badge-lowstock"><i class="fas fa-exclamation"></i> Low Stock</span>');
+    const badgeHtml = badges.length ? `<div class="product-badges">${badges.join('')}</div>` : '';
+    
     return `
       <div class="listing-item">
         <div class="product-item">
@@ -931,6 +993,7 @@ function renderProducts() {
             </div>
           </div>
           <div class="product-image-container" onclick="goToProduct('${listing.id}')">
+            ${badgeHtml}
             <div class="image-slider">
               ${imageUrls.map((url, index) => `
                 <img src="${getImageUrl(url, 'product')}" alt="Product Image" class="product-image" loading="${index === 0 ? 'eager' : 'lazy'}" data-fallback="product">
@@ -945,11 +1008,11 @@ function renderProducts() {
             <div class="price-row">
               <span class="price-label">Your Price:</span>
               <strong class="wholesale-amount">KES ${listing.minPrice.toLocaleString()}</strong>
+              ${listing.packQuantity > 1 ? `<span class="wholesale-per-pc">(KES ${Math.ceil(listing.minPrice / listing.packQuantity).toLocaleString()}/pc)</span>` : ''}
             </div>
             ${listing.retailPrice && listing.retailPrice > listing.minPrice ? `
             <div class="price-row retail-row">
-              <span class="price-label" title="What shops typically sell this for">Retail Price:</span>
-              <span class="retail-amount">KES ${listing.retailPrice.toLocaleString()}</span>
+              <span class="retail-hint">Est. Retail ~KES ${listing.retailPrice.toLocaleString()}${listing.packQuantity > 1 ? ` (KES ${Math.ceil(listing.retailPrice / listing.packQuantity).toLocaleString()}/pc)` : ''}</span>
               <span class="profit-badge">Save ${listing.margin}%</span>
             </div>` : ''}
           </div>
@@ -1086,17 +1149,21 @@ window.buyNow = async (id) => {
 function showQuantityModal(id, listing, isCart) {
   // Get all variation options
   const options = [];
+  const listingImg = listing.imageUrls?.[0] || '';
   if (listing.variations?.length) {
     listing.variations.forEach((v, vi) => {
+      // Variation-level image (photoUrls array from bulk upload)
+      const varImg = v.photoUrls?.[0] || v.photoUrl || '';
       if (v.attributes?.length) {
         v.attributes.forEach((a, ai) => {
           options.push({
             ...a,
             varTitle: v.title,
             display: `${v.title}: ${a.attr_name}`,
-            // Check both retailPrice and retail field names
             retailPrice: a.retailPrice || a.retail || null,
-            photoUrl: a.photoUrl || a.imageUrl || null,
+            photoUrl: a.photoUrl || a.imageUrl || varImg || listingImg,
+            packQuantity: a.packQuantity || null,
+            unitLabel: a.unitLabel || 'pieces',
             vi, ai
           });
         });
@@ -1105,7 +1172,9 @@ function showQuantityModal(id, listing, isCart) {
           ...v, 
           display: v.title || `Option ${vi + 1}`, 
           retailPrice: v.retailPrice || v.retail || null,
-          photoUrl: v.photoUrl || v.imageUrl || null,
+          photoUrl: v.photoUrl || v.imageUrl || varImg || listingImg,
+          packQuantity: v.packQuantity || null,
+          unitLabel: v.unitLabel || 'pieces',
           vi 
         });
       }
@@ -1122,21 +1191,29 @@ function showQuantityModal(id, listing, isCart) {
   modal.innerHTML = `
     <div class="quantity-modal-content">
       <h3>Select Options</h3>
-      <p>Stock: <strong id="modalStock">${maxStock}</strong> units</p>
+      ${shouldShowStock(maxStock) ? `<p>Stock: <strong id="modalStock">${maxStock}</strong> units</p>` : '<span id="modalStock" style="display:none;"></span>'}
       ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
       ${options.length ? `
         <div class="modal-variations">
           <h4>Select Option:</h4>
           <div class="variations-grid">
-            ${options.map((o, i) => `
+            ${options.map((o, i) => {
+              const imgSrc = sanitizeUrl(o.photoUrl || listingImg);
+              const pqty = parseInt(o.packQuantity) || 0;
+              const pLabel = pqty ? `<p class="variation-pack"><i class="fas fa-cubes"></i> ${pqty} ${escapeHtml(o.unitLabel || 'pieces')} per unit</p>` : '';
+              const oRetail = parseFloat(o.retailPrice) || 0;
+              const retailPP = oRetail && pqty > 1 ? getRetailPerPiece(oRetail, pqty) : '';
+              const oStock = parseInt(o.stock) || 0;
+              return `
               <div class="variation-mini-card ${i === 0 ? 'selected' : ''}" data-idx="${i}">
-                ${o.photoUrl ? `<img src="${sanitizeUrl(o.photoUrl)}" alt="">` : '<i class="fas fa-box"></i>'}
+                ${imgSrc ? `<img src="${imgSrc}" alt="">` : '<i class="fas fa-box"></i>'}
                 <p><strong>${escapeHtml(o.display)}</strong></p>
-                <p class="variation-price">KES ${(parseFloat(o.price || o.originalPrice || listing.minPrice) || 0).toLocaleString()}</p>
-                ${o.retailPrice ? `<p class="variation-retail">Retail: KES ${(parseFloat(o.retailPrice) || 0).toLocaleString()}</p>` : ''}
-                <p class="variation-stock">${parseInt(o.stock) || 0} units</p>
+                ${pLabel}
+                <p class="variation-price">KES ${(parseFloat(o.price || o.originalPrice || listing.minPrice) || 0).toLocaleString()}${pqty > 1 ? ` <span class="var-per-pc">(KES ${Math.ceil((parseFloat(o.price || o.originalPrice || listing.minPrice) || 0) / pqty).toLocaleString()}/pc)</span>` : ''}</p>
+                ${oRetail ? `<p class="variation-retail">~Retail KES ${oRetail.toLocaleString()}${retailPP}</p>` : ''}
+                ${shouldShowStock(oStock) ? `<p class="variation-stock">${oStock} in stock</p>` : ''}
               </div>
-            `).join('')}
+            `; }).join('')}
           </div>
         </div>
       ` : ''}
@@ -1330,10 +1407,66 @@ const badgeObserver = new MutationObserver(syncBadgeCounts);
   if (el) badgeObserver.observe(el, { childList: true, characterData: true, subtree: true });
 });
 
+// ===== ANNOUNCEMENT BAR =====
+async function loadAnnouncement() {
+  try {
+    // Check if user already dismissed this announcement
+    const dismissed = localStorage.getItem('oda_announcement_dismissed');
+    const bar = document.getElementById('announcementBar');
+    if (!bar) return;
+
+    // Use sessionStorage cache to avoid a Firestore read every page load
+    let data = null;
+    const cached = sessionStorage.getItem('oda_announcement');
+    if (cached) {
+      try { data = JSON.parse(cached); } catch(e) {}
+    }
+    
+    if (!data) {
+      const snap = await getDoc(doc(db, 'Settings', 'announcement'));
+      if (!snap.exists()) return;
+      data = snap.data();
+      sessionStorage.setItem('oda_announcement', JSON.stringify(data));
+    }
+    
+    if (!data.enabled || !data.text) return;
+    
+    // If already dismissed this exact announcement, don't show
+    if (dismissed === data.text) return;
+    
+    document.getElementById('announcementText').textContent = data.text;
+    
+    const link = document.getElementById('announcementLink');
+    if (data.linkUrl && data.linkText) {
+      link.href = data.linkUrl;
+      link.textContent = data.linkText;
+      link.style.display = 'inline';
+    }
+    
+    // Custom background color
+    if (data.bgColor) bar.style.background = data.bgColor;
+    
+    bar.style.display = 'block';
+    
+    document.getElementById('closeAnnouncement')?.addEventListener('click', () => {
+      bar.style.display = 'none';
+      localStorage.setItem('oda_announcement_dismissed', data.text);
+    });
+  } catch (err) {
+    console.warn('[Announcement] Load failed:', err.message);
+  }
+}
+
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
   // Show skeleton loaders immediately for fast visual feedback
   showSkeletons();
+  
+  // Load announcement bar (non-blocking)
+  loadAnnouncement();
+  
+  // Load product display settings (non-blocking, needed before rendering)
+  loadDisplaySettings();
   
   // Show non-blocking progress toast
   showLoader('main');

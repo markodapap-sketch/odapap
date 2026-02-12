@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+    <title>Returns & Refunds - Oda Pap</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <header class="oda-header">
+        <div class="header-top-bar">
+            <div class="header-logo" onclick="location.href='index.html'">
+                <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+                <span class="header-logo-text">Oda Pap</span>
+            </div>
+            <button onclick="window.history.back()" class="header-back-btn">
+                <i class="fas fa-arrow-left"></i> Back
+            </button>
+        </div>
+        <div class="header-divider"></div>
+        <nav class="header-nav">
+            <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+            <button class="header-nav-btn" onclick="location.href='notification.html'"><i class="fas fa-bell"></i></button>
+            <button class="header-nav-btn" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i></button>
+            <button class="header-nav-btn" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i></button>
+            <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1><i class="fas fa-undo-alt"></i> Returns & Refunds</h1>
+            <p>Request returns and track refund status</p>
+            <p style="font-size: 0.75rem; color: rgba(255,255,255,0.8); margin-top: 6px;">🔄 Submit a return request within 7 days of delivery. We'll review it within 24-48 hours.</p>
+        </div>
+
+        <div class="ret-container">
+            <!-- Tabs -->
+            <div class="ret-tabs">
+                <button class="ret-tab active" data-tab="new"><i class="fas fa-plus-circle"></i> New Request</button>
+                <button class="ret-tab" data-tab="history"><i class="fas fa-history"></i> My Requests <span class="ret-tab-badge" id="requestCount">0</span></button>
+            </div>
+
+            <!-- NEW REQUEST TAB -->
+            <div class="ret-tab-content active" id="tab-new">
+                <!-- Step 1: Select Order -->
+                <div class="ret-step" id="step1">
+                    <div class="ret-step-header">
+                        <span class="ret-step-num">1</span>
+                        <h3>Select Order</h3>
+                    </div>
+                    <div id="eligibleOrders" class="ret-orders-list">
+                        <div class="ret-loading"><i class="fas fa-spinner fa-spin"></i> Loading eligible orders...</div>
+                    </div>
+                    <div id="noEligible" class="ret-no-orders" style="display:none;">
+                        <i class="fas fa-box-open"></i>
+                        <p>No eligible orders found</p>
+                        <small>Only delivered orders within 7 days are eligible for returns</small>
+                    </div>
+                </div>
+
+                <!-- Step 2: Reason & Details -->
+                <div class="ret-step" id="step2" style="display:none;">
+                    <div class="ret-step-header">
+                        <span class="ret-step-num">2</span>
+                        <h3>Return Details</h3>
+                    </div>
+
+                    <div class="ret-selected-order" id="selectedOrderSummary"></div>
+
+                    <div class="ret-form-group">
+                        <label><i class="fas fa-question-circle"></i> Reason for Return *</label>
+                        <select id="returnReason" class="ret-select">
+                            <option value="">Select a reason...</option>
+                            <option value="wrong_item">Wrong item received</option>
+                            <option value="damaged">Item arrived damaged</option>
+                            <option value="not_as_described">Not as described</option>
+                            <option value="quality_issue">Quality issue</option>
+                            <option value="missing_items">Missing items from order</option>
+                            <option value="size_issue">Size/fit issue</option>
+                            <option value="changed_mind">Changed my mind</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="ret-form-group">
+                        <label><i class="fas fa-comment-alt"></i> Description *</label>
+                        <textarea id="returnDescription" rows="4" placeholder="Please describe the issue in detail..." maxlength="500"></textarea>
+                        <small class="ret-char-count"><span id="descCount">0</span>/500</small>
+                    </div>
+
+                    <div class="ret-form-group">
+                        <label><i class="fas fa-camera"></i> Photos (Optional)</label>
+                        <p class="ret-hint">Upload photos of the issue to speed up the review</p>
+                        <div class="ret-photo-upload">
+                            <input type="file" id="returnPhotos" accept="image/*" multiple hidden>
+                            <label for="returnPhotos" class="ret-upload-trigger">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Tap to add photos</span>
+                            </label>
+                            <div class="ret-photo-previews" id="photoPreviews"></div>
+                        </div>
+                    </div>
+
+                    <div class="ret-form-group">
+                        <label><i class="fas fa-exchange-alt"></i> Preferred Resolution *</label>
+                        <div class="ret-resolution-options">
+                            <label class="ret-resolution selected">
+                                <input type="radio" name="resolution" value="refund" checked>
+                                <i class="fas fa-money-bill-wave"></i>
+                                <span>Refund to Wallet</span>
+                            </label>
+                            <label class="ret-resolution">
+                                <input type="radio" name="resolution" value="replacement">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Replacement</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="ret-form-actions">
+                        <button class="ret-btn-back" onclick="goToStep(1)"><i class="fas fa-arrow-left"></i> Back</button>
+                        <button class="ret-btn-submit" id="submitReturnBtn">
+                            <i class="fas fa-paper-plane"></i> Submit Request
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Confirmation -->
+                <div class="ret-step" id="step3" style="display:none;">
+                    <div class="ret-success">
+                        <div class="ret-success-icon"><i class="fas fa-check-circle"></i></div>
+                        <h3>Return Request Submitted</h3>
+                        <p>Your request has been received. Our team will review it within 24-48 hours.</p>
+                        <p class="ret-ref">Reference: <strong id="returnRef"></strong></p>
+                        <div class="ret-success-actions">
+                            <button class="ret-btn-view" onclick="switchTab('history')"><i class="fas fa-eye"></i> View My Requests</button>
+                            <a href="orderTracking.html" class="ret-btn-orders"><i class="fas fa-box"></i> Back to Orders</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORY TAB -->
+            <div class="ret-tab-content" id="tab-history">
+                <div id="requestsList" class="ret-requests-list">
+                    <div class="ret-loading"><i class="fas fa-spinner fa-spin"></i> Loading requests...</div>
+                </div>
+                <div id="noRequests" class="ret-no-orders" style="display:none;">
+                    <i class="fas fa-clipboard-list"></i>
+                    <p>No return requests yet</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Oda Pap Wholesale. All Rights Reserved.</p>
+    </footer>
+
+    <script type="module">
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, getDocs, query, where, orderBy, Timestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { app } from "./js/firebase.js";
+        import { showNotification } from './notifications.js';
+        import { escapeHtml } from './js/sanitize.js';
+
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        let currentUser = null;
+        let selectedOrder = null;
+        let uploadedPhotos = [];
+
+        // Tabs
+        document.querySelectorAll('.ret-tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        window.switchTab = (tabName) => {
+            document.querySelectorAll('.ret-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+            document.querySelectorAll('.ret-tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+            if (tabName === 'history') loadRequests();
+        };
+
+        // Resolution option selection
+        document.querySelectorAll('.ret-resolution').forEach(opt => {
+            opt.addEventListener('click', () => {
+                document.querySelectorAll('.ret-resolution').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+            });
+        });
+
+        // Character counter
+        document.getElementById('returnDescription').addEventListener('input', (e) => {
+            document.getElementById('descCount').textContent = e.target.value.length;
+        });
+
+        // Photo upload preview
+        document.getElementById('returnPhotos').addEventListener('change', (e) => {
+            const previews = document.getElementById('photoPreviews');
+            Array.from(e.target.files).forEach(file => {
+                if (uploadedPhotos.length >= 5) return showNotification('Maximum 5 photos', 'error');
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    uploadedPhotos.push(ev.target.result);
+                    const div = document.createElement('div');
+                    div.className = 'ret-photo-thumb';
+                    div.innerHTML = `<img src="${ev.target.result}" alt=""><button onclick="removePhoto(${uploadedPhotos.length - 1}, this)"><i class="fas fa-times"></i></button>`;
+                    previews.appendChild(div);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+
+        window.removePhoto = (idx, btn) => {
+            uploadedPhotos.splice(idx, 1);
+            btn.parentElement.remove();
+        };
+
+        // Step navigation
+        window.goToStep = (step) => {
+            document.querySelectorAll('.ret-step').forEach(s => s.style.display = 'none');
+            document.getElementById(`step${step}`).style.display = 'block';
+        };
+
+        // Load eligible orders (delivered within 7 days)
+        async function loadEligibleOrders() {
+            if (!currentUser) return;
+            const container = document.getElementById('eligibleOrders');
+            const noEligible = document.getElementById('noEligible');
+
+            try {
+                const q = query(
+                    collection(db, 'Orders'),
+                    where('userId', '==', currentUser.uid),
+                    orderBy('orderDate', 'desc')
+                );
+                const snap = await getDocs(q);
+                const eligible = [];
+
+                snap.forEach(docSnap => {
+                    const order = { id: docSnap.id, ...docSnap.data() };
+                    const status = order.orderStatus || order.status || '';
+                    // Eligible: delivered or out_for_delivery within last 7 days
+                    if (['delivered', 'out_for_delivery', 'confirmed', 'seller_confirmed'].includes(status)) {
+                        const orderDate = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
+                        const daysSince = (Date.now() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
+                        if (daysSince <= 14) eligible.push(order);
+                    }
+                });
+
+                if (eligible.length === 0) {
+                    container.innerHTML = '';
+                    noEligible.style.display = 'block';
+                    return;
+                }
+
+                noEligible.style.display = 'none';
+                container.innerHTML = eligible.map(order => {
+                    const firstItem = order.items?.[0];
+                    const img = firstItem?.imageUrl || 'images/product-placeholder.png';
+                    const statusLabels = { pending: 'Pending', seller_confirmed: 'Confirmed', confirmed: 'Confirmed', out_for_delivery: 'In Transit', delivered: 'Delivered' };
+                    const date = order.orderDate?.toDate ? order.orderDate.toDate() : new Date(order.orderDate);
+                    return `
+                    <div class="ret-order-card" onclick="selectOrder('${order.id}')">
+                        <img src="${img}" alt="" class="ret-order-img">
+                        <div class="ret-order-info">
+                            <p class="ret-order-id">#${escapeHtml(order.orderId || order.id.slice(0, 8))}</p>
+                            <p class="ret-order-items">${order.items?.length || 0} item(s) • KES ${(order.total || order.totalAmount || 0).toLocaleString()}</p>
+                            <p class="ret-order-date">${date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        </div>
+                        <span class="ret-order-status ret-status-${order.orderStatus || order.status}">${statusLabels[order.orderStatus || order.status] || 'Unknown'}</span>
+                    </div>`;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                container.innerHTML = '<p style="text-align:center;color:#f44336;padding:20px;">Failed to load orders</p>';
+            }
+        }
+
+        // Select order for return
+        window.selectOrder = (orderId) => {
+            const order = document.querySelector(`.ret-order-card[onclick*="${orderId}"]`);
+            // Store the orderId
+            selectedOrder = orderId;
+
+            // Show step 2
+            const summary = document.getElementById('selectedOrderSummary');
+            summary.innerHTML = order ? `
+                <div class="ret-mini-order">
+                    <i class="fas fa-box"></i>
+                    <span>Order #${orderId.slice(0, 12)}...</span>
+                    <button class="ret-change-btn" onclick="goToStep(1)">Change</button>
+                </div>` : '';
+
+            goToStep(2);
+        };
+
+        // Submit return request
+        document.getElementById('submitReturnBtn').addEventListener('click', async () => {
+            const reason = document.getElementById('returnReason').value;
+            const description = document.getElementById('returnDescription').value.trim();
+            const resolution = document.querySelector('input[name="resolution"]:checked')?.value;
+
+            if (!reason) return showNotification('Please select a reason', 'error');
+            if (!description) return showNotification('Please describe the issue', 'error');
+            if (!selectedOrder) return showNotification('Please select an order', 'error');
+
+            const btn = document.getElementById('submitReturnBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+
+            try {
+                const returnData = {
+                    userId: currentUser.uid,
+                    orderId: selectedOrder,
+                    reason,
+                    description: escapeHtml(description),
+                    resolution: resolution || 'refund',
+                    photos: uploadedPhotos.slice(0, 5),
+                    status: 'pending',
+                    createdAt: Timestamp.now(),
+                    updatedAt: Timestamp.now()
+                };
+
+                const docRef = await addDoc(collection(db, 'ReturnRequests'), returnData);
+                document.getElementById('returnRef').textContent = `RET-${docRef.id.slice(0, 8).toUpperCase()}`;
+                goToStep(3);
+                showNotification('Return request submitted successfully');
+            } catch (error) {
+                console.error('Error submitting return:', error);
+                showNotification('Failed to submit request. Please try again.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+            }
+        });
+
+        // Load return request history
+        async function loadRequests() {
+            if (!currentUser) return;
+            const container = document.getElementById('requestsList');
+            const noReqs = document.getElementById('noRequests');
+
+            try {
+                const q = query(
+                    collection(db, 'ReturnRequests'),
+                    where('userId', '==', currentUser.uid),
+                    orderBy('createdAt', 'desc')
+                );
+                const snap = await getDocs(q);
+
+                document.getElementById('requestCount').textContent = snap.size;
+
+                if (snap.empty) {
+                    container.innerHTML = '';
+                    noReqs.style.display = 'block';
+                    return;
+                }
+
+                noReqs.style.display = 'none';
+                container.innerHTML = snap.docs.map(docSnap => {
+                    const req = docSnap.data();
+                    const date = req.createdAt?.toDate ? req.createdAt.toDate() : new Date();
+                    const statusConfig = {
+                        pending: { label: 'Under Review', icon: 'hourglass-half', color: '#ff9800' },
+                        approved: { label: 'Approved', icon: 'check-circle', color: '#4caf50' },
+                        rejected: { label: 'Rejected', icon: 'times-circle', color: '#f44336' },
+                        refunded: { label: 'Refunded', icon: 'money-bill-wave', color: '#2196f3' },
+                        replacement_sent: { label: 'Replacement Sent', icon: 'truck', color: '#9c27b0' },
+                        completed: { label: 'Completed', icon: 'check-double', color: '#4caf50' }
+                    };
+                    const st = statusConfig[req.status] || statusConfig.pending;
+                    const reasonLabels = {
+                        wrong_item: 'Wrong Item', damaged: 'Damaged', not_as_described: 'Not As Described',
+                        quality_issue: 'Quality Issue', missing_items: 'Missing Items',
+                        size_issue: 'Size Issue', changed_mind: 'Changed Mind', other: 'Other'
+                    };
+                    return `
+                    <div class="ret-request-card">
+                        <div class="ret-req-header">
+                            <span class="ret-req-ref">RET-${docSnap.id.slice(0, 8).toUpperCase()}</span>
+                            <span class="ret-req-status" style="color:${st.color};background:${st.color}15;">
+                                <i class="fas fa-${st.icon}"></i> ${st.label}
+                            </span>
+                        </div>
+                        <div class="ret-req-body">
+                            <p><strong>Order:</strong> #${(req.orderId || '').slice(0, 12)}...</p>
+                            <p><strong>Reason:</strong> ${reasonLabels[req.reason] || req.reason}</p>
+                            <p><strong>Resolution:</strong> ${req.resolution === 'replacement' ? 'Replacement' : 'Refund to Wallet'}</p>
+                            <p class="ret-req-date"><i class="fas fa-clock"></i> ${date.toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                        </div>
+                        ${req.adminResponse ? `
+                        <div class="ret-req-response">
+                            <i class="fas fa-reply"></i>
+                            <p><strong>Admin Response:</strong> ${escapeHtml(req.adminResponse)}</p>
+                        </div>` : ''}
+                    </div>`;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading requests:', error);
+                container.innerHTML = '<p style="text-align:center;color:#f44336;padding:20px;">Failed to load requests</p>';
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                loadEligibleOrders();
+                loadRequests();
+            } else {
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+
+    <style>
+        .page-header {
+            text-align: center; padding: 30px 20px;
+            background: linear-gradient(135deg, #ff5722 0%, #ff7043 100%);
+            color: white; margin-bottom: 24px;
+        }
+        .page-header h1 { margin: 0 0 8px; font-size: 24px; }
+        .page-header p { margin: 0; opacity: 0.9; }
+
+        .ret-container { max-width: 700px; margin: 0 auto; padding: 0 16px 60px; }
+
+        .ret-tabs {
+            display: flex; gap: 8px; margin-bottom: 20px; background: white;
+            border-radius: 10px; padding: 6px; box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+        }
+        .ret-tab {
+            flex: 1; padding: 10px; border: none; background: none; border-radius: 8px;
+            font-size: 13px; font-weight: 600; cursor: pointer; color: #666;
+            display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+        }
+        .ret-tab.active { background: #ff5722; color: white; }
+        .ret-tab-badge {
+            background: #eee; color: #666; padding: 1px 7px; border-radius: 10px; font-size: 11px;
+        }
+        .ret-tab.active .ret-tab-badge { background: rgba(255,255,255,0.3); color: white; }
+
+        .ret-tab-content { display: none; }
+        .ret-tab-content.active { display: block; }
+
+        .ret-step-header {
+            display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+        }
+        .ret-step-num {
+            width: 28px; height: 28px; border-radius: 50%; background: #ff5722;
+            color: white; display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; flex-shrink: 0;
+        }
+        .ret-step-header h3 { margin: 0; font-size: 16px; color: #333; }
+
+        .ret-loading { text-align: center; padding: 40px; color: #ff5722; }
+
+        .ret-orders-list { display: flex; flex-direction: column; gap: 10px; }
+
+        .ret-order-card {
+            display: flex; align-items: center; gap: 12px; padding: 14px;
+            background: white; border-radius: 10px; cursor: pointer;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.07); transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .ret-order-card:hover { border-color: #ff5722; box-shadow: 0 4px 12px rgba(255,87,34,0.15); }
+
+        .ret-order-img { width: 50px; height: 50px; border-radius: 8px; object-fit: cover; background: #f5f5f5; flex-shrink: 0; }
+        .ret-order-info { flex: 1; min-width: 0; }
+        .ret-order-id { margin: 0 0 2px; font-weight: 700; font-size: 13px; color: #333; }
+        .ret-order-items { margin: 0 0 2px; font-size: 12px; color: #666; }
+        .ret-order-date { margin: 0; font-size: 11px; color: #999; }
+        .ret-order-status {
+            font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 12px; white-space: nowrap;
+        }
+        .ret-status-delivered { background: #e8f5e9; color: #2e7d32; }
+        .ret-status-out_for_delivery { background: #f3e5f5; color: #7b1fa2; }
+        .ret-status-confirmed, .ret-status-seller_confirmed { background: #e3f2fd; color: #1565c0; }
+
+        .ret-no-orders { text-align: center; padding: 40px; }
+        .ret-no-orders i { font-size: 48px; color: #ddd; margin-bottom: 12px; display: block; }
+        .ret-no-orders p { color: #666; margin: 0 0 4px; }
+        .ret-no-orders small { color: #999; font-size: 12px; }
+
+        /* Step 2 */
+        .ret-selected-order { margin-bottom: 20px; }
+        .ret-mini-order {
+            display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+            background: #fff3e0; border-radius: 8px; font-size: 13px; color: #e65100;
+        }
+        .ret-change-btn {
+            margin-left: auto; background: none; border: 1px solid #ff9800; padding: 4px 10px;
+            border-radius: 6px; font-size: 12px; color: #e65100; cursor: pointer;
+        }
+
+        .ret-form-group { margin-bottom: 18px; }
+        .ret-form-group label { display: block; font-size: 13px; font-weight: 600; color: #444; margin-bottom: 6px; }
+        .ret-form-group label i { color: #ff5722; margin-right: 4px; }
+        .ret-hint { font-size: 12px; color: #888; margin: 0 0 8px; }
+        .ret-char-count { font-size: 11px; color: #999; text-align: right; display: block; margin-top: 4px; }
+
+        .ret-select, .ret-form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 14px; box-sizing: border-box; transition: border 0.2s;
+        }
+        .ret-select:focus, .ret-form-group textarea:focus { border-color: #ff5722; outline: none; }
+
+        .ret-resolution-options { display: flex; gap: 10px; }
+        .ret-resolution {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 14px 10px; border: 2px solid #e0e0e0; border-radius: 10px;
+            cursor: pointer; transition: all 0.2s; text-align: center;
+        }
+        .ret-resolution input { display: none; }
+        .ret-resolution i { font-size: 24px; color: #999; }
+        .ret-resolution span { font-size: 12px; font-weight: 600; color: #555; }
+        .ret-resolution.selected { border-color: #ff5722; background: #fff3e0; }
+        .ret-resolution.selected i { color: #ff5722; }
+        .ret-resolution.selected span { color: #e64a19; }
+
+        .ret-photo-upload { display: flex; flex-wrap: wrap; gap: 10px; }
+        .ret-upload-trigger {
+            width: 80px; height: 80px; border: 2px dashed #ddd; border-radius: 10px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s; gap: 4px;
+        }
+        .ret-upload-trigger i { font-size: 20px; color: #ccc; }
+        .ret-upload-trigger span { font-size: 10px; color: #aaa; }
+        .ret-upload-trigger:hover { border-color: #ff5722; }
+        .ret-photo-previews { display: flex; gap: 8px; flex-wrap: wrap; }
+        .ret-photo-thumb {
+            width: 80px; height: 80px; border-radius: 10px; overflow: hidden; position: relative;
+        }
+        .ret-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .ret-photo-thumb button {
+            position: absolute; top: 2px; right: 2px; width: 20px; height: 20px;
+            border-radius: 50%; background: rgba(0,0,0,0.6); color: white; border: none;
+            cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center;
+        }
+
+        .ret-form-actions { display: flex; gap: 10px; margin-top: 24px; }
+        .ret-btn-back {
+            padding: 12px 20px; border: 1px solid #ddd; background: white;
+            border-radius: 10px; font-size: 14px; cursor: pointer; color: #666;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .ret-btn-submit {
+            flex: 1; padding: 12px; border: none; background: #ff5722; color: white;
+            border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;
+        }
+        .ret-btn-submit:hover { background: #e64a19; }
+        .ret-btn-submit:disabled { background: #ccc; }
+
+        /* Step 3 - Success */
+        .ret-success { text-align: center; padding: 40px 20px; }
+        .ret-success-icon { font-size: 56px; color: #4caf50; margin-bottom: 16px; }
+        .ret-success h3 { color: #333; margin: 0 0 8px; }
+        .ret-success p { color: #666; margin: 0 0 8px; font-size: 14px; }
+        .ret-ref { font-size: 13px; color: #ff5722; margin-bottom: 24px !important; }
+        .ret-success-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .ret-btn-view, .ret-btn-orders {
+            padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+            display: flex; align-items: center; gap: 6px; cursor: pointer; text-decoration: none;
+        }
+        .ret-btn-view { background: #ff5722; color: white; border: none; }
+        .ret-btn-orders { background: white; color: #555; border: 1px solid #ddd; }
+
+        /* History */
+        .ret-requests-list { display: flex; flex-direction: column; gap: 12px; }
+        .ret-request-card {
+            background: white; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+        }
+        .ret-req-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0;
+        }
+        .ret-req-ref { font-weight: 700; font-size: 13px; color: #333; }
+        .ret-req-status {
+            font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 12px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .ret-req-body { padding: 14px 16px; }
+        .ret-req-body p { margin: 0 0 4px; font-size: 13px; color: #555; }
+        .ret-req-date { color: #999 !important; font-size: 12px !important; margin-top: 8px !important; }
+        .ret-req-response {
+            padding: 10px 16px; background: #e8f5e9; border-top: 1px solid #c8e6c9;
+            display: flex; gap: 8px; align-items: flex-start;
+        }
+        .ret-req-response i { color: #4caf50; margin-top: 3px; flex-shrink: 0; }
+        .ret-req-response p { margin: 0; font-size: 13px; color: #333; }
+    </style>
+</body>
+</html>

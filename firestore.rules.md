@@ -54,6 +54,19 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update, delete: if request.auth != null && 
                               (request.auth.uid == userId || isAdmin());
+
+      // Notifications subcollection (admin broadcasts to individual users)
+      match /Notifications/{notifId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && isAdmin();
+        allow delete: if request.auth != null && 
+                        (request.auth.uid == userId || isAdmin());
+      }
+
+      // Addresses subcollection (saved delivery addresses)
+      match /Addresses/{addressId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // 'users' collection (for app-related data including followers)
@@ -291,6 +304,35 @@ service cloud.firestore {
     
     // WithdrawalRequests collection - Users create, admins manage
     match /WithdrawalRequests/{requestId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // Referrals collection - Track referral commissions
+    match /Referrals/{referralId} {
+      // Referrer can read their own referrals, admin can read all
+      allow read: if request.auth != null && 
+                    (resource.data.referrerId == request.auth.uid || 
+                     resource.data.referredUserId == request.auth.uid || 
+                     isAdmin());
+      // Any authenticated user can create (created during checkout)
+      allow create: if request.auth != null;
+      // Only admin can update/delete
+      allow update, delete: if isAdmin();
+    }
+    
+    // ReturnRequests collection - Buyers request returns/refunds
+    match /ReturnRequests/{requestId} {
+      allow read: if request.auth != null && 
+                    (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+    
+    // OrderConfirmations collection - Email/SMS notification queue
+    match /OrderConfirmations/{confirmId} {
       allow read: if request.auth != null && 
                     (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if request.auth != null;

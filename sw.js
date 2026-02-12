@@ -1,5 +1,5 @@
-// Oda Pap Service Worker v1.0.0
-const CACHE_NAME = 'odapap-cache-v1';
+// Oda Pap Service Worker v2.0.0
+const CACHE_NAME = 'odapap-cache-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Files to cache for offline use
@@ -77,41 +77,54 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        if (cachedResponse) {
-          // Return cached version and update cache in background
-          event.waitUntil(
-            fetch(event.request)
-              .then((networkResponse) => {
-                if (networkResponse && networkResponse.ok) {
-                  caches.open(CACHE_NAME)
-                    .then((cache) => cache.put(event.request, networkResponse));
-                }
-              })
-              .catch(() => {})
-          );
-          return cachedResponse;
+    (async () => {
+      // Navigation requests (HTML pages) → Network-first
+      // This ensures users always get the latest page, fixing the
+      // "page won't load unless I clear app data" issue.
+      if (event.request.mode === 'navigate') {
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch (e) {
+          const cached = await caches.match(event.request);
+          return cached || caches.match(OFFLINE_URL);
         }
+      }
 
-        // Not in cache, try network
-        return fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.ok) {
-              const responseClone = networkResponse.clone();
-              caches.open(CACHE_NAME)
-                .then((cache) => cache.put(event.request, responseClone));
-            }
-            return networkResponse;
-          })
-          .catch(() => {
-            // Network failed, return offline page for navigation requests
-            if (event.request.mode === 'navigate') {
-              return caches.match(OFFLINE_URL);
-            }
-            return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-          });
-      })
+      // All other requests (CSS, JS, images) → Cache-first with background refresh
+      const cachedResponse = await caches.match(event.request);
+      if (cachedResponse) {
+        // Update cache in background
+        event.waitUntil(
+          fetch(event.request)
+            .then(networkResponse => {
+              if (networkResponse && networkResponse.ok) {
+                caches.open(CACHE_NAME)
+                  .then(cache => cache.put(event.request, networkResponse));
+              }
+            })
+            .catch(() => {})
+        );
+        return cachedResponse;
+      }
+
+      // Not in cache — try network
+      try {
+        const networkResponse = await fetch(event.request);
+        if (networkResponse && networkResponse.ok) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => cache.put(event.request, responseClone));
+        }
+        return networkResponse;
+      } catch (e) {
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })()
   );
 });
 

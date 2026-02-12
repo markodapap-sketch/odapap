@@ -569,7 +569,7 @@
     </div>
 
     <script type="module">
-        import { signUpUser, signInWithGoogle, handleGoogleRedirectResult, checkSurveyEnabled, updateUserSurvey } from "./js/auth.js";
+        import { signUpUser, signInWithGoogle, handleGoogleRedirectResult, checkSurveyEnabled, updateUserSurvey, resolveReferralCode } from "./js/auth.js";
         import { auth } from "./js/firebase.js";
 
         // State
@@ -582,6 +582,24 @@
             shoppingPreferences: []
         };
         let pendingSignupData = null;
+        let referralData = null; // { referrerId, code }
+
+        // Check for referral code in URL
+        (async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refCode = urlParams.get('ref');
+            if (refCode) {
+                referralData = await resolveReferralCode(refCode);
+                if (referralData) {
+                    // Show referral badge
+                    const badge = document.createElement('div');
+                    badge.style.cssText = 'background:#dcfce7;color:#16a34a;padding:10px 16px;border-radius:8px;margin-bottom:12px;font-size:13px;text-align:left;display:flex;align-items:center;gap:8px;';
+                    badge.innerHTML = '<i class="fas fa-gift"></i> Referred by a friend! You\'re all set.';
+                    const form = document.getElementById('signup-form');
+                    if (form) form.insertBefore(badge, form.firstChild);
+                }
+            }
+        })();
 
         // Check if survey is enabled
         (async () => {
@@ -679,7 +697,7 @@
             } else {
                 // Direct signup without survey
                 try {
-                    await signUpUser(email, phone, password);
+                    await signUpUser(email, phone, password, null, referralData);
                     window.location.href = 'index.html';
                 } catch (error) {
                     showError(error.message);
@@ -695,7 +713,7 @@
             googleSignupBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google logo"> Signing up...';
             
             try {
-                const result = await signInWithGoogle();
+                const result = await signInWithGoogle(referralData);
                 if (result) {
                     if (result.isNewUser && surveyEnabled) {
                         pendingSignupData = { type: 'google', user: result.user };
@@ -801,7 +819,8 @@
                         pendingSignupData.email,
                         pendingSignupData.phone,
                         pendingSignupData.password,
-                        data
+                        data,
+                        referralData
                     );
                     document.body.style.overflow = '';
                     window.location.href = 'index.html';

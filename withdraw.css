@@ -1,56 +1,285 @@
+/* ===== Withdraw Page ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f4;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f5f5f5;
+  min-height: 100vh;
+  color: #333;
 }
 
-header {
-    background-color: #ff5722;
-    color: white;
-    text-align: center;
-    padding: 10px 0;
+/* Hero */
+.withdraw-hero {
+  text-align: center;
+  padding: 28px 20px 20px;
+  background: linear-gradient(135deg, #ff5722, #ff7043);
+  color: white;
+}
+.withdraw-hero h1 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.withdraw-hero h1 i { margin-right: 6px; }
+.withdraw-hero p {
+  font-size: 0.82rem;
+  opacity: 0.92;
+}
+.withdraw-hero .hero-note {
+  font-size: 0.72rem;
+  opacity: 0.85;
+  margin-top: 8px;
+  display: inline-block;
+  background: rgba(255,255,255,0.15);
+  padding: 6px 14px;
+  border-radius: 20px;
 }
 
-main {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: calc(100vh - 60px);
+/* Content wrapper */
+.withdraw-content {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 0 16px;
 }
 
-form {
-    background: white;
-    padding: 20px;
-    border-radius: 5px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    width: 300px;
+/* Balance Card */
+.balance-card {
+  margin: -18px auto 16px;
+  padding: 18px 20px;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  z-index: 1;
+}
+.balance-icon {
+  width: 48px;
+  height: 48px;
+  background: #fff3e0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: #ff5722;
+  flex-shrink: 0;
+}
+.balance-label {
+  font-size: 0.72rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.balance-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #222;
 }
 
-label {
-    display: block;
-    margin-bottom: 10px;
+/* Form Card */
+.withdraw-form-card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  padding: 22px 20px;
+  margin-bottom: 16px;
+}
+.withdraw-form-card h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 18px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.withdraw-form-card h3 i { color: #ff5722; }
+
+.form-group {
+  margin-bottom: 18px;
+}
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  color: #444;
+}
+.form-group label i {
+  color: #ff5722;
+  margin-right: 5px;
+  font-size: 0.8rem;
+}
+.form-group input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #fafafa;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+.form-group input:focus {
+  border-color: #ff5722;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255,87,34,0.1);
+}
+.form-group .field-hint {
+  display: block;
+  font-size: 0.72rem;
+  color: #999;
+  margin-top: 5px;
 }
 
-input[type="number"] {
-    width: 100%;
-    padding: 10px;
-    margin-bottom: 20px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+/* Quick amount chips */
+.quick-amounts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.quick-amount-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #e0e0e0;
+  background: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.quick-amount-chip:hover,
+.quick-amount-chip.active {
+  background: #fff3e0;
+  border-color: #ff5722;
+  color: #ff5722;
 }
 
-button {
-    width: 100%;
-    padding: 10px;
-    background-color: #ff5722;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 16px;
+/* Submit button */
+.btn-withdraw {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #ff5722, #e64a19);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(255,87,34,0.3);
+}
+.btn-withdraw:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255,87,34,0.4);
+}
+.btn-withdraw:active {
+  transform: scale(0.98);
+}
+.btn-withdraw:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
-button:hover {
-    background-color: #e64a19;
+.form-footer-note {
+  text-align: center;
+  font-size: 0.72rem;
+  color: #999;
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+/* History Card */
+.history-card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.history-card-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.history-card-header h3 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #333;
+}
+.history-card-header i { color: #ff5722; font-size: 0.85rem; }
+.history-list {
+  padding: 0 20px;
+}
+
+/* History Item */
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.history-item:last-child { border-bottom: none; }
+.history-amount {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #222;
+}
+.history-date {
+  font-size: 0.72rem;
+  color: #999;
+  margin-top: 2px;
+}
+.history-phone {
+  font-size: 0.72rem;
+  color: #888;
+  margin-top: 1px;
+}
+.status-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 12px;
+  text-transform: capitalize;
+}
+.status-badge.pending { background: #fff3cd; color: #856404; }
+.status-badge.completed { background: #d4edda; color: #155724; }
+.status-badge.rejected { background: #f8d7da; color: #721c24; }
+
+/* Empty state */
+.history-empty {
+  text-align: center;
+  padding: 30px 20px;
+  color: #bbb;
+}
+.history-empty i {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 8px;
+}
+.history-empty p {
+  font-size: 0.82rem;
+}
+
+/* Footer */
+.withdraw-footer {
+  text-align: center;
+  padding: 20px;
+  color: #bbb;
+  font-size: 0.75rem;
 }

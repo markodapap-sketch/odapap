@@ -24,6 +24,38 @@ const PLACEHOLDERS = {
     user: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"%3E%3Ccircle fill="%23e2e8f0" cx="50" cy="50" r="50"/%3E%3Ccircle fill="%2394a3b8" cx="50" cy="40" r="20"/%3E%3Cellipse fill="%2394a3b8" cx="50" cy="85" rx="35" ry="25"/%3E%3C/svg%3E'
 };
 
+// Product display settings from admin
+let displaySettings = { showStockCount: false, showStockLowOnly: false, lowStockThreshold: 5 };
+
+async function loadDisplaySettings() {
+  try {
+    const snap = await getDoc(doc(db, 'Settings', 'appSettings'));
+    if (snap.exists()) {
+      const d = snap.data();
+      displaySettings.showStockCount = d.showStockCount === true;
+      displaySettings.showStockLowOnly = d.showStockLowOnly === true;
+      displaySettings.lowStockThreshold = parseInt(d.lowStockThreshold) || 5;
+    }
+  } catch (e) { console.warn('Display settings load failed:', e); }
+}
+
+function shouldShowStock(stockCount) {
+  if (!displaySettings.showStockCount) return false;
+  if (displaySettings.showStockLowOnly) {
+    return stockCount > 0 && stockCount <= displaySettings.lowStockThreshold;
+  }
+  return true;
+}
+
+function getRetailPerPiece(retailPrice, packQuantity) {
+  if (!retailPrice || !packQuantity || packQuantity <= 1) return '';
+  const perPiece = Math.ceil(retailPrice / packQuantity);
+  return ` (KES ${perPiece.toLocaleString()}/pc)`;
+}
+
+// Module-level Firestore reference for settings
+const db = getFirestore(app);
+
 // Simple function to get image URL without caching
 function getImageUrl(src, type = 'product') {
     if (!src || typeof src !== 'string') return PLACEHOLDERS[type] || PLACEHOLDERS.product;
@@ -118,6 +150,7 @@ class ProductPage {
         this.buyNowBtn = document.getElementById('buyNowBtn');
         this.addToCartBtn = document.getElementById('addToCartBtn');
         this.wishlistBtn = document.getElementById('wishlistBtn');
+        this.compareBtn = document.getElementById('compareBtn');
         this.messageSellerBtn = document.getElementById('messageSellerBtn');
         this.copyLinkBtn = document.getElementById('copyLinkBtn');
     }
@@ -128,6 +161,7 @@ class ProductPage {
         this.buyNowBtn?.addEventListener('click', () => this.handleBuyNow());
         this.addToCartBtn?.addEventListener('click', () => this.handleAddToCart());
         this.wishlistBtn?.addEventListener('click', () => this.handleWishlist());
+        this.compareBtn?.addEventListener('click', () => this.handleCompare());
         this.messageSellerBtn?.addEventListener('click', () => this.handleMessageSeller());
         this.copyLinkBtn?.addEventListener('click', () => this.handleCopyLink());
 
@@ -149,6 +183,14 @@ class ProductPage {
             await this.loadProduct();
             await this.loadSimilarProducts();
             await this.loadReviews();
+
+            // Set compare button state
+            const compareList = JSON.parse(localStorage.getItem('oda_compare') || '[]');
+            if (compareList.includes(this.productId) && this.compareBtn) {
+                this.compareBtn.classList.add('active');
+                this.compareBtn.title = 'In comparison';
+            }
+
             if (this.auth.currentUser) {
                 await this.updateCartCounter();
                 await this.updateWishlistCounter();
@@ -277,15 +319,23 @@ class ProductPage {
         const pricePrefix = hasVariations ? 'From: ' : '';
         this.productPriceEl.textContent = `${pricePrefix}KES ${minPrice.toLocaleString()}`;
         
-        // Calculate and display price per item
-        const pieceCount = this.product.pieceCount || this.product.piece_count || 1;
+        // Calculate and display wholesale price per piece
+        const cheapestPack = this.getCheapestPackQuantity();
         const pricePerItem = document.getElementById('pricePerItem');
-        if (pricePerItem && pieceCount > 1) {
-            const perItemPrice = Math.ceil(minPrice / pieceCount);
-            pricePerItem.textContent = `(KES ${perItemPrice.toLocaleString()}/item × ${pieceCount})`;
+        if (pricePerItem && cheapestPack > 1) {
+            const perItemPrice = Math.ceil(minPrice / cheapestPack);
+            pricePerItem.textContent = `(KES ${perItemPrice.toLocaleString()}/pc × ${cheapestPack} pcs)`;
             pricePerItem.style.display = 'block';
-        } else if (pricePerItem) {
-            pricePerItem.style.display = 'none';
+        } else {
+            // Fallback to legacy pieceCount
+            const pieceCount = this.product.pieceCount || this.product.piece_count || 1;
+            if (pricePerItem && pieceCount > 1) {
+                const perItemPrice = Math.ceil(minPrice / pieceCount);
+                pricePerItem.textContent = `(KES ${perItemPrice.toLocaleString()}/pc × ${pieceCount} pcs)`;
+                pricePerItem.style.display = 'block';
+            } else if (pricePerItem) {
+                pricePerItem.style.display = 'none';
+            }
         }
         
         this.productDescriptionEl.textContent = this.product.description;
@@ -307,15 +357,59 @@ class ProductPage {
         }
         
         this.productBrandEl.textContent = this.product.brand || 'Unbranded';
-        this.productTotalStockEl.textContent = this.product.totalStock || 0;
+        
+        // Conditionally show stock based on admin settings
+        const totalStock = parseInt(this.product.totalStock) || 0;
+        const stockTag = this.productTotalStockEl?.closest('.info-tag');
+        if (shouldShowStock(totalStock)) {
+            this.productTotalStockEl.textContent = totalStock;
+            if (stockTag) stockTag.style.display = '';
+        } else {
+            if (stockTag) stockTag.style.display = 'none';
+        }
+        
         this.productLocationEl.textContent = `${this.seller?.county || ''}${this.seller?.ward ? ', ' + this.seller.ward : ''}`;
         this.productDateEl.textContent = new Date(this.product.createdAt).toLocaleDateString();
+
+        // Show min order quantity if > 1
+        const minOrder = parseInt(this.product.minOrderQuantity) || 1;
+        const minOrderTag = document.getElementById('minOrderTag');
+        const minOrderEl = document.getElementById('productMinOrder');
+        if (minOrder > 1 && minOrderTag && minOrderEl) {
+            minOrderEl.textContent = minOrder;
+            minOrderTag.style.display = '';
+        }
+
+        // Show total variation count
+        let varCount = 0;
+        if (this.product.variations?.length) {
+            this.product.variations.forEach(v => {
+                varCount += (v.attributes?.length) || 1;
+            });
+        }
+        const varCountTag = document.getElementById('variationCountTag');
+        const varCountEl = document.getElementById('productVariationCount');
+        if (varCount > 1 && varCountTag && varCountEl) {
+            varCountEl.textContent = varCount;
+            varCountTag.style.display = '';
+        }
 
         // Handle initial/retail price and discount - use the associated retail for min price option
         const pricingExplainer = document.getElementById('pricingExplainer');
         if (retailPrice && retailPrice > minPrice) {
             this.initialPriceContainer.style.display = 'flex';
-            this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
+            this.initialPriceEl.textContent = `~KES ${retailPrice.toLocaleString()}`;
+            
+            // Show retail per piece if pack has multiple pieces
+            const retailPPEl = document.getElementById('retailPerPiece');
+            const cheapestPack = this.getCheapestPackQuantity();
+            if (retailPPEl && cheapestPack > 1) {
+                const perPc = Math.ceil(retailPrice / cheapestPack);
+                retailPPEl.textContent = `(KES ${perPc.toLocaleString()}/pc)`;
+                retailPPEl.style.display = 'inline';
+            } else if (retailPPEl) {
+                retailPPEl.style.display = 'none';
+            }
             
             const discount = ((retailPrice - minPrice) / retailPrice * 100).toFixed(0);
             this.discountBadge.textContent = `Save ${discount}%`;
@@ -342,27 +436,39 @@ class ProductPage {
 
         let variationIndex = 0;
 
+        const productImg = this.product.imageUrls?.[0] || '';
+
         this.product.variations.forEach((variation) => {
+            // Variation-level image (photoUrls array from bulk upload)
+            const varImg = variation.photoUrls?.[0] || variation.photoUrl || '';
+
             // Handle new structure with attributes array
             if (variation.attributes && variation.attributes.length > 0) {
                 variation.attributes.forEach((attr) => {
+                    const resolvedPhoto = attr.photoUrl || attr.imageUrl || varImg || productImg;
                     const variationCard = document.createElement('div');
                     variationCard.className = 'variation-card';
                     variationCard.dataset.stock = attr.stock;
                     variationCard.dataset.price = attr.price;
                     variationCard.dataset.retailPrice = attr.retailPrice || '';
-                    variationCard.dataset.photoUrl = attr.photoUrl || '';
+                    variationCard.dataset.photoUrl = resolvedPhoto;
                     
                     const safeAttrName = escapeHtml(attr.attr_name || 'Option');
-                    const safePhotoUrl = sanitizeUrl(attr.photoUrl, '');
-                    variationCard.title = `${safeAttrName} • Stock: ${attr.stock} • KES ${(attr.price || 0).toLocaleString()}`;
+                    const safePhotoUrl = sanitizeUrl(resolvedPhoto, '');
+                    const pqty = parseInt(attr.packQuantity) || 0;
+                    const pLabel = attr.unitLabel || 'pieces';
+                    const attrRetail = parseFloat(attr.retailPrice) || 0;
+                    const retailPP = attrRetail && pqty > 1 ? getRetailPerPiece(attrRetail, pqty) : '';
+                    const attrStock = parseInt(attr.stock) || 0;
+                    variationCard.title = `${safeAttrName}${pqty ? ' • ' + pqty + ' ' + pLabel : ''}${shouldShowStock(attrStock) ? ' • Stock: ' + attrStock : ''} • KES ${(attr.price || 0).toLocaleString()}`;
                     
                     variationCard.innerHTML = `
                         ${safePhotoUrl ? `<img src="${safePhotoUrl}" class="variation-thumb" alt="${safeAttrName}" loading="lazy">` : ''}
                         <div class="variation-header">
                             <h4>${safeAttrName}</h4>
-                            <p class="variation-price">KES ${(attr.price || 0).toLocaleString()}</p>
-                            ${attr.retailPrice ? `<p class="variation-retail"><s>KES ${attr.retailPrice.toLocaleString()}</s></p>` : ''}
+                            ${pqty ? `<p class="variation-pack"><i class="fas fa-cubes"></i> ${pqty} ${escapeHtml(pLabel)} per unit</p>` : ''}
+                            <p class="variation-price">KES ${(attr.price || 0).toLocaleString()}${pqty > 1 ? ` <span class="var-per-pc">(KES ${Math.ceil((attr.price || 0) / pqty).toLocaleString()}/pc)</span>` : ''}</p>
+                            ${attrRetail ? `<p class="variation-retail">~Retail KES ${attrRetail.toLocaleString()}${retailPP}</p>` : ''}
                         </div>
                     `;
                     variationsListEl.appendChild(variationCard);
@@ -370,27 +476,33 @@ class ProductPage {
                 });
             } else {
                 // Handle old structure (single attribute per variation)
+                const resolvedPhoto = variation.photoUrl || variation.imageUrl || varImg || productImg;
                 const variationCard = document.createElement('div');
                 variationCard.className = 'variation-card';
                 
                 const attrName = variation.attr_name || variation.title || 'Option';
                 const stock = variation.stock || 0;
                 const price = variation.price || this.product.price;
-                const photoUrl = variation.photoUrl;
+                const pqty = parseInt(variation.packQuantity) || 0;
+                const pLabel = variation.unitLabel || 'pieces';
                 
                 variationCard.dataset.stock = stock;
                 variationCard.dataset.price = price;
-                variationCard.dataset.photoUrl = photoUrl || '';
+                variationCard.dataset.photoUrl = resolvedPhoto;
                 
                 const safeAttrName = escapeHtml(attrName);
-                const safePhotoUrl = sanitizeUrl(photoUrl, '');
-                variationCard.title = `${safeAttrName} • Stock: ${stock} • KES ${(price || 0).toLocaleString()}`;
+                const safePhotoUrl = sanitizeUrl(resolvedPhoto, '');
+                const varRetail = parseFloat(variation.retailPrice || variation.retail) || 0;
+                const retailPP = varRetail && pqty > 1 ? getRetailPerPiece(varRetail, pqty) : '';
+                variationCard.title = `${safeAttrName}${pqty ? ' • ' + pqty + ' ' + pLabel : ''}${shouldShowStock(stock) ? ' • Stock: ' + stock : ''} • KES ${(price || 0).toLocaleString()}`;
                 
                 variationCard.innerHTML = `
                     ${safePhotoUrl ? `<img src="${safePhotoUrl}" class="variation-thumb" alt="${safeAttrName}" loading="lazy">` : ''}
                     <div class="variation-header">
                         <h4>${safeAttrName}</h4>
-                        <p class="variation-price">KES ${(price || 0).toLocaleString()}</p>
+                        ${pqty ? `<p class="variation-pack"><i class="fas fa-cubes"></i> ${pqty} ${escapeHtml(pLabel)} per unit</p>` : ''}
+                        <p class="variation-price">KES ${(price || 0).toLocaleString()}${pqty > 1 ? ` <span class="var-per-pc">(KES ${Math.ceil((price || 0) / pqty).toLocaleString()}/pc)</span>` : ''}</p>
+                        ${varRetail ? `<p class="variation-retail">~Retail KES ${varRetail.toLocaleString()}${retailPP}</p>` : ''}
                     </div>
                 `;
                 variationsListEl.appendChild(variationCard);
@@ -407,6 +519,27 @@ class ProductPage {
 
         // Auto-select first variation
         this.selectVariation(0);
+    }
+
+    getCheapestPackQuantity() {
+        let minPrice = Infinity;
+        let packQty = 0;
+        if (this.product.variations?.length) {
+            this.product.variations.forEach(v => {
+                if (v.attributes?.length) {
+                    v.attributes.forEach(a => {
+                        if (a.price && a.price < minPrice) {
+                            minPrice = a.price;
+                            packQty = parseInt(a.packQuantity) || 0;
+                        }
+                    });
+                } else if (v.price && v.price < minPrice) {
+                    minPrice = v.price;
+                    packQty = parseInt(v.packQuantity) || 0;
+                }
+            });
+        }
+        return packQty;
     }
 
     selectVariation(index) {
@@ -459,7 +592,7 @@ class ProductPage {
         const pricingExplainer2 = document.getElementById('pricingExplainer');
         if (retailPrice && retailPrice > displayPrice) {
             this.initialPriceContainer.style.display = 'flex';
-            this.initialPriceEl.textContent = `KES ${retailPrice.toLocaleString()}`;
+            this.initialPriceEl.textContent = `~KES ${retailPrice.toLocaleString()}`;
             const discount = ((retailPrice - displayPrice) / retailPrice * 100).toFixed(0);
             this.discountBadge.textContent = `-${discount}%`;
             this.discountBadge.style.display = 'inline-block';
@@ -1096,6 +1229,40 @@ class ProductPage {
         window.location.href = `chat.html?sellerId=${this.seller.id}&listingId=${this.productId}`;
     }
 
+    handleCompare() {
+        const MAX_COMPARE = 4;
+        let list = JSON.parse(localStorage.getItem('oda_compare') || '[]');
+        const id = this.productId;
+
+        if (list.includes(id)) {
+            // Remove from comparison
+            list = list.filter(i => i !== id);
+            localStorage.setItem('oda_compare', JSON.stringify(list));
+            this.compareBtn.classList.remove('active');
+            this.compareBtn.title = 'Compare';
+            showNotification('Removed from compare list');
+        } else {
+            if (list.length >= MAX_COMPARE) {
+                showNotification(`Compare list is full (${MAX_COMPARE} max). Remove one first.`, 'warning');
+                return;
+            }
+            list.push(id);
+            localStorage.setItem('oda_compare', JSON.stringify(list));
+            this.compareBtn.classList.add('active');
+            this.compareBtn.title = 'In compare list';
+            showNotification(`Product added to compare list (${list.length} of ${MAX_COMPARE})`, 'success');
+            // After a short delay, ask if they want to go compare now
+            if (list.length >= 2) {
+                setTimeout(() => {
+                    if (confirm(`You have ${list.length} products to compare. View comparison now?`)) {
+                        window.location.href = 'compare.html';
+                    }
+                }, 800);
+            }
+        }
+        window.dispatchEvent(new Event('compare-updated'));
+    }
+
     async handleCopyLink() {
         const productUrl = `${window.location.origin}/product.html?id=${this.productId}`;
         try {
@@ -1163,6 +1330,7 @@ class ProductPage {
 
 // Initialize the product page
 document.addEventListener('DOMContentLoaded', () => {
+    loadDisplaySettings();
     const productPage = new ProductPage();
     productPage.initialize();
 });

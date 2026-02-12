@@ -72,13 +72,14 @@
                         <span class="price-per-item" id="pricePerItem"></span>
                     </div>
                     <div class="initial-price" id="initialPriceContainer">
-                        <span class="was-label">Market Retail Price</span>
+                        <span class="was-label">Est. Retail (Approx.)</span>
                         <span id="initialPrice" class="amount strikethrough"></span>
+                        <span id="retailPerPiece" class="retail-per-piece"></span>
                         <span id="discountBadge" class="discount-badge"></span>
                     </div>
                     <div id="pricingExplainer" style="display:none;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11px;color:#92400e;line-height:1.5;">
                         <i class="fas fa-info-circle" style="color:#f59e0b;"></i>
-                        <strong>Why two prices?</strong> "Your Price" is the wholesale rate you pay. "Retail Price" is what shops normally charge customers — the difference is your savings or resale profit!
+                        <strong>Why two prices?</strong> "Your Price" is the wholesale rate you pay. "Est. Retail" is the approximate market price based on research — the difference is your potential savings or resale margin.
                     </div>
                 </div>
 
@@ -92,6 +93,9 @@
                     </button>
                     <button id="wishlistBtn" class="icon-btn">
                         <i class="fas fa-heart"></i>
+                    </button>
+                    <button id="compareBtn" class="icon-btn" title="Add to compare list">
+                        <i class="fas fa-columns"></i>
                     </button>
                     <button id="copyLinkBtn" class="icon-btn">
                         <i class="fas fa-share"></i>
@@ -115,8 +119,14 @@
                     <span class="info-tag">
                         <i class="fas fa-copyright"></i> <span id="productBrand"></span>
                     </span>
-                    <span class="info-tag">
+                    <span class="info-tag" id="stockInfoTag">
                         <i class="fas fa-boxes"></i> <span id="productTotalStock"></span> in stock
+                    </span>
+                    <span class="info-tag" id="minOrderTag" style="display:none;">
+                        <i class="fas fa-shopping-basket"></i> Min order: <span id="productMinOrder"></span> units
+                    </span>
+                    <span class="info-tag" id="variationCountTag" style="display:none;">
+                        <i class="fas fa-palette"></i> <span id="productVariationCount"></span> options available
                     </span>
                     <span class="info-tag">
                         <i class="fas fa-map-marker-alt"></i> <span id="productLocation"></span>

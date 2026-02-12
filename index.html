@@ -51,6 +51,16 @@
   </script>
 </head>
 <body>
+  <!-- Announcement Bar (loaded from Firestore Settings/announcement) -->
+  <div class="announcement-bar" id="announcementBar" style="display:none;">
+    <div class="announcement-content">
+      <i class="fas fa-bullhorn announcement-icon"></i>
+      <span id="announcementText"></span>
+      <a id="announcementLink" href="#" style="display:none;">Shop Now →</a>
+    </div>
+    <button class="announcement-close" id="closeAnnouncement" aria-label="Close">×</button>
+  </div>
+
   <!-- Header with Smart Collapse -->
   <header id="mainHeader" class="header-full">
     <!-- Compact Header (shown when scrolled) -->
@@ -138,7 +148,7 @@
     <div class="mega-actions">
       <a href="listing.html" class="mega-action sell"><i class="fas fa-plus-circle"></i> Sell Item</a>
       <a href="seller-dashboard.html" class="mega-action"><i class="fas fa-store"></i> Seller Hub</a>
-      <a href="notification.html" class="mega-action"><i class="fas fa-comments"></i> Messages</a>
+      <a href="deposit.html" class="mega-action"><i class="fas fa-plus-circle"></i> Deposit</a>
       <a href="profile.html" class="mega-action"><i class="fas fa-user-cog"></i> My Account</a>
     </div>
 
@@ -147,6 +157,20 @@
       <h4>Browse Categories</h4>
       <div class="mega-cat-grid" id="megaCatGrid">
         <!-- Categories loaded dynamically from Firestore -->
+      </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="mega-categories">
+      <h4>Quick Links</h4>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="orderTracking.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-truck" style="color:#ff5722;width:20px;text-align:center;"></i> Track Orders</a>
+        <a href="referral.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#e64a19;text-decoration:none;font-size:13px;font-weight:600;background:linear-gradient(135deg,#fff7f0,#fff3e0);border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-gift" style="color:#ff5722;width:20px;text-align:center;"></i> Refer & Earn 5%</a>
+        <a href="compare.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-columns" style="color:#ff5722;width:20px;text-align:center;"></i> Compare Products</a>
+        <a href="recently_viewed.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-history" style="color:#ff5722;width:20px;text-align:center;"></i> Recently Viewed</a>
+        <a href="addresses.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-map-marker-alt" style="color:#ff5722;width:20px;text-align:center;"></i> My Addresses</a>
+        <a href="returns.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-undo-alt" style="color:#ff5722;width:20px;text-align:center;"></i> Returns & Refunds</a>
+        <a href="notification.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-bell" style="color:#ff5722;width:20px;text-align:center;"></i> Notifications</a>
       </div>
     </div>
 
@@ -276,6 +300,10 @@
     <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px 20px;margin-bottom:12px;">
       <a href="customer_care.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-headset"></i> Help Center</a>
       <a href="orderTracking.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-truck"></i> Track Order</a>
+      <a href="compare.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-columns"></i> Compare</a>
+      <a href="recently_viewed.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-history"></i> Recently Viewed</a>
+      <a href="returns.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-undo"></i> Returns</a>
+      <a href="referral.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-gift"></i> Refer & Earn</a>
       <a href="listing.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-store"></i> Sell on Oda Pap</a>
       <a href="profile.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-user"></i> My Account</a>
     </div>
@@ -301,25 +329,33 @@
       document.body.style.overflow = '';
     }
 
-    // Smart Header Collapse
+    // Smart Header Collapse with deadzone to prevent glitch
     let lastScroll = 0;
     let scrollThreshold = 100;
+    let hysteresis = 30; // deadzone to prevent flickering
+    let isCompact = false;
     let ticking = false;
+    let switchTimer = null;
     
     function updateHeader() {
       const header = document.getElementById('mainHeader');
       const currentScroll = window.pageYOffset;
       
-      if (currentScroll > scrollThreshold) {
-        if (!header.classList.contains('header-compact')) {
+      // Use hysteresis: only switch when scroll passes threshold + buffer
+      if (!isCompact && currentScroll > scrollThreshold + hysteresis) {
+        if (switchTimer) clearTimeout(switchTimer);
+        switchTimer = setTimeout(() => {
           header.classList.add('header-compact');
           header.classList.remove('header-full');
-        }
-      } else {
-        if (header.classList.contains('header-compact')) {
+          isCompact = true;
+        }, 50);
+      } else if (isCompact && currentScroll < scrollThreshold - hysteresis) {
+        if (switchTimer) clearTimeout(switchTimer);
+        switchTimer = setTimeout(() => {
           header.classList.remove('header-compact');
           header.classList.add('header-full');
-        }
+          isCompact = false;
+        }, 50);
       }
       
       // Hide header when scrolling down fast, show when scrolling up
@@ -338,7 +374,7 @@
         requestAnimationFrame(updateHeader);
         ticking = true;
       }
-    });
+    }, { passive: true });
 
     // Compact search sync
     document.getElementById('compactSearchInput')?.addEventListener('keypress', function(e) {

@@ -539,6 +539,7 @@
     let allChats = [];
     let allOrderNotifications = [];
     let currentFilter = 'all';
+    const userProfileCache = {}; // Cache chat partner profiles to reduce reads
     
     // Store unsubscribe functions for cleanup
     let unsubscribeChats = null;
@@ -615,9 +616,11 @@
         return;
       }
       currentUser = user;
+      userNotifsLoaded = false; // Reset on new auth
       loadChats();
       loadOrderNotifications();
       loadGlobalNotifications();
+      loadUserNotifications();
     });
 
     // Load global/admin notifications
@@ -650,27 +653,30 @@
             }
           });
 
-          // Also load user-specific notifications from subcollection
-          loadUserNotifications();
+          // Sort & render (user notifs loaded separately from auth handler)
+          allOrderNotifications.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+            return dateB - dateA;
+          });
+          updateNotificationBadge();
+          if (currentFilter === 'orders') renderOrderNotifications();
         });
       } catch (error) {
         console.error('Error loading global notifications:', error);
       }
     }
 
-    // Load user-specific notifications (from admin broadcasts)
+    // Load user-specific notifications (from admin broadcasts) — called ONCE from auth handler
+    let userNotifsLoaded = false;
     async function loadUserNotifications() {
-      if (!currentUser) return;
+      if (!currentUser || userNotifsLoaded) return;
+      userNotifsLoaded = true;
       
       try {
         const userNotifsRef = collection(db, 'Users', currentUser.uid, 'Notifications');
-        const q = query(
-          userNotifsRef,
-          orderBy('createdAt', 'desc'),
-          limit(30)
-        );
-
-        const snapshot = await getDocs(q);
+        // Use a simple getDocs without orderBy to avoid needing a composite index
+        const snapshot = await getDocs(query(userNotifsRef, limit(30)));
         snapshot.forEach(docSnap => {
           const data = docSnap.data();
           const exists = allOrderNotifications.some(n => n.id === docSnap.id);
@@ -693,15 +699,11 @@
           return dateB - dateA;
         });
 
-        // Update badge count
         updateNotificationBadge();
-
-        // Render if orders tab is active
-        if (currentFilter === 'orders') {
-          renderOrderNotifications();
-        }
+        if (currentFilter === 'orders') renderOrderNotifications();
       } catch (error) {
-        console.error('Error loading user notifications:', error);
+        // Permissions error on subcollection is non-critical — skip silently
+        console.warn('User notifications subcollection not available:', error.code || error.message);
       }
     }
 
@@ -923,12 +925,16 @@
             }
           });
 
-          // Fetch user details
+          // Fetch user details (with cache to reduce reads)
           allChats = [];
           for (const otherUserId in chatGroups) {
             try {
-              const userDoc = await getDoc(doc(db, 'Users', otherUserId));
-              const userData = userDoc.exists() ? userDoc.data() : {};
+              let userData = userProfileCache[otherUserId];
+              if (!userData) {
+                const userDoc = await getDoc(doc(db, 'Users', otherUserId));
+                userData = userDoc.exists() ? userDoc.data() : {};
+                userProfileCache[otherUserId] = userData;
+              }
               
               allChats.push({
                 ...chatGroups[otherUserId],

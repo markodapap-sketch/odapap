@@ -5,7 +5,7 @@
  */
 
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDocs, getDoc, addDoc, deleteDoc, serverTimestamp, updateDoc, runTransaction } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getFirestore, collection, doc, getDocs, getDoc, addDoc, deleteDoc, serverTimestamp, updateDoc, runTransaction, query, where, increment } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
 import { app } from './js/firebase.js';
 import { showNotification } from './notifications.js';
@@ -14,6 +14,8 @@ import { OdaModal } from './js/odaModal.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 import { escapeHtml, validatePrice, validateQuantity, validateOrder } from './js/sanitize.js';
 import authModal from './js/authModal.js';
+import { counties } from './js/locationData.js';
+import { detectLocation } from './js/geolocation.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -31,6 +33,7 @@ class CheckoutManager {
         this.shippingFee = 150; // Default for Mombasa
         this.discount = 0;
         this.total = 0;
+        this.appliedCoupon = null; // Track applied coupon { id, code, type, value }
         this.paymentMethod = 'mpesa';
         this.orderSource = this.determineOrderSource();
         this.mpesaManager = null;
@@ -93,6 +96,15 @@ class CheckoutManager {
         this.totalEl = document.getElementById('totalAmount');
         this.btnTotalEl = document.getElementById('btnTotalAmount');
         
+        // Promo Code
+        this.promoCodeInput = document.getElementById('promoCodeInput');
+        this.applyPromoBtn = document.getElementById('applyPromoBtn');
+        this.promoApplied = document.getElementById('promoApplied');
+        this.promoAppliedText = document.getElementById('promoAppliedText');
+        this.removePromoBtn = document.getElementById('removePromoBtn');
+        this.promoError = document.getElementById('promoError');
+        this.promoInputWrap = document.getElementById('promoInputWrap');
+        
         // Delivery Info
         this.buyerNameEl = document.getElementById('buyerName');
         this.buyerPhoneEl = document.getElementById('buyerPhone');
@@ -141,6 +153,19 @@ class CheckoutManager {
     }
 
     setupEventListeners() {
+        // Promo code
+        if (this.applyPromoBtn) {
+            this.applyPromoBtn.addEventListener('click', () => this.applyCoupon());
+        }
+        if (this.promoCodeInput) {
+            this.promoCodeInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); this.applyCoupon(); }
+            });
+        }
+        if (this.removePromoBtn) {
+            this.removePromoBtn.addEventListener('click', () => this.removeCoupon());
+        }
+
         // Payment method selection
         this.paymentOptions.forEach(option => {
             option.addEventListener('click', () => {
@@ -292,7 +317,24 @@ class CheckoutManager {
                 const subcounty = this.userData.subcounty || this.userData.constituency || '';
                 const ward = this.userData.ward || '';
                 
-                this.buyerLocationEl.textContent = [county, subcounty, ward].filter(Boolean).join(', ') || 'Not set';
+                const locationDisplay = [county, subcounty, ward].filter(Boolean).join(', ') || 'Not set';
+                this.buyerLocationEl.textContent = locationDisplay;
+                
+                // Add "not set" styling if no location
+                if (!county) {
+                    this.buyerLocationEl.classList.add('lp-not-set');
+                } else {
+                    this.buyerLocationEl.classList.remove('lp-not-set');
+                }
+                
+                // Initialize inline location dropdowns for checkout
+                this._initCheckoutLocationDropdowns({
+                    region: this.userData.region || '',
+                    county,
+                    constituency: subcounty,
+                    ward,
+                    specificLocation: this.userData.specificLocation || ''
+                });
                 
                 // Check if user's county is in enabled delivery areas
                 await this.checkDeliveryArea(county);
@@ -301,6 +343,9 @@ class CheckoutManager {
                 if (this.userData.deliveryAddress && this.deliveryAddressEl) {
                     this.deliveryAddressEl.value = this.userData.deliveryAddress;
                 }
+
+                // Load saved addresses from Firestore
+                this.loadSavedAddresses();
 
                 // Pre-fill M-Pesa phone with user's phone (support both field names)
                 if (userPhone && this.mpesaPhoneInput) {
@@ -321,6 +366,234 @@ class CheckoutManager {
         } catch (error) {
             console.error('Error loading user info:', error);
         }
+    }
+
+    async loadSavedAddresses() {
+        try {
+            if (!this.user) return;
+            const wrap = document.getElementById('savedAddressesWrap');
+            const list = document.getElementById('savedAddressList');
+            if (!wrap || !list) return;
+
+            const addrRef = collection(db, 'Users', this.user.uid, 'Addresses');
+            const snap = await getDocs(addrRef);
+            if (snap.empty) return;
+
+            const addresses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Sort default first
+            addresses.sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
+
+            wrap.style.display = 'block';
+            list.innerHTML = addresses.map(addr => `
+                <div class="ck-saved-addr ${addr.isDefault ? 'ck-addr-default' : ''}" data-addr-id="${addr.id}" style="
+                    display:flex;align-items:center;gap:8px;padding:8px 12px;
+                    border:1px solid ${addr.isDefault ? '#ff5722' : '#e0e0e0'};border-radius:8px;
+                    cursor:pointer;transition:all 0.2s;font-size:12px;background:${addr.isDefault ? '#fff8f5' : 'white'};">
+                    <i class="fas fa-${addr.label === 'Office' ? 'building' : addr.label === 'Other' ? 'map-pin' : 'home'}" 
+                       style="color:${addr.isDefault ? '#ff5722' : '#999'};width:16px;text-align:center;"></i>
+                    <div style="flex:1;min-width:0;">
+                        <strong style="font-size:12px;color:#333;">${escapeHtml(addr.recipientName || '')}</strong>
+                        <span style="color:#888;"> · ${escapeHtml(addr.phone || '')}</span>
+                        <div style="color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">
+                            ${escapeHtml(addr.detailedAddress || '')}
+                        </div>
+                    </div>
+                    ${addr.isDefault ? '<span style="font-size:10px;color:#ff5722;font-weight:600;white-space:nowrap;">DEFAULT</span>' : ''}
+                </div>
+            `).join('');
+
+            // Click to fill address
+            list.querySelectorAll('.ck-saved-addr').forEach(el => {
+                el.addEventListener('click', () => {
+                    const id = el.dataset.addrId;
+                    const addr = addresses.find(a => a.id === id);
+                    if (addr && this.deliveryAddressEl) {
+                        this.deliveryAddressEl.value = addr.detailedAddress || '';
+                        // Highlight selected
+                        list.querySelectorAll('.ck-saved-addr').forEach(s => {
+                            s.style.borderColor = '#e0e0e0';
+                            s.style.background = 'white';
+                        });
+                        el.style.borderColor = '#ff5722';
+                        el.style.background = '#fff8f5';
+                        showNotification('Address applied');
+                    }
+                });
+            });
+
+            // Auto-select default address if delivery field is empty
+            if (!this.deliveryAddressEl?.value?.trim()) {
+                const defaultAddr = addresses.find(a => a.isDefault);
+                if (defaultAddr) {
+                    this.deliveryAddressEl.value = defaultAddr.detailedAddress || '';
+                }
+            }
+        } catch (e) {
+            console.warn('Could not load saved addresses:', e);
+        }
+    }
+
+    _initCheckoutLocationDropdowns(currentLoc) {
+        const regionSel = document.getElementById('ck-region');
+        const countySel = document.getElementById('ck-county');
+        const consSel = document.getElementById('ck-constituency');
+        const wardSel = document.getElementById('ck-ward');
+        const formEl = document.getElementById('checkout-location-form');
+        const editBtn = document.getElementById('checkout-edit-location-btn');
+
+        // Populate regions
+        Object.keys(counties).forEach(r => {
+            const o = document.createElement('option');
+            o.value = r;
+            o.textContent = r.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            regionSel.appendChild(o);
+        });
+
+        regionSel.addEventListener('change', () => {
+            countySel.innerHTML = '<option value="">County</option>';
+            consSel.innerHTML = '<option value="">Sub-County</option>';
+            wardSel.innerHTML = '<option value="">Ward</option>';
+            countySel.disabled = !regionSel.value;
+            consSel.disabled = true;
+            wardSel.disabled = true;
+            if (regionSel.value && counties[regionSel.value]) {
+                Object.keys(counties[regionSel.value]).forEach(c => {
+                    const o = document.createElement('option'); o.value = c; o.textContent = c; countySel.appendChild(o);
+                });
+            }
+        });
+        countySel.addEventListener('change', () => {
+            consSel.innerHTML = '<option value="">Sub-County</option>';
+            wardSel.innerHTML = '<option value="">Ward</option>';
+            consSel.disabled = !countySel.value;
+            wardSel.disabled = true;
+            if (regionSel.value && countySel.value && counties[regionSel.value][countySel.value]) {
+                Object.keys(counties[regionSel.value][countySel.value]).forEach(c => {
+                    const o = document.createElement('option'); o.value = c; o.textContent = c; consSel.appendChild(o);
+                });
+            }
+        });
+        consSel.addEventListener('change', () => {
+            wardSel.innerHTML = '<option value="">Ward</option>';
+            wardSel.disabled = !consSel.value;
+            if (regionSel.value && countySel.value && consSel.value && counties[regionSel.value][countySel.value][consSel.value]) {
+                counties[regionSel.value][countySel.value][consSel.value].forEach(w => {
+                    const o = document.createElement('option'); o.value = w; o.textContent = w; wardSel.appendChild(o);
+                });
+            }
+        });
+
+        // Pre-fill with current data
+        if (currentLoc.region) {
+            regionSel.value = currentLoc.region;
+            regionSel.dispatchEvent(new Event('change'));
+            setTimeout(() => {
+                if (currentLoc.county) { countySel.value = currentLoc.county; countySel.dispatchEvent(new Event('change')); }
+                setTimeout(() => {
+                    if (currentLoc.constituency) { consSel.value = currentLoc.constituency; consSel.dispatchEvent(new Event('change')); }
+                    setTimeout(() => { if (currentLoc.ward) wardSel.value = currentLoc.ward; }, 10);
+                }, 10);
+            }, 10);
+        }
+
+        // Toggle form
+        if (editBtn) editBtn.addEventListener('click', () => {
+            formEl.style.display = formEl.style.display === 'none' ? 'block' : 'none';
+        });
+        document.getElementById('ck-cancel-location')?.addEventListener('click', () => {
+            formEl.style.display = 'none';
+        });
+
+        // Optional map
+        let ckMap = null, ckMarker = null, ckCoords = null;
+        if (this.userData?.lat && this.userData?.lng) ckCoords = { lat: this.userData.lat, lng: this.userData.lng };
+
+        document.getElementById('checkout-map-toggle')?.addEventListener('click', () => {
+            const mc = document.getElementById('checkout-map-container');
+            const show = mc.style.display === 'none';
+            mc.style.display = show ? 'block' : 'none';
+            if (show && !ckMap) {
+                ckMap = L.map('checkout-map').setView(ckCoords ? [ckCoords.lat, ckCoords.lng] : [-1.2921, 36.8219], ckCoords ? 14 : 7);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(ckMap);
+                if (ckCoords) ckMarker = L.marker([ckCoords.lat, ckCoords.lng]).addTo(ckMap);
+                ckMap.on('click', (e) => {
+                    if (ckMarker) ckMap.removeLayer(ckMarker);
+                    ckMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(ckMap);
+                    ckCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+                });
+                setTimeout(() => ckMap.invalidateSize(), 200);
+            } else if (show && ckMap) {
+                setTimeout(() => ckMap.invalidateSize(), 100);
+            }
+        });
+
+        // Detect location
+        document.getElementById('ck-detect-btn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('ck-detect-btn');
+            const st = document.getElementById('ck-detect-status');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
+            st.style.display = 'block';
+            st.style.background = '#e3f2fd'; st.style.color = '#1565c0';
+            st.textContent = 'Requesting your location…';
+            try {
+                const loc = await detectLocation();
+                st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
+                st.textContent = '✓ ' + loc.display_name.substring(0, 70) + '…';
+                ckCoords = { lat: loc.lat, lng: loc.lng };
+                // Match to dropdowns
+                const detected = (loc.county || '').toLowerCase();
+                for (const [rk, rc] of Object.entries(counties)) {
+                    for (const cn of Object.keys(rc)) {
+                        if (detected.includes(cn.toLowerCase()) || cn.toLowerCase().includes(detected)) {
+                            regionSel.value = rk; regionSel.dispatchEvent(new Event('change'));
+                            setTimeout(() => { countySel.value = cn; countySel.dispatchEvent(new Event('change')); }, 20);
+                            break;
+                        }
+                    }
+                }
+                if (ckMap) {
+                    ckMap.setView([loc.lat, loc.lng], 14);
+                    if (ckMarker) ckMap.removeLayer(ckMarker);
+                    ckMarker = L.marker([loc.lat, loc.lng]).addTo(ckMap);
+                }
+            } catch (e) {
+                st.style.background = '#fce4ec'; st.style.color = '#c62828';
+                st.textContent = e.message;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-crosshairs"></i> Detect My Location';
+            }
+        });
+
+        // Save location
+        document.getElementById('ck-save-location')?.addEventListener('click', async () => {
+            const data = {
+                region: regionSel.value,
+                county: countySel.value,
+                constituency: consSel.value,
+                ward: wardSel.value
+            };
+            if (!data.county) { showNotification('Please select at least a county', 'warning'); return; }
+            if (ckCoords) { data.lat = ckCoords.lat; data.lng = ckCoords.lng; }
+            try {
+                await updateDoc(doc(db, "Users", this.user.uid), data);
+                const display = [data.county, data.constituency, data.ward].filter(Boolean).join(', ');
+                this.buyerLocationEl.textContent = display || 'Not set';
+                this.buyerLocationEl.classList.toggle('lp-not-set', !data.county);
+                this.userData.county = data.county;
+                this.userData.constituency = data.constituency;
+                this.userData.ward = data.ward;
+                this.userData.region = data.region;
+                await this.checkDeliveryArea(data.county);
+                await this.calculateShippingFee(data.county, data.constituency, data.ward);
+                formEl.style.display = 'none';
+                showNotification('Delivery location updated!', 'success');
+            } catch (e) {
+                console.error('Error saving location:', e);
+                showNotification('Failed to update location', 'error');
+            }
+        });
     }
 
     async checkDeliveryArea(county) {
@@ -477,18 +750,24 @@ class CheckoutManager {
                     return;
                 }
 
-                for (const docSnap of cartSnapshot.docs) {
-                    const item = docSnap.data();
-                    
+                // Fetch all listing docs in parallel to avoid N+1 sequential reads
+                const cartItems = cartSnapshot.docs.map(d => ({ ...d.data(), _cartDocId: d.id }));
+                const uniqueListingIds = [...new Set(cartItems.map(i => i.listingId))];
+                const listingResults = await Promise.all(
+                    uniqueListingIds.map(id => getDoc(doc(db, 'Listings', id)).catch(() => null))
+                );
+                const listingMap = {};
+                listingResults.forEach((snap, idx) => {
+                    if (snap && snap.exists()) listingMap[uniqueListingIds[idx]] = snap.data();
+                });
+
+                for (const item of cartItems) {
                     // SECURITY: Verify price from Firebase to prevent manipulation
-                    const listingDoc = await getDoc(doc(db, 'Listings', item.listingId));
-                    if (!listingDoc.exists()) {
-                        // Product no longer exists - skip it
+                    const listingData = listingMap[item.listingId];
+                    if (!listingData) {
                         console.log(`Product ${item.listingId} not found - skipping`);
                         continue;
                     }
-                    
-                    const listingData = listingDoc.data();
                     const sellerId = listingData.uploaderId;
                     
                     // Get verified price from listing/variation
@@ -518,7 +797,7 @@ class CheckoutManager {
                     );
                     
                     const itemData = {
-                        docId: docSnap.id,
+                        docId: item._cartDocId,
                         listingId: item.listingId,
                         name: listingData.name, // Use name from Firebase
                         price: verifiedPrice, // Use verified price from Firebase
@@ -616,6 +895,117 @@ class CheckoutManager {
         }
         
         this.renderPriceValues();
+    }
+
+    // ============ Promo / Coupon Code ============
+
+    async applyCoupon() {
+        const code = (this.promoCodeInput?.value || '').trim().toUpperCase();
+        if (!code) return;
+
+        // Reset error
+        if (this.promoError) { this.promoError.style.display = 'none'; this.promoError.textContent = ''; }
+
+        // Disable button while checking
+        if (this.applyPromoBtn) { this.applyPromoBtn.disabled = true; this.applyPromoBtn.textContent = '...'; }
+
+        try {
+            // Query coupons collection for matching code
+            const q = query(collection(db, 'Coupons'), where('code', '==', code));
+            const snap = await getDocs(q);
+
+            if (snap.empty) {
+                this.showPromoError('Invalid promo code');
+                return;
+            }
+
+            const couponDoc = snap.docs[0];
+            const coupon = couponDoc.data();
+
+            // Check if active
+            if (!coupon.active) {
+                this.showPromoError('This promo code is no longer active');
+                return;
+            }
+
+            // Check expiry
+            if (coupon.expiry) {
+                const expiryDate = coupon.expiry.toDate ? coupon.expiry.toDate() : new Date(coupon.expiry);
+                if (expiryDate < new Date()) {
+                    this.showPromoError('This promo code has expired');
+                    return;
+                }
+            }
+
+            // Check usage limit
+            if (coupon.maxUses && coupon.usedCount >= coupon.maxUses) {
+                this.showPromoError('This promo code has reached its usage limit');
+                return;
+            }
+
+            // Check minimum order amount
+            if (coupon.minOrder && this.subtotal < coupon.minOrder) {
+                this.showPromoError(`Minimum order of KES ${coupon.minOrder.toLocaleString()} required`);
+                return;
+            }
+
+            // Calculate discount
+            let discountAmount = 0;
+            if (coupon.type === 'percent') {
+                discountAmount = Math.round(this.subtotal * (coupon.value / 100));
+            } else {
+                // flat
+                discountAmount = coupon.value;
+            }
+
+            // Don't let discount exceed subtotal
+            discountAmount = Math.min(discountAmount, this.subtotal);
+
+            // Apply
+            this.discount = discountAmount;
+            this.appliedCoupon = {
+                id: couponDoc.id,
+                code: coupon.code,
+                type: coupon.type,
+                value: coupon.value
+            };
+
+            // Update UI
+            const label = coupon.type === 'percent' ? `${coupon.value}% off` : `KES ${coupon.value} off`;
+            if (this.promoAppliedText) this.promoAppliedText.textContent = `${coupon.code} — ${label}`;
+            if (this.promoInputWrap) this.promoInputWrap.style.display = 'none';
+            if (this.promoApplied) this.promoApplied.style.display = 'flex';
+
+            this.renderPriceValues();
+            showNotification(`Promo code applied! You save KES ${discountAmount.toLocaleString()}`, 'success');
+        } catch (err) {
+            console.error('Coupon apply error:', err);
+            this.showPromoError('Could not validate code. Try again.');
+        } finally {
+            if (this.applyPromoBtn) { this.applyPromoBtn.disabled = false; this.applyPromoBtn.textContent = 'Apply'; }
+        }
+    }
+
+    removeCoupon() {
+        this.discount = 0;
+        this.appliedCoupon = null;
+
+        // Reset UI
+        if (this.promoInputWrap) this.promoInputWrap.style.display = 'flex';
+        if (this.promoApplied) this.promoApplied.style.display = 'none';
+        if (this.promoCodeInput) this.promoCodeInput.value = '';
+        if (this.promoError) { this.promoError.style.display = 'none'; }
+        if (this.discountRow) this.discountRow.style.display = 'none';
+
+        this.renderPriceValues();
+        showNotification('Promo code removed', 'info');
+    }
+
+    showPromoError(msg) {
+        if (this.promoError) {
+            this.promoError.textContent = msg;
+            this.promoError.style.display = 'block';
+        }
     }
 
     renderPriceValues() {
@@ -1236,6 +1626,14 @@ class CheckoutManager {
                 },
                 shippingFee: validatePrice(this.shippingFee) || 0,
                 discount: validatePrice(this.discount) || 0,
+                ...(this.appliedCoupon && {
+                    coupon: {
+                        id: this.appliedCoupon.id,
+                        code: this.appliedCoupon.code,
+                        type: this.appliedCoupon.type,
+                        value: this.appliedCoupon.value
+                    }
+                }),
                 subtotal: validatePrice(this.subtotal) || 0,
                 // Include both total fields for compatibility
                 totalAmount: validatePrice(this.total) || 0,
@@ -1256,6 +1654,20 @@ class CheckoutManager {
             // Also save to user's orders subcollection for easy querying
             await addDoc(collection(db, `users/${this.user.uid}/orders`), orderData);
 
+            // Increment coupon usage count
+            if (this.appliedCoupon?.id) {
+                try {
+                    await updateDoc(doc(db, 'Coupons', this.appliedCoupon.id), {
+                        usedCount: increment(1)
+                    });
+                } catch (e) {
+                    console.warn('Could not update coupon usage count:', e);
+                }
+            }
+
+            // Deduct stock for each item
+            await this.deductStock(this.orderItems);
+
             // Save delivery address to user profile for next checkout
             if (deliveryAddress) {
                 try {
@@ -1271,6 +1683,12 @@ class CheckoutManager {
             // Create notifications for sellers
             await this.notifySellerOfNewOrder(orderData);
 
+            // Send order confirmation (email/SMS) — stub for future implementation
+            await this.sendOrderConfirmation(orderId, orderData, paymentMethod);
+
+            // Track referral commission (5% to referrer)
+            await this.processReferralCommission(orderId, orderData);
+
             // Clear cart/buyNow
             await this.clearOrderSource();
 
@@ -1281,6 +1699,147 @@ class CheckoutManager {
             console.error('Error creating order:', error);
             showNotification('Error creating order. Please contact support.', 'error');
             throw error;
+        }
+    }
+
+    /**
+     * Send order confirmation via email/SMS.
+     * Currently stores a pending notification record in Firestore.
+     * When a backend service (e.g. Cloud Function) is set up, it will
+     * watch the OrderConfirmations collection and dispatch actual
+     * email/SMS messages via SendGrid, Twilio, Africa's Talking, etc.
+     *
+     * To enable later:
+     * 1. Set up a Cloud Function triggered on OrderConfirmations onCreate
+     * 2. Read the phone/email from the document
+     * 3. Send via your preferred provider (Africa's Talking for KE SMS)
+     * 4. Update the document status to 'sent'
+     */
+    async sendOrderConfirmation(orderId, orderData, paymentMethod) {
+        try {
+            const buyerPhone = orderData.buyerDetails?.phone || this.buyerPhoneEl?.textContent || '';
+            const buyerEmail = this.userData?.email || '';
+            const buyerName = orderData.buyerDetails?.name || 'Customer';
+            const total = orderData.totalAmount || orderData.total || 0;
+            const itemCount = orderData.items?.length || 0;
+
+            const confirmationData = {
+                orderId,
+                userId: this.user.uid,
+                recipientName: buyerName,
+                recipientPhone: buyerPhone,
+                recipientEmail: buyerEmail,
+                orderTotal: total,
+                itemCount,
+                paymentMethod,
+                paymentStatus: orderData.paymentStatus || 'pending',
+                // Message templates — backend will use these
+                smsMessage: `Hi ${buyerName}! Your Oda Pap order #${orderId} (${itemCount} item${itemCount !== 1 ? 's' : ''}, KES ${total.toLocaleString()}) has been placed. Track: ${window.location.origin}/orderTracking.html?orderId=${orderId}`,
+                emailSubject: `Order Confirmation - #${orderId}`,
+                emailBody: `Thank you for your order, ${buyerName}! Your order #${orderId} with ${itemCount} item(s) totalling KES ${total.toLocaleString()} has been received.`,
+                // Delivery status
+                channels: {
+                    sms: buyerPhone ? 'pending' : 'no_phone',
+                    email: buyerEmail ? 'pending' : 'no_email'
+                },
+                status: 'pending', // Will be updated to 'sent' by Cloud Function
+                createdAt: serverTimestamp()
+            };
+
+            await addDoc(collection(db, 'OrderConfirmations'), confirmationData);
+            console.log('Order confirmation record created for', orderId);
+        } catch (e) {
+            // Non-critical — don't fail the order
+            console.warn('Could not create order confirmation record:', e);
+        }
+    }
+
+    async processReferralCommission(orderId, orderData) {
+        try {
+            // Check if this buyer was referred by someone
+            if (!this.userData?.referredBy) return;
+            
+            const referrerId = this.userData.referredBy;
+            const orderTotal = validatePrice(this.total) || 0;
+            if (orderTotal <= 0) return;
+
+            const REFERRAL_RATE = 0.05; // 5%
+            const commission = Math.round(orderTotal * REFERRAL_RATE);
+            if (commission <= 0) return;
+
+            // Get referrer's data
+            const referrerDoc = await getDoc(doc(db, "Users", referrerId));
+            if (!referrerDoc.exists()) return;
+            const referrerData = referrerDoc.data();
+
+            const isPaid = orderData.paymentStatus === 'completed';
+
+            // Create referral record
+            await addDoc(collection(db, "Referrals"), {
+                referrerId: referrerId,
+                referredUserId: this.user.uid,
+                referredName: this.userData.name || 'User',
+                orderId: orderId,
+                orderTotal: orderTotal,
+                commission: commission,
+                rate: REFERRAL_RATE,
+                status: isPaid ? 'earned' : 'pending',
+                createdAt: serverTimestamp()
+            });
+
+            // Update referrer's earnings
+            if (isPaid) {
+                await updateDoc(doc(db, "Users", referrerId), {
+                    referralEarnings: (referrerData.referralEarnings || 0) + commission
+                });
+            } else {
+                await updateDoc(doc(db, "Users", referrerId), {
+                    pendingReferralEarnings: (referrerData.pendingReferralEarnings || 0) + commission
+                });
+            }
+
+            // Notify referrer
+            try {
+                await addDoc(collection(db, "Notifications"), {
+                    userId: referrerId,
+                    type: 'referral_commission',
+                    title: 'Referral Earnings! 🎉',
+                    message: `You earned KES ${commission.toLocaleString()} from a referral purchase!`,
+                    read: false,
+                    createdAt: serverTimestamp()
+                });
+            } catch (e) {
+                console.warn('Could not send referral notification:', e);
+            }
+
+            console.log(`Referral commission of KES ${commission} recorded for referrer ${referrerId}`);
+        } catch (e) {
+            // Don't fail the order if referral tracking fails
+            console.warn('Referral commission tracking error:', e);
+        }
+    }
+
+    async deductStock(items) {
+        for (const item of items) {
+            try {
+                const listingRef = doc(db, 'Listings', item.listingId);
+                await runTransaction(db, async (transaction) => {
+                    const listingSnap = await transaction.get(listingRef);
+                    if (!listingSnap.exists()) return;
+
+                    const data = listingSnap.data();
+                    const currentStock = data.totalStock || data.stock || 0;
+                    const newStock = Math.max(0, currentStock - item.quantity);
+
+                    const updateData = { totalStock: newStock, updatedAt: serverTimestamp() };
+                    // Also update legacy field if it exists
+                    if (data.stock !== undefined) updateData.stock = newStock;
+
+                    transaction.update(listingRef, updateData);
+                });
+            } catch (e) {
+                console.warn(`Stock deduction failed for ${item.listingId}:`, e);
+            }
         }
     }
 

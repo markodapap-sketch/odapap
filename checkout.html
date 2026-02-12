@@ -8,6 +8,8 @@
     <title>Checkout - Oda Pap B2B</title>
     <link rel="stylesheet" href="checkout.css">
     <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -81,6 +83,20 @@
                     <!-- Order items will be dynamically inserted -->
                 </div>
 
+                <!-- Promo Code -->
+                <div class="promo-code-section" id="promoSection">
+                    <div class="promo-input-wrap" id="promoInputWrap">
+                        <i class="fas fa-ticket-alt promo-icon"></i>
+                        <input type="text" id="promoCodeInput" placeholder="Enter promo code" maxlength="20" autocomplete="off" spellcheck="false">
+                        <button type="button" id="applyPromoBtn" class="btn-apply-promo">Apply</button>
+                    </div>
+                    <div class="promo-applied" id="promoApplied" style="display:none;">
+                        <span><i class="fas fa-check-circle"></i> <span id="promoAppliedText"></span></span>
+                        <button type="button" id="removePromoBtn" class="btn-remove-promo"><i class="fas fa-times"></i></button>
+                    </div>
+                    <p class="promo-error" id="promoError" style="display:none;"></p>
+                </div>
+
                 <!-- Price Breakdown Card -->
                 <div class="price-card">
                     <div class="price-row">
@@ -109,9 +125,6 @@
                 <div class="form-card" id="deliveryCard">
                     <div class="card-header">
                         <h3><i class="fas fa-truck"></i> Delivery Information</h3>
-                        <a href="profile.html" class="edit-btn">
-                            <i class="fas fa-edit"></i> Edit Profile
-                        </a>
                     </div>
                     <div class="card-body">
                         <div class="info-grid">
@@ -126,6 +139,45 @@
                             <div class="info-item full-width">
                                 <label><i class="fas fa-map-marker-alt"></i> Location</label>
                                 <span id="buyerLocation">Loading...</span>
+                                <button type="button" class="btn-edit-location" id="checkout-edit-location-btn" style="background:none;border:1px solid #ddd;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;color:#555;margin-left:8px;"><i class="fas fa-pen"></i> Change</button>
+                            </div>
+                            <!-- Inline location edit dropdowns (hidden by default) -->
+                            <div class="checkout-location-form" id="checkout-location-form" style="display:none;padding:12px;background:#fafafa;border-radius:8px;margin-top:8px;">
+                              <button type="button" id="ck-detect-btn" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a73e8,#4285f4);color:white;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:7px;">
+                                <i class="fas fa-crosshairs"></i> Detect My Location
+                              </button>
+                              <div id="ck-detect-status" style="display:none;font-size:0.73rem;padding:7px 10px;border-radius:6px;margin-bottom:8px;"></div>
+                              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                                <div>
+                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Region</label>
+                                  <select id="ck-region" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Region</option></select>
+                                </div>
+                                <div>
+                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">County</label>
+                                  <select id="ck-county" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">County</option></select>
+                                </div>
+                                <div>
+                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Sub-County</label>
+                                  <select id="ck-constituency" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Sub-County</option></select>
+                                </div>
+                                <div>
+                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Ward</label>
+                                  <select id="ck-ward" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Ward</option></select>
+                                </div>
+                              </div>
+                              <div style="margin-top:8px;">
+                                <button type="button" class="btn-map-toggle" id="checkout-map-toggle" style="background:none;border:1px dashed #aaa;border-radius:6px;padding:6px 12px;color:#555;font-size:0.75rem;cursor:pointer;">
+                                  <i class="fas fa-map-marked-alt"></i> Pin on Map (optional)
+                                </button>
+                              </div>
+                              <div id="checkout-map-container" style="display:none;margin-top:8px;border-radius:10px;overflow:hidden;border:1px solid #ddd;">
+                                <div id="checkout-map" style="width:100%;height:200px;"></div>
+                                <p style="text-align:center;font-size:0.7rem;color:#888;padding:5px;background:#fafafa;"><i class="fas fa-info-circle"></i> Tap the map to pin your location</p>
+                              </div>
+                              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+                                <button type="button" id="ck-cancel-location" style="padding:6px 14px;border-radius:4px;font-size:0.75rem;cursor:pointer;border:none;background:#eee;color:#666;">Cancel</button>
+                                <button type="button" id="ck-save-location" style="padding:6px 14px;border-radius:4px;font-size:0.75rem;cursor:pointer;border:none;background:#ff5722;color:white;">Save</button>
+                              </div>
                             </div>
                         </div>
 
@@ -134,6 +186,15 @@
                                 <i class="fas fa-home"></i> Detailed Delivery Address
                                 <span class="required">*</span>
                             </label>
+                            <!-- Saved Addresses Selector -->
+                            <div id="savedAddressesWrap" style="display:none; margin-bottom:10px;">
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                    <i class="fas fa-bookmark" style="color:#ff5722;font-size:12px;"></i>
+                                    <span style="font-size:12px;font-weight:600;color:#555;">Saved Addresses</span>
+                                    <a href="addresses.html" style="margin-left:auto;font-size:11px;color:#ff5722;text-decoration:none;">Manage</a>
+                                </div>
+                                <div id="savedAddressList" style="display:flex;flex-direction:column;gap:6px;"></div>
+                            </div>
                             <textarea 
                                 id="deliveryAddress" 
                                 rows="3" 

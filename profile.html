@@ -7,6 +7,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
   <title>Profile - Oda Pap</title>
   <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -263,6 +265,68 @@
       border-radius: 6px;
       font-size: 0.8rem;
       background: white;
+    }
+    .btn-detect-location {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #1a73e8, #4285f4);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      transition: opacity 0.2s;
+    }
+    .btn-detect-location:hover { opacity: 0.9; }
+    .btn-detect-location:disabled { opacity: 0.5; cursor: wait; }
+    .detect-status {
+      font-size: 0.75rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .detect-status.loading { background: #e3f2fd; color: #1565c0; }
+    .detect-status.success { background: #e8f5e9; color: #2e7d32; }
+    .detect-status.error   { background: #fce4ec; color: #c62828; }
+    .btn-map-toggle {
+      background: none;
+      border: 1px dashed #aaa;
+      border-radius: 6px;
+      padding: 8px 14px;
+      color: #555;
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .2s;
+    }
+    .btn-map-toggle:hover { background: #f0f0f0; }
+    .map-container {
+      margin-top: 8px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+    }
+    .leaflet-map {
+      width: 100%;
+      height: 220px;
+    }
+    .map-hint {
+      text-align: center;
+      font-size: 0.7rem;
+      color: #888;
+      padding: 6px;
+      background: #fafafa;
     }
 
     /* Seller Orders - Compact */
@@ -597,6 +661,53 @@
       margin-top: 8px;
       color: #ff5722;
     }
+
+    /* Download App Banner */
+    .download-app-banner {
+      margin: 12px;
+      background: linear-gradient(135deg, #1a73e8, #4285f4);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: white;
+    }
+    .download-app-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .download-app-icon img {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    .download-app-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .download-app-text strong {
+      display: block;
+      font-size: 0.9rem;
+    }
+    .download-app-text span {
+      font-size: 0.7rem;
+      opacity: 0.9;
+    }
+    .download-app-btn {
+      background: white;
+      color: #1a73e8;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .download-app-btn:active { transform: scale(0.96); }
   </style>
 </head>
 <body>
@@ -772,29 +883,34 @@
     <div class="info-row" id="location-summary">
       <div class="info-value" id="full-location-display">Not Set</div>
     </div>
-    <div class="location-form" id="location-selection">
-      <label>Region</label>
-      <select id="region-select">
-        <option value="" disabled selected>Select Region</option>
-        <option value="coast">Coast</option>
-        <option value="north-eastern">North Eastern</option>
-        <option value="eastern">Eastern</option>
-        <option value="central">Central</option>
-        <option value="rift-valley">Rift Valley</option>
-        <option value="western">Western</option>
-        <option value="nyanza">Nyanza</option>
-        <option value="nairobi">Nairobi</option>
-      </select>
-      <label>County</label>
+    <!-- Cascading Dropdown Form (default) -->
+    <div class="location-form" id="location-form">
+      <button type="button" class="btn-detect-location" id="btn-detect-location">
+        <i class="fas fa-crosshairs"></i> Detect My Location
+      </button>
+      <div id="detect-status" class="detect-status" style="display:none;"></div>
+      <label for="region-select">Region</label>
+      <select id="region-select"><option value="">Select Region</option></select>
+      <label for="county-select">County</label>
       <select id="county-select" disabled><option value="">Select County</option></select>
-      <label>Constituency</label>
+      <label for="constituency-select">Constituency / Sub-County</label>
       <select id="constituency-select" disabled><option value="">Select Constituency</option></select>
-      <label>Ward</label>
+      <label for="ward-select">Ward</label>
       <select id="ward-select" disabled><option value="">Select Ward</option></select>
-      <label>Specific Location</label>
-      <textarea id="specific-details" rows="2" placeholder="E.g., Near XYZ Mall..."></textarea>
-      <div class="edit-actions" style="margin-top: 10px;">
-        <button class="btn-cancel" onclick="document.getElementById('location-selection').classList.remove('active')">Cancel</button>
+      <label for="specific-location">Specific Location / Landmark</label>
+      <textarea id="specific-location" rows="2" placeholder="e.g., Near Tuskys, 2nd floor"></textarea>
+      <!-- Optional Map -->
+      <div class="map-toggle" style="margin-top:10px;">
+        <button type="button" class="btn-map-toggle" id="profile-map-toggle">
+          <i class="fas fa-map-marked-alt"></i> Pin on Map (optional)
+        </button>
+      </div>
+      <div id="profile-map-container" class="map-container" style="display:none;">
+        <div id="profile-map" class="leaflet-map"></div>
+        <p class="map-hint"><i class="fas fa-info-circle"></i> Tap the map to pin your location</p>
+      </div>
+      <div class="edit-actions" style="margin-top:10px;">
+        <button class="btn-cancel" id="cancel-location-button">Cancel</button>
         <button class="btn-save" id="save-location-button">Save</button>
       </div>
     </div>
@@ -819,9 +935,25 @@
 
   <!-- Menu Links -->
   <div class="menu-links">
+    <!-- Admin & Delivery links — shown only for verified users -->
+    <a href="admin.html" class="menu-link" id="adminDashboardLink" style="display:none; background: linear-gradient(135deg, #ede7f6, #e8eaf6);">
+      <i class="fas fa-shield-alt" style="background:#ede7f6; color:#7c3aed;"></i>
+      <span style="color:#5b21b6; font-weight:600;">Admin Dashboard</span>
+      <i class="fas fa-chevron-right arrow" style="color:#7c3aed;"></i>
+    </a>
+    <a href="delivery.html" class="menu-link" id="deliveryDashboardLink" style="display:none; background: linear-gradient(135deg, #e0f2fe, #dbeafe);">
+      <i class="fas fa-shipping-fast" style="background:#dbeafe; color:#0369a1;"></i>
+      <span style="color:#0c4a6e; font-weight:600;">Delivery Dashboard</span>
+      <i class="fas fa-chevron-right arrow" style="color:#0369a1;"></i>
+    </a>
     <a href="recently_viewed.html" class="menu-link">
       <i class="fas fa-history"></i>
       <span>Recently Viewed</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
+    <a href="compare.html" class="menu-link">
+      <i class="fas fa-columns"></i>
+      <span>Compare Products</span>
       <i class="fas fa-chevron-right arrow"></i>
     </a>
     <a href="wishlist.html" class="menu-link">
@@ -829,14 +961,39 @@
       <span>Wishlist</span>
       <i class="fas fa-chevron-right arrow"></i>
     </a>
+    <a href="referral.html" class="menu-link" style="background: linear-gradient(135deg, #fff7f0, #fff3e0);">
+      <i class="fas fa-gift" style="color: #ff5722;"></i>
+      <span style="color: #e64a19; font-weight: 600;">Refer & Earn 5%</span>
+      <i class="fas fa-chevron-right arrow" style="color: #ff5722;"></i>
+    </a>
     <a href="seller-dashboard.html" class="menu-link">
       <i class="fas fa-store"></i>
       <span>My Shop</span>
       <i class="fas fa-chevron-right arrow"></i>
     </a>
+    <a href="deposit.html" class="menu-link">
+      <i class="fas fa-wallet"></i>
+      <span>Deposit Funds</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
+    <a href="withdraw.html" class="menu-link">
+      <i class="fas fa-money-bill-wave"></i>
+      <span>Withdraw</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
     <a href="orderTracking.html" class="menu-link">
       <i class="fas fa-truck"></i>
       <span>Track Orders</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
+    <a href="addresses.html" class="menu-link">
+      <i class="fas fa-map-marker-alt"></i>
+      <span>My Addresses</span>
+      <i class="fas fa-chevron-right arrow"></i>
+    </a>
+    <a href="returns.html" class="menu-link">
+      <i class="fas fa-undo-alt"></i>
+      <span>Returns & Refunds</span>
       <i class="fas fa-chevron-right arrow"></i>
     </a>
     <a href="customer_care.html" class="menu-link">
@@ -851,6 +1008,22 @@
     </a>
   </div>
 
+  <!-- Download App Banner -->
+  <div class="download-app-banner" id="download-app-banner" style="display:none;">
+    <div class="download-app-inner">
+      <div class="download-app-icon">
+        <img src="favicon_io/android-chrome-192x192.png" alt="Oda Pap" onerror="this.src='images/logo.png'">
+      </div>
+      <div class="download-app-text">
+        <strong>Get Oda Pap App</strong>
+        <span>Install for faster access • Only ~2MB</span>
+      </div>
+      <button class="download-app-btn" id="install-app-btn">
+        <i class="fas fa-download"></i> Install
+      </button>
+    </div>
+  </div>
+
   <script type="module">
     import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
     import { getFirestore, doc, updateDoc, getDoc, setDoc, collection, query, where, getDocs, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
@@ -859,6 +1032,7 @@
     import { showNotification } from './notifications.js';
     import { counties } from './js/locationData.js';
     import { escapeHtml } from './js/sanitize.js';
+    import { detectLocation } from './js/geolocation.js';
 
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -915,6 +1089,8 @@
       await loadUserStats(user.uid);
       await loadSellerOrders(user.uid);
       initOrderTabs();
+      // Check admin & delivery staff status and show links
+      checkVerifiedRoles(user);
       
       // Check for redirect message from listing page
       const redirectMessage = sessionStorage.getItem('profileMessage');
@@ -961,6 +1137,20 @@
         ? [userData.specificLocation, ...locationParts, userData.region].filter(Boolean).join(', ')
         : 'Not Set';
 
+      // Initialize location dropdowns with current data
+      prefillLocationDropdowns({
+        region: userData.region || '',
+        county: userData.county || '',
+        constituency: userData.constituency || '',
+        ward: userData.ward || '',
+        specificLocation: userData.specificLocation || ''
+      });
+
+      // If user has saved map coords, store them
+      if (userData.lat && userData.lng) {
+        profileMapMarkerCoords = { lat: userData.lat, lng: userData.lng };
+      }
+
       const balance = userData.walletBalance || 0;
       document.getElementById('account-balance').textContent = `KES ${balance.toLocaleString()}`;
 
@@ -983,6 +1173,32 @@
         document.getElementById('orders-count').textContent = ordersSnap.size;
       } catch (e) {
         console.log('Stats error:', e);
+      }
+    }
+
+    /**
+     * Check if current user is admin or delivery staff and show respective dashboard links.
+     * Queries Admins collection (by email) and DeliveryStaff/{uid} doc.
+     */
+    async function checkVerifiedRoles(user) {
+      try {
+        // Check admin status
+        const adminQuery = query(collection(db, "Admins"), where("email", "==", user.email));
+        const adminSnap = await getDocs(adminQuery);
+        if (!adminSnap.empty) {
+          const adminLink = document.getElementById('adminDashboardLink');
+          if (adminLink) adminLink.style.display = 'flex';
+        }
+
+        // Check delivery staff status
+        const deliveryDoc = await getDoc(doc(db, "DeliveryStaff", user.uid));
+        if (deliveryDoc.exists()) {
+          const deliveryLink = document.getElementById('deliveryDashboardLink');
+          if (deliveryLink) deliveryLink.style.display = 'flex';
+        }
+      } catch (e) {
+        // Silently fail — user just won't see the links
+        console.log('Role check:', e.message);
       }
     }
 
@@ -1121,89 +1337,276 @@
       document.getElementById('edit-phone-container').classList.remove('active');
     });
 
-    // Location editing
-    document.getElementById('edit-location-button').addEventListener('click', () => {
-      document.getElementById('location-selection').classList.add('active');
+    // Location editing - cascading dropdowns (default)
+    const regionSelect = document.getElementById('region-select');
+    const countySelect = document.getElementById('county-select');
+    const constituencySelect = document.getElementById('constituency-select');
+    const wardSelect = document.getElementById('ward-select');
+    const specificLocationInput = document.getElementById('specific-location');
+    const locationForm = document.getElementById('location-form');
+
+    // Populate regions from locationData
+    Object.keys(counties).forEach(region => {
+      const opt = document.createElement('option');
+      opt.value = region;
+      opt.textContent = region.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      regionSelect.appendChild(opt);
     });
 
-    document.getElementById('region-select').addEventListener('change', populateCounties);
-    document.getElementById('county-select').addEventListener('change', populateConstituencies);
-    document.getElementById('constituency-select').addEventListener('change', populateWards);
-
-    function populateCounties() {
-      const region = document.getElementById('region-select').value;
-      const countySelect = document.getElementById('county-select');
+    regionSelect.addEventListener('change', () => {
+      const region = regionSelect.value;
       countySelect.innerHTML = '<option value="">Select County</option>';
-      document.getElementById('constituency-select').innerHTML = '<option value="">Select Constituency</option>';
-      document.getElementById('ward-select').innerHTML = '<option value="">Select Ward</option>';
-      document.getElementById('constituency-select').disabled = true;
-      document.getElementById('ward-select').disabled = true;
-
+      constituencySelect.innerHTML = '<option value="">Select Constituency</option>';
+      wardSelect.innerHTML = '<option value="">Select Ward</option>';
+      countySelect.disabled = !region;
+      constituencySelect.disabled = true;
+      wardSelect.disabled = true;
       if (region && counties[region]) {
         Object.keys(counties[region]).forEach(county => {
-          countySelect.add(new Option(county, county));
+          const opt = document.createElement('option');
+          opt.value = county;
+          opt.textContent = county;
+          countySelect.appendChild(opt);
         });
-        countySelect.disabled = false;
       }
-    }
+    });
 
-    function populateConstituencies() {
-      const region = document.getElementById('region-select').value;
-      const county = document.getElementById('county-select').value;
-      const constituencySelect = document.getElementById('constituency-select');
+    countySelect.addEventListener('change', () => {
+      const region = regionSelect.value;
+      const county = countySelect.value;
       constituencySelect.innerHTML = '<option value="">Select Constituency</option>';
-      document.getElementById('ward-select').innerHTML = '<option value="">Select Ward</option>';
-      document.getElementById('ward-select').disabled = true;
-
-      if (region && county && counties[region]?.[county]) {
-        Object.keys(counties[region][county]).forEach(c => {
-          constituencySelect.add(new Option(c, c));
-        });
-        constituencySelect.disabled = false;
-      }
-    }
-
-    function populateWards() {
-      const region = document.getElementById('region-select').value;
-      const county = document.getElementById('county-select').value;
-      const constituency = document.getElementById('constituency-select').value;
-      const wardSelect = document.getElementById('ward-select');
       wardSelect.innerHTML = '<option value="">Select Ward</option>';
-
-      if (counties[region]?.[county]?.[constituency]) {
-        counties[region][county][constituency].forEach(w => {
-          wardSelect.add(new Option(w, w));
+      constituencySelect.disabled = !county;
+      wardSelect.disabled = true;
+      if (region && county && counties[region][county]) {
+        Object.keys(counties[region][county]).forEach(cons => {
+          const opt = document.createElement('option');
+          opt.value = cons;
+          opt.textContent = cons;
+          constituencySelect.appendChild(opt);
         });
-        wardSelect.disabled = false;
+      }
+    });
+
+    constituencySelect.addEventListener('change', () => {
+      const region = regionSelect.value;
+      const county = countySelect.value;
+      const cons = constituencySelect.value;
+      wardSelect.innerHTML = '<option value="">Select Ward</option>';
+      wardSelect.disabled = !cons;
+      if (region && county && cons && counties[region][county][cons]) {
+        counties[region][county][cons].forEach(ward => {
+          const opt = document.createElement('option');
+          opt.value = ward;
+          opt.textContent = ward;
+          wardSelect.appendChild(opt);
+        });
+      }
+    });
+
+    // Pre-fill dropdowns with saved data
+    function prefillLocationDropdowns(data) {
+      if (data.region) {
+        regionSelect.value = data.region;
+        regionSelect.dispatchEvent(new Event('change'));
+        setTimeout(() => {
+          if (data.county) {
+            countySelect.value = data.county;
+            countySelect.dispatchEvent(new Event('change'));
+            setTimeout(() => {
+              if (data.constituency) {
+                constituencySelect.value = data.constituency;
+                constituencySelect.dispatchEvent(new Event('change'));
+                setTimeout(() => {
+                  if (data.ward) wardSelect.value = data.ward;
+                }, 10);
+              }
+            }, 10);
+          }
+        }, 10);
+      }
+      if (data.specificLocation) specificLocationInput.value = data.specificLocation;
+    }
+
+    // Detect My Location
+    document.getElementById('btn-detect-location').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-detect-location');
+      const status = document.getElementById('detect-status');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
+      status.style.display = 'flex';
+      status.className = 'detect-status loading';
+      status.innerHTML = '<i class="fas fa-satellite-dish"></i> Requesting your location…';
+      try {
+        const loc = await detectLocation();
+        status.className = 'detect-status success';
+        status.innerHTML = `<i class="fas fa-check-circle"></i> Found: ${loc.display_name.substring(0, 80)}…`;
+        // Try to match to our location data
+        matchDetectedToDropdowns(loc);
+        // Store coords for map
+        profileMapMarkerCoords = { lat: loc.lat, lng: loc.lng };
+        if (profileMap) {
+          profileMap.setView([loc.lat, loc.lng], 14);
+          if (profileMapMarker) profileMap.removeLayer(profileMapMarker);
+          profileMapMarker = L.marker([loc.lat, loc.lng]).addTo(profileMap);
+        }
+        specificLocationInput.value = [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ');
+
+        // Auto-save after detection — wait briefly for dropdown cascades to settle
+        setTimeout(async () => {
+          try {
+            const data = {
+              region: regionSelect.value,
+              county: countySelect.value,
+              constituency: constituencySelect.value,
+              ward: wardSelect.value,
+              specificLocation: specificLocationInput.value.trim()
+            };
+            if (profileMapMarkerCoords) {
+              data.lat = profileMapMarkerCoords.lat;
+              data.lng = profileMapMarkerCoords.lng;
+            }
+            if (data.county) {
+              await updateDoc(doc(db, "Users", currentUserId), data);
+              const locationParts = [data.ward, data.constituency, data.county].filter(Boolean);
+              document.getElementById('location-text').textContent = locationParts.join(', ');
+              document.getElementById('full-location-display').textContent =
+                [data.specificLocation, ...locationParts, data.region ? data.region.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : ''].filter(Boolean).join(', ');
+              document.getElementById('profile-prompt').style.display = 'none';
+              locationForm.classList.remove('active');
+              status.className = 'detect-status success';
+              status.innerHTML = '<i class="fas fa-check-circle"></i> Location detected & saved!';
+              showNotification('Location detected & saved!', 'success');
+            } else {
+              // Dropdowns didn't match — show save button
+              const saveBtn = document.getElementById('save-location-button');
+              saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              saveBtn.style.animation = 'pulse 0.6s ease 2';
+              status.innerHTML += ' — Please verify & tap <strong>Save</strong> below.';
+            }
+          } catch (e) {
+            // Auto-save failed, prompt manual save
+            const saveBtn = document.getElementById('save-location-button');
+            saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            status.innerHTML += ' — Tap <strong>Save</strong> below to confirm.';
+          }
+        }, 500);
+      } catch (e) {
+        status.className = 'detect-status error';
+        status.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${e.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-crosshairs"></i> Detect My Location';
+      }
+    });
+
+    function matchDetectedToDropdowns(loc) {
+      // Best-effort fuzzy match of detected county name against our data
+      const detected = (loc.county || '').toLowerCase();
+      for (const [regionKey, regionCounties] of Object.entries(counties)) {
+        for (const countyName of Object.keys(regionCounties)) {
+          if (detected.includes(countyName.toLowerCase()) || countyName.toLowerCase().includes(detected)) {
+            regionSelect.value = regionKey;
+            regionSelect.dispatchEvent(new Event('change'));
+            setTimeout(() => {
+              countySelect.value = countyName;
+              countySelect.dispatchEvent(new Event('change'));
+              // Try matching sub-county
+              const detSub = (loc.subcounty || '').toLowerCase();
+              setTimeout(() => {
+                for (const opt of constituencySelect.options) {
+                  if (opt.value && detSub.includes(opt.value.toLowerCase())) {
+                    constituencySelect.value = opt.value;
+                    constituencySelect.dispatchEvent(new Event('change'));
+                    // Try ward
+                    const detWard = (loc.ward || '').toLowerCase();
+                    setTimeout(() => {
+                      for (const wo of wardSelect.options) {
+                        if (wo.value && detWard.includes(wo.value.toLowerCase())) {
+                          wardSelect.value = wo.value;
+                          break;
+                        }
+                      }
+                    }, 20);
+                    break;
+                  }
+                }
+              }, 20);
+            }, 20);
+            return;
+          }
+        }
       }
     }
+
+    document.getElementById('edit-location-button').addEventListener('click', () => {
+      locationForm.classList.toggle('active');
+    });
+
+    document.getElementById('cancel-location-button').addEventListener('click', () => {
+      locationForm.classList.remove('active');
+    });
 
     document.getElementById('save-location-button').addEventListener('click', async () => {
       const data = {
-        region: document.getElementById('region-select').value,
-        county: document.getElementById('county-select').value,
-        constituency: document.getElementById('constituency-select').value,
-        ward: document.getElementById('ward-select').value,
-        specificLocation: document.getElementById('specific-details').value
+        region: regionSelect.value,
+        county: countySelect.value,
+        constituency: constituencySelect.value,
+        ward: wardSelect.value,
+        specificLocation: specificLocationInput.value.trim()
       };
-
-      if (!data.region || !data.county) {
-        showNotification("Select at least region and county", "warning");
+      if (!data.county) {
+        showNotification('Please select at least a county', 'warning');
         return;
       }
-
+      // Include map coords if set
+      if (profileMapMarkerCoords) {
+        data.lat = profileMapMarkerCoords.lat;
+        data.lng = profileMapMarkerCoords.lng;
+      }
       try {
         await updateDoc(doc(db, "Users", currentUserId), data);
         const locationParts = [data.ward, data.constituency, data.county].filter(Boolean);
         document.getElementById('location-text').textContent = locationParts.join(', ');
-        document.getElementById('full-location-display').textContent = 
-          [data.specificLocation, ...locationParts, data.region].filter(Boolean).join(', ');
-        document.getElementById('location-selection').classList.remove('active');
+        document.getElementById('full-location-display').textContent =
+          [data.specificLocation, ...locationParts, data.region ? data.region.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : ''].filter(Boolean).join(', ');
+        document.getElementById('profile-prompt').style.display = 'none';
+        locationForm.classList.remove('active');
         showNotification("Location updated!");
       } catch (e) {
         showNotification("Failed to update location", "error");
       }
     });
+
+    // Optional map for profile
+    let profileMap = null;
+    let profileMapMarker = null;
+    let profileMapMarkerCoords = null;
+
+    document.getElementById('profile-map-toggle').addEventListener('click', () => {
+      const container = document.getElementById('profile-map-container');
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? 'block' : 'none';
+      if (isHidden && !profileMap) {
+        initProfileMap();
+      } else if (isHidden && profileMap) {
+        setTimeout(() => profileMap.invalidateSize(), 100);
+      }
+    });
+
+    function initProfileMap() {
+      profileMap = L.map('profile-map').setView([-1.2921, 36.8219], 7);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(profileMap);
+      profileMap.on('click', (e) => {
+        const { lat, lng } = e.latlng;
+        if (profileMapMarker) profileMap.removeLayer(profileMapMarker);
+        profileMapMarker = L.marker([lat, lng]).addTo(profileMap);
+        profileMapMarkerCoords = { lat, lng };
+      });
+      setTimeout(() => profileMap.invalidateSize(), 200);
+    }
 
     // Logout
     document.getElementById('logout-btn').addEventListener('click', async (e) => {
@@ -1527,6 +1930,36 @@
       document.body.style.overflow = '';
     };
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeOdaMenu(); });
+
+    // ===== PWA Install (Download App) =====
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const banner = document.getElementById('download-app-banner');
+      if (banner) banner.style.display = 'block';
+    });
+
+    document.getElementById('install-app-btn')?.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const result = await deferredPrompt.userChoice;
+        if (result.outcome === 'accepted') {
+          showToast('App installing! Check your home screen.', 'success');
+          document.getElementById('download-app-banner').style.display = 'none';
+        }
+        deferredPrompt = null;
+      } else {
+        // Fallback: show manual instructions
+        showToast('Tap your browser menu (⋮) → "Add to Home Screen" to install', 'info');
+      }
+    });
+
+    // Show banner if already installed (standalone) → hide it
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      const banner = document.getElementById('download-app-banner');
+      if (banner) banner.style.display = 'none';
+    }
   </script>
 </body>
 </html>

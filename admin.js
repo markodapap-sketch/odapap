@@ -1968,6 +1968,10 @@ async function loadSettings() {
     loadDeliveryAreas();
     loadDeliveryStaff();
     loadSystemToggles();
+    loadAnnouncementSettings();
+    loadCoupons();
+    loadCommissionSettings();
+    loadProductDisplaySettings();
 }
 
 // ============= Delivery Areas Management =============
@@ -3176,3 +3180,248 @@ window.removeDeliveryStaff = async function(staffId) {
         showNotification('Error removing staff', 'error');
     }
 };
+
+// ============= ANNOUNCEMENT BAR MANAGEMENT =============
+async function loadAnnouncementSettings() {
+    try {
+        const snap = await getDoc(doc(db, 'Settings', 'announcement'));
+        if (snap.exists()) {
+            const d = snap.data();
+            $('announcementEnabled').checked = d.enabled === true;
+            $('announcementText').value = d.text || '';
+            $('announcementLinkText').value = d.linkText || '';
+            $('announcementLinkUrl').value = d.linkUrl || '';
+            $('announcementColor').value = d.bgColor || '';
+        }
+    } catch (err) { console.error('Load announcement error:', err); }
+
+    $('saveAnnouncementBtn')?.addEventListener('click', async () => {
+        const btn = $('saveAnnouncementBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        try {
+            await setDoc(doc(db, 'Settings', 'announcement'), {
+                enabled: $('announcementEnabled').checked,
+                text: $('announcementText').value.trim(),
+                linkText: $('announcementLinkText').value.trim(),
+                linkUrl: $('announcementLinkUrl').value.trim(),
+                bgColor: $('announcementColor').value,
+                updatedAt: Timestamp.now(),
+                updatedBy: state.user?.email
+            });
+            showNotification('Announcement saved!', 'success');
+        } catch (err) {
+            console.error('Save announcement error:', err);
+            showNotification('Failed to save announcement', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Save';
+        }
+    });
+}
+
+// ============= COUPON / PROMO CODE MANAGEMENT =============
+async function loadCoupons() {
+    const container = $('couponsList');
+    if (!container) return;
+    try {
+        const snap = await getDocs(collection(db, 'Coupons'));
+        if (snap.empty) {
+            container.innerHTML = '<p style="color:#999;font-size:13px;text-align:center;padding:20px;">No promo codes yet</p>';
+            return;
+        }
+        container.innerHTML = snap.docs.map(d => {
+            const c = d.data();
+            const isActive = c.active !== false && (!c.expiresAt || c.expiresAt.toDate() > new Date());
+            return `
+                <div style="display:flex;align-items:center;gap:12px;padding:12px;background:${isActive ? '#f0fdf4' : '#fafafa'};border-radius:8px;border:1px solid ${isActive ? '#bbf7d0' : '#e5e7eb'};">
+                    <div style="flex:1;">
+                        <strong style="font-size:15px;letter-spacing:1px;">${c.code}</strong>
+                        <div style="font-size:12px;color:#666;margin-top:2px;">
+                            ${c.type === 'percent' ? c.value + '% off' : 'KES ' + (c.value || 0).toLocaleString() + ' off'}
+                            ${c.minOrder ? ' • Min order KES ' + c.minOrder.toLocaleString() : ''}
+                            ${c.maxUses ? ' • ' + (c.usedCount || 0) + '/' + c.maxUses + ' used' : ''}
+                        </div>
+                    </div>
+                    <span style="font-size:11px;padding:3px 8px;border-radius:12px;background:${isActive ? '#dcfce7' : '#fee2e2'};color:${isActive ? '#166534' : '#991b1b'};">${isActive ? 'Active' : 'Expired'}</span>
+                    <button onclick="toggleCoupon('${d.id}',${isActive})" class="btn btn-sm ${isActive ? 'btn-outline' : 'btn-primary'}" style="font-size:11px;">${isActive ? 'Disable' : 'Enable'}</button>
+                    <button onclick="deleteCoupon('${d.id}')" class="btn btn-sm" style="background:#fee2e2;color:#991b1b;font-size:11px;"><i class="fas fa-trash"></i></button>
+                </div>`;
+        }).join('');
+    } catch (err) {
+        console.error('Load coupons error:', err);
+        container.innerHTML = '<p style="color:#ef4444;">Failed to load coupons</p>';
+    }
+}
+
+window.toggleCoupon = async function(id, currentlyActive) {
+    try {
+        await updateDoc(doc(db, 'Coupons', id), { active: !currentlyActive });
+        showNotification(currentlyActive ? 'Coupon disabled' : 'Coupon enabled');
+        loadCoupons();
+    } catch (err) {
+        showNotification('Failed to update coupon', 'error');
+    }
+};
+
+window.deleteCoupon = async function(id) {
+    if (!confirm('Delete this promo code?')) return;
+    try {
+        await deleteDoc(doc(db, 'Coupons', id));
+        showNotification('Coupon deleted');
+        loadCoupons();
+    } catch (err) { showNotification('Failed to delete', 'error'); }
+};
+
+$('addCouponBtn')?.addEventListener('click', () => {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width:420px;">
+            <button class="modal-close" onclick="this.closest('.modal').remove()">&times;</button>
+            <h3 style="margin-bottom:16px;"><i class="fas fa-tags" style="color:var(--primary);"></i> New Promo Code</h3>
+            <form id="couponForm">
+                <div class="form-group">
+                    <label>Code</label>
+                    <input type="text" id="couponCode" required placeholder="e.g. WELCOME20" style="text-transform:uppercase;" maxlength="20">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Discount Type</label>
+                        <select id="couponType">
+                            <option value="percent">Percentage (%)</option>
+                            <option value="flat">Fixed Amount (KES)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Value</label>
+                        <input type="number" id="couponValue" required min="1" placeholder="e.g. 10">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Min Order (KES)</label>
+                        <input type="number" id="couponMinOrder" min="0" value="0" placeholder="0 = none">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Uses</label>
+                        <input type="number" id="couponMaxUses" min="0" value="0" placeholder="0 = unlimited">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Expires (optional)</label>
+                    <input type="date" id="couponExpiry">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-outline" onclick="this.closest('.modal').remove()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Code</button>
+                </div>
+            </form>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    
+    modal.querySelector('#couponForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = $('couponCode').value.trim().toUpperCase();
+        if (!code) return;
+        try {
+            await addDoc(collection(db, 'Coupons'), {
+                code,
+                type: $('couponType').value,
+                value: parseFloat($('couponValue').value) || 0,
+                minOrder: parseFloat($('couponMinOrder').value) || 0,
+                maxUses: parseInt($('couponMaxUses').value) || 0,
+                usedCount: 0,
+                expiresAt: $('couponExpiry').value ? Timestamp.fromDate(new Date($('couponExpiry').value + 'T23:59:59')) : null,
+                active: true,
+                createdAt: Timestamp.now(),
+                createdBy: state.user?.email
+            });
+            showNotification(`Promo code ${code} created!`, 'success');
+            modal.remove();
+            loadCoupons();
+        } catch (err) {
+            console.error('Create coupon error:', err);
+            showNotification('Failed to create code', 'error');
+        }
+    });
+});
+
+// ============= COMMISSION & LIMITS SETTINGS =============
+async function loadCommissionSettings() {
+    try {
+        const snap = await getDoc(doc(db, 'Settings', 'appSettings'));
+        if (snap.exists()) {
+            const d = snap.data();
+            if (d.referralCommission !== undefined) $('referralCommission').value = d.referralCommission;
+            if (d.minOrderAmount !== undefined) $('minOrderAmount').value = d.minOrderAmount;
+        }
+    } catch (err) { console.error('Load commission error:', err); }
+
+    $('saveCommissionBtn')?.addEventListener('click', async () => {
+        const btn = $('saveCommissionBtn');
+        btn.disabled = true;
+        try {
+            await setDoc(doc(db, 'Settings', 'appSettings'), {
+                referralCommission: parseFloat($('referralCommission').value) || 5,
+                minOrderAmount: parseFloat($('minOrderAmount').value) || 0,
+                updatedAt: Timestamp.now(),
+                updatedBy: state.user?.email
+            }, { merge: true });
+            showNotification('Settings saved!', 'success');
+        } catch (err) {
+            showNotification('Failed to save settings', 'error');
+        } finally { btn.disabled = false; }
+    });
+}
+
+// ============= PRODUCT DISPLAY SETTINGS =============
+async function loadProductDisplaySettings() {
+    try {
+        const snap = await getDoc(doc(db, 'Settings', 'appSettings'));
+        if (snap.exists()) {
+            const d = snap.data();
+            if (d.showStockCount === true) $('showStockCount').checked = true;
+            if (d.showStockLowOnly === true) $('showStockLowOnly').checked = true;
+            if (d.lowStockThreshold !== undefined) $('lowStockThreshold').value = d.lowStockThreshold;
+        }
+        updateDisplaySettingsUI();
+    } catch (err) { console.error('Load display settings error:', err); }
+
+    // Toggle sub-options visibility
+    $('showStockCount')?.addEventListener('change', updateDisplaySettingsUI);
+    $('showStockLowOnly')?.addEventListener('change', updateDisplaySettingsUI);
+
+    $('saveDisplaySettingsBtn')?.addEventListener('click', async () => {
+        const btn = $('saveDisplaySettingsBtn');
+        btn.disabled = true;
+        try {
+            await setDoc(doc(db, 'Settings', 'appSettings'), {
+                showStockCount: $('showStockCount').checked,
+                showStockLowOnly: $('showStockLowOnly').checked,
+                lowStockThreshold: parseInt($('lowStockThreshold').value) || 5,
+                updatedAt: Timestamp.now(),
+                updatedBy: state.user?.email
+            }, { merge: true });
+            showNotification('Display settings saved!', 'success');
+        } catch (err) {
+            showNotification('Failed to save display settings', 'error');
+        } finally { btn.disabled = false; }
+    });
+}
+
+function updateDisplaySettingsUI() {
+    const showStock = $('showStockCount')?.checked;
+    const lowOnlyRow = $('lowStockOnlyRow');
+    const thresholdRow = $('lowStockThresholdRow');
+    if (lowOnlyRow) {
+        lowOnlyRow.style.opacity = showStock ? '1' : '0.5';
+        lowOnlyRow.style.pointerEvents = showStock ? 'auto' : 'none';
+    }
+    const showLowOnly = showStock && $('showStockLowOnly')?.checked;
+    if (thresholdRow) {
+        thresholdRow.style.opacity = showLowOnly ? '1' : '0.5';
+        thresholdRow.style.pointerEvents = showLowOnly ? 'auto' : 'none';
+    }
+}

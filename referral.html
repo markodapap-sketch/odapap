@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="favicon_io/site.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+  <title>Refer & Earn - Oda Pap</title>
+  <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding-bottom: 30px;
+    }
+
+    /* Hero */
+    .ref-hero {
+      background: linear-gradient(135deg, #ff5722, #e64a19);
+      padding: 30px 20px;
+      text-align: center;
+      color: white;
+    }
+    .ref-hero-icon {
+      width: 64px;
+      height: 64px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      font-size: 28px;
+    }
+    .ref-hero h1 {
+      font-size: 1.4rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .ref-hero p {
+      font-size: 0.85rem;
+      opacity: 0.9;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    /* Stats Row */
+    .ref-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 16px;
+      margin-top: -24px;
+    }
+    .ref-stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .ref-stat-value {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #ff5722;
+    }
+    .ref-stat-label {
+      font-size: 0.65rem;
+      color: #888;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    /* Section card */
+    .ref-card {
+      background: white;
+      margin: 0 16px 14px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .ref-card-header {
+      padding: 14px 16px;
+      background: #fafafa;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ref-card-header h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #333;
+    }
+    .ref-card-header i { color: #ff5722; font-size: 0.9rem; }
+    .ref-card-body { padding: 16px; }
+
+    /* Referral code display */
+    .ref-code-box {
+      background: #fff7f0;
+      border: 2px dashed #ffccbc;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .ref-code-label {
+      font-size: 0.7rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .ref-code-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ff5722;
+      letter-spacing: 3px;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .ref-copy-btn {
+      background: #ff5722;
+      color: white;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+    .ref-copy-btn:hover { background: #e64a19; }
+    .ref-copy-btn.copied {
+      background: #10b981;
+    }
+
+    /* Share link section */
+    .ref-link-box {
+      margin-top: 14px;
+    }
+    .ref-link-input {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .ref-link-input input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #666;
+      background: #fafafa;
+    }
+    .ref-link-input button {
+      padding: 10px 16px;
+      background: #ff5722;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* Share buttons */
+    .ref-share-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .ref-share-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 8px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      background: white;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: all 0.2s;
+      font-size: 0.7rem;
+      font-weight: 500;
+    }
+    .ref-share-btn:hover { border-color: #ff5722; background: #fff7f0; }
+    .ref-share-btn i { font-size: 20px; }
+    .ref-share-btn.whatsapp i { color: #25d366; }
+    .ref-share-btn.twitter i { color: #1da1f2; }
+    .ref-share-btn.facebook i { color: #1877f2; }
+    .ref-share-btn.sms i { color: #ff9800; }
+    .ref-share-btn.email i { color: #ea4335; }
+    .ref-share-btn.more i { color: #666; }
+
+    /* How it works */
+    .ref-steps {
+      counter-reset: step;
+    }
+    .ref-step {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ref-step:last-child { border-bottom: none; }
+    .ref-step-num {
+      counter-increment: step;
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #ff5722, #e64a19);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .ref-step-num::after { content: counter(step); }
+    .ref-step-text h4 {
+      font-size: 0.85rem;
+      color: #333;
+      margin-bottom: 2px;
+    }
+    .ref-step-text p {
+      font-size: 0.75rem;
+      color: #888;
+      line-height: 1.4;
+    }
+
+    /* Earnings card */
+    .ref-earnings-box {
+      background: linear-gradient(135deg, #1a237e, #3949ab);
+      border-radius: 10px;
+      padding: 16px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ref-earnings-box h4 {
+      font-size: 0.7rem;
+      opacity: 0.8;
+      margin-bottom: 2px;
+    }
+    .ref-earnings-amount {
+      font-size: 1.6rem;
+      font-weight: 800;
+    }
+    .ref-withdraw-btn {
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .ref-withdraw-btn:hover { background: rgba(255,255,255,0.3); }
+
+    /* History table */
+    .ref-history-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .ref-history-item:last-child { border-bottom: none; }
+    .ref-history-avatar {
+      width: 36px;
+      height: 36px;
+      background: #fff3e0;
+      color: #ff9800;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .ref-history-info { flex: 1; min-width: 0; }
+    .ref-history-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ref-history-date {
+      font-size: 0.68rem;
+      color: #999;
+    }
+    .ref-history-amount {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #10b981;
+      white-space: nowrap;
+    }
+    .ref-history-pending {
+      color: #f59e0b;
+    }
+
+    /* Empty state */
+    .ref-empty {
+      text-align: center;
+      padding: 30px 20px;
+      color: #aaa;
+    }
+    .ref-empty i { font-size: 36px; margin-bottom: 10px; display: block; }
+    .ref-empty p { font-size: 0.8rem; }
+
+    /* Badge */
+    .ref-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.65rem;
+      font-weight: 600;
+    }
+    .ref-badge.earned { background: #dcfce7; color: #16a34a; }
+    .ref-badge.pending { background: #fef3c7; color: #d97706; }
+
+    /* Loading */
+    .ref-loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+    .ref-loading i { font-size: 24px; display: block; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="oda-header">
+    <div class="header-top-bar">
+      <div class="header-logo" onclick="location.href='index.html'">
+        <img src="images/logo.png" alt="Oda Pap" class="header-logo-img">
+        <span class="header-logo-text">Oda Pap</span>
+      </div>
+      <button onclick="window.history.back()" class="header-back-btn">
+        <i class="fas fa-arrow-left"></i> Back
+      </button>
+    </div>
+    <div class="header-divider"></div>
+    <nav class="header-nav">
+      <button class="header-nav-btn" onclick="location.href='index.html'"><i class="fas fa-home"></i></button>
+      <button class="header-nav-btn" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span class="header-nav-counter" id="notification-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span class="header-nav-counter" id="cart-count"></span></button>
+      <button class="header-nav-btn" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+    </nav>
+  </header>
+
+  <!-- Hero -->
+  <div class="ref-hero">
+    <div class="ref-hero-icon"><i class="fas fa-gift"></i></div>
+    <h1>Refer & Earn 5%</h1>
+    <p>Share your link with friends. When they buy, you earn 5% commission on every sale!</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="ref-stats">
+    <div class="ref-stat-card">
+      <div class="ref-stat-value" id="totalReferrals">0</div>
+      <div class="ref-stat-label">Referrals</div>
+    </div>
+    <div class="ref-stat-card">
+      <div class="ref-stat-value" id="totalEarnings">KES 0</div>
+      <div class="ref-stat-label">Earned</div>
+    </div>
+    <div class="ref-stat-card">
+      <div class="ref-stat-value" id="pendingEarnings">KES 0</div>
+      <div class="ref-stat-label">Pending</div>
+    </div>
+  </div>
+
+  <!-- Earnings -->
+  <div class="ref-card">
+    <div class="ref-card-body" style="padding: 0 16px 16px;">
+      <div class="ref-earnings-box">
+        <div>
+          <h4>💰 Referral Balance</h4>
+          <div class="ref-earnings-amount" id="referralBalance">KES 0</div>
+        </div>
+        <button class="ref-withdraw-btn" id="withdrawBtn">Withdraw</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Your Referral Code -->
+  <div class="ref-card">
+    <div class="ref-card-header">
+      <i class="fas fa-link"></i>
+      <h3>Your Referral Code</h3>
+    </div>
+    <div class="ref-card-body">
+      <div class="ref-code-box">
+        <div class="ref-code-label">Share this code</div>
+        <div class="ref-code-value">
+          <span id="refCode">------</span>
+          <button class="ref-copy-btn" id="copyCodeBtn" title="Copy code"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+      <div class="ref-link-box">
+        <div style="font-size:0.75rem;color:#888;">Or share your personal link:</div>
+        <div class="ref-link-input">
+          <input type="text" id="refLinkInput" readonly>
+          <button id="copyLinkBtn">Copy Link</button>
+        </div>
+      </div>
+      <div class="ref-share-grid">
+        <a class="ref-share-btn whatsapp" id="shareWhatsApp" href="#" target="_blank">
+          <i class="fab fa-whatsapp"></i>
+          <span>WhatsApp</span>
+        </a>
+        <a class="ref-share-btn twitter" id="shareTwitter" href="#" target="_blank">
+          <i class="fab fa-twitter"></i>
+          <span>Twitter</span>
+        </a>
+        <a class="ref-share-btn facebook" id="shareFacebook" href="#" target="_blank">
+          <i class="fab fa-facebook-f"></i>
+          <span>Facebook</span>
+        </a>
+        <a class="ref-share-btn sms" id="shareSMS" href="#">
+          <i class="fas fa-sms"></i>
+          <span>SMS</span>
+        </a>
+        <a class="ref-share-btn email" id="shareEmail" href="#">
+          <i class="fas fa-envelope"></i>
+          <span>Email</span>
+        </a>
+        <button class="ref-share-btn more" id="shareNative">
+          <i class="fas fa-share-alt"></i>
+          <span>More</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="ref-card">
+    <div class="ref-card-header">
+      <i class="fas fa-question-circle"></i>
+      <h3>How It Works</h3>
+    </div>
+    <div class="ref-card-body">
+      <div class="ref-steps">
+        <div class="ref-step">
+          <div class="ref-step-num"></div>
+          <div class="ref-step-text">
+            <h4>Share Your Link</h4>
+            <p>Copy your unique referral code or link and share it with friends, family, or on social media.</p>
+          </div>
+        </div>
+        <div class="ref-step">
+          <div class="ref-step-num"></div>
+          <div class="ref-step-text">
+            <h4>Friend Signs Up</h4>
+            <p>When someone uses your link to create an account on Oda Pap, they're linked to you as a referral.</p>
+          </div>
+        </div>
+        <div class="ref-step">
+          <div class="ref-step-num"></div>
+          <div class="ref-step-text">
+            <h4>They Make a Purchase</h4>
+            <p>Every time your referral completes a purchase, you earn a 5% commission on the order total.</p>
+          </div>
+        </div>
+        <div class="ref-step">
+          <div class="ref-step-num"></div>
+          <div class="ref-step-text">
+            <h4>Get Paid</h4>
+            <p>Your earnings are added to your referral balance. Withdraw to your M-Pesa or Oda Pap wallet anytime.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Referral History -->
+  <div class="ref-card">
+    <div class="ref-card-header">
+      <i class="fas fa-history"></i>
+      <h3>Referral History</h3>
+    </div>
+    <div class="ref-card-body" id="referralHistory">
+      <div class="ref-loading">
+        <i class="fas fa-spinner fa-spin"></i>
+        Loading...
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:20px;font-size:0.7rem;color:#bbb;">
+    &copy; 2025 Oda Pap. Referral commissions are subject to our <a href="#" style="color:#ff5722;">terms</a>.
+  </div>
+
+  <script type="module">
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, orderBy, limit, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { app } from './js/firebase.js';
+
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    let currentUser = null;
+    let referralCode = '';
+
+    onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        window.location.href = 'login.html';
+        return;
+      }
+      currentUser = user;
+      await loadReferralData(user.uid);
+    });
+
+    async function loadReferralData(uid) {
+      try {
+        const userRef = doc(db, "Users", uid);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) return;
+        const userData = userDoc.data();
+
+        // Generate referral code if missing
+        if (!userData.referralCode) {
+          referralCode = generateCode(uid);
+          await updateDoc(userRef, { referralCode, referralEarnings: 0, pendingReferralEarnings: 0 });
+        } else {
+          referralCode = userData.referralCode;
+        }
+
+        // Display code and link
+        document.getElementById('refCode').textContent = referralCode;
+        const baseUrl = window.location.origin;
+        const refLink = `${baseUrl}/signup.html?ref=${referralCode}`;
+        document.getElementById('refLinkInput').value = refLink;
+
+        // Setup share links
+        const shareText = `Join Oda Pap and shop amazing deals! Use my referral code: ${referralCode}`;
+        const shareUrl = refLink;
+        
+        document.getElementById('shareWhatsApp').href =
+          `https://wa.me/?text=${encodeURIComponent(shareText + '\n' + shareUrl)}`;
+        document.getElementById('shareTwitter').href =
+          `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+        document.getElementById('shareFacebook').href =
+          `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`;
+        document.getElementById('shareSMS').href =
+          `sms:?body=${encodeURIComponent(shareText + ' ' + shareUrl)}`;
+        document.getElementById('shareEmail').href =
+          `mailto:?subject=${encodeURIComponent('Join Oda Pap!')}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`;
+
+        // Native share
+        document.getElementById('shareNative').addEventListener('click', async () => {
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: 'Join Oda Pap', text: shareText, url: shareUrl });
+            } catch (e) { /* cancelled */ }
+          } else {
+            copyToClipboard(shareUrl);
+          }
+        });
+
+        // Copy buttons
+        document.getElementById('copyCodeBtn').addEventListener('click', () => {
+          copyToClipboard(referralCode);
+          const btn = document.getElementById('copyCodeBtn');
+          btn.classList.add('copied');
+          btn.innerHTML = '<i class="fas fa-check"></i>';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.innerHTML = '<i class="fas fa-copy"></i>';
+          }, 2000);
+        });
+
+        document.getElementById('copyLinkBtn').addEventListener('click', () => {
+          copyToClipboard(refLink);
+          const btn = document.getElementById('copyLinkBtn');
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000);
+        });
+
+        // Load stats
+        const earnings = userData.referralEarnings || 0;
+        const pending = userData.pendingReferralEarnings || 0;
+        document.getElementById('referralBalance').textContent = `KES ${earnings.toLocaleString()}`;
+        document.getElementById('totalEarnings').textContent = `KES ${earnings.toLocaleString()}`;
+        document.getElementById('pendingEarnings').textContent = `KES ${pending.toLocaleString()}`;
+
+        // Load referrals
+        await loadReferralHistory(uid);
+
+        // Withdraw button — no minimum for referral earnings
+        document.getElementById('withdrawBtn').addEventListener('click', () => {
+          if (earnings <= 0) {
+            showToast('No referral earnings to withdraw', 'warning');
+            return;
+          }
+          window.location.href = `withdraw.html?source=referral`;
+        });
+
+      } catch (e) {
+        console.error('Error loading referral data:', e);
+      }
+    }
+
+    async function loadReferralHistory(uid) {
+      const historyEl = document.getElementById('referralHistory');
+      try {
+        // Get users referred by this user
+        const referralsQuery = query(
+          collection(db, "Referrals"),
+          where("referrerId", "==", uid),
+          orderBy("createdAt", "desc"),
+          limit(50)
+        );
+        const snap = await getDocs(referralsQuery);
+
+        // Also count unique referrals
+        const referredUsersQuery = query(
+          collection(db, "Users"),
+          where("referredBy", "==", uid)
+        );
+        const referredSnap = await getDocs(referredUsersQuery);
+        document.getElementById('totalReferrals').textContent = referredSnap.size;
+
+        if (snap.empty) {
+          historyEl.innerHTML = `
+            <div class="ref-empty">
+              <i class="fas fa-users"></i>
+              <p>No referral activity yet. Share your code to start earning!</p>
+            </div>
+          `;
+          return;
+        }
+
+        let html = '';
+        snap.forEach(doc => {
+          const data = doc.data();
+          const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+          const initial = (data.referredName || 'U').charAt(0).toUpperCase();
+          const isPending = data.status === 'pending';
+          html += `
+            <div class="ref-history-item">
+              <div class="ref-history-avatar">${initial}</div>
+              <div class="ref-history-info">
+                <div class="ref-history-name">${escapeHtml(data.referredName || 'User')}</div>
+                <div class="ref-history-date">${formatDate(date)} • <span class="ref-badge ${isPending ? 'pending' : 'earned'}">${isPending ? 'Pending' : 'Earned'}</span></div>
+              </div>
+              <div class="ref-history-amount ${isPending ? 'ref-history-pending' : ''}">+KES ${(data.commission || 0).toLocaleString()}</div>
+            </div>
+          `;
+        });
+        historyEl.innerHTML = html;
+
+      } catch (e) {
+        console.error('Error loading referral history:', e);
+        historyEl.innerHTML = `<div class="ref-empty"><p>Could not load history</p></div>`;
+      }
+    }
+
+    function generateCode(uid) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = 'ODA';
+      // Use last 3 chars of uid + 3 random
+      const uidPart = uid.slice(-3).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      code += uidPart;
+      for (let i = code.length; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard!', 'success');
+      }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast('Copied!', 'success');
+      });
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function formatDate(d) {
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'Just now';
+      if (diff < 3600000) return `${Math.floor(diff/60000)}m ago`;
+      if (diff < 86400000) return `${Math.floor(diff/3600000)}h ago`;
+      return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      const colors = { success: '#10b981', error: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+      toast.style.cssText = `
+        position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+        background: ${colors[type]}; color: white; padding: 12px 24px;
+        border-radius: 8px; z-index: 9999; font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 8px;
+      `;
+      toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle'}"></i> ${message}`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+  </script>
+</body>
+</html>

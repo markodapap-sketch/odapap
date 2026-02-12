@@ -285,8 +285,10 @@ html, body {
 
 .initial-price .strikethrough {
     text-decoration: line-through;
-    color: var(--text-muted);
-    font-size: 15px;
+    color: #9ca3af;
+    font-size: 12px;
+    font-weight: 400;
+    font-style: italic;
 }
 
 .discount-badge {
@@ -296,6 +298,12 @@ html, body {
     border-radius: 4px;
     font-size: 11px;
     font-weight: 700;
+}
+
+.retail-per-piece {
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
 }
 
 /* ==================== Product Info Compact Tags ==================== */
@@ -470,14 +478,35 @@ a.info-tag:hover {
     white-space: nowrap;
 }
 
+.var-per-pc {
+    font-size: 9px;
+    font-weight: 400;
+    color: #6b7280;
+}
+
 .variation-retail {
-    font-size: 10px;
-    color: #888;
+    font-size: 9px;
+    color: #9ca3af;
     margin: 0;
+    font-style: italic;
 }
 
 .variation-retail s {
     text-decoration: line-through;
+}
+
+.variation-pack {
+    font-size: 10px;
+    color: #6a1b9a;
+    font-weight: 500;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.variation-pack i {
+    font-size: 9px;
 }
 
 .select-variation-btn {
@@ -623,6 +652,12 @@ a.info-tag:hover {
     background: #fee2e2;
     border-color: #ef4444;
     color: #ef4444;
+}
+
+.icon-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
 }
 
 /* ==================== Description Section ==================== */

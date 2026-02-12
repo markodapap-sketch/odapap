@@ -29,6 +29,11 @@ ecosystem.config.js
 nginx*.conf
 .pm2/
 pm2.log
+readme.md
+README.md
+storage.rules.md
+serviceAccountKey.json
+serviceAccountKey2.json
 
 # Source files (BUSINESS LOGIC & VULNERABILITY ANALYSIS)
 server.js

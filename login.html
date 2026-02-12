@@ -333,7 +333,7 @@
             Continue with Google
         </button>
         
-        <p>Don't have an account? <a href="signup.html">Sign Up</a></p>
+        <p>Don't have an account? <a href="signup.html" id="signupLink">Sign Up</a></p>
     </div>
 
     <!-- Forgot Password Modal -->
@@ -529,6 +529,13 @@
                 sendResetBtn.textContent = 'Send Reset Link';
             }
         });
+        
+        // Pass referral code to signup page if present
+        const refParam = new URLSearchParams(window.location.search).get('ref');
+        if (refParam) {
+            const link = document.getElementById('signupLink');
+            if (link) link.href = `signup.html?ref=${encodeURIComponent(refParam)}`;
+        }
     </script>
 </body>
 </html>

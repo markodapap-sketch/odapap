@@ -920,6 +920,30 @@
                         </label>
                     </div>
                 </div>
+
+                <!-- Product Display Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-eye"></i> Product Display Settings</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Control what product information customers can see on the storefront.</p>
+                        <label class="toggle-item">
+                            <span>Show Stock Count to Customers</span>
+                            <input type="checkbox" id="showStockCount">
+                        </label>
+                        <label class="toggle-item" id="lowStockOnlyRow" style="margin-top:8px;padding-left:16px;opacity:0.5;pointer-events:none;">
+                            <span>Only Show When Stock Is Low</span>
+                            <input type="checkbox" id="showStockLowOnly">
+                        </label>
+                        <div class="form-group" id="lowStockThresholdRow" style="margin-top:10px;padding-left:16px;opacity:0.5;pointer-events:none;">
+                            <label>Low Stock Threshold</label>
+                            <input type="number" id="lowStockThreshold" min="1" max="100" value="5" style="max-width:100px;">
+                            <p class="form-hint">Items with stock at or below this number are considered "low stock"</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="saveDisplaySettingsBtn" style="margin-top:12px;"><i class="fas fa-save"></i> Save Display Settings</button>
+                    </div>
+                </div>
                 
                 <!-- User Survey Settings -->
                 <div class="card">
@@ -935,6 +959,80 @@
                         <div class="survey-stats" id="surveyStats" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
                             <div class="loading-spinner"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Announcement Bar -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-bullhorn"></i> Announcement Bar</h3>
+                        <button class="btn btn-primary btn-sm" id="saveAnnouncementBtn"><i class="fas fa-save"></i> Save</button>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Show a dismissible banner at the top of the homepage. Great for promotions, new features, or alerts.</p>
+                        <label class="toggle-item">
+                            <span>Enable Announcement</span>
+                            <input type="checkbox" id="announcementEnabled">
+                        </label>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Message Text</label>
+                            <input type="text" id="announcementText" placeholder="e.g. Free delivery on orders over KES 3000!" maxlength="120">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Button Text (optional)</label>
+                                <input type="text" id="announcementLinkText" placeholder="e.g. Shop Now →">
+                            </div>
+                            <div class="form-group">
+                                <label>Button URL (optional)</label>
+                                <input type="text" id="announcementLinkUrl" placeholder="e.g. category.html?category=fashion">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Background Color</label>
+                            <select id="announcementColor">
+                                <option value="">Default (Orange)</option>
+                                <option value="linear-gradient(90deg, #1a73e8, #4285f4)">Blue</option>
+                                <option value="linear-gradient(90deg, #2e7d32, #43a047)">Green</option>
+                                <option value="linear-gradient(90deg, #6a1b9a, #8e24aa)">Purple</option>
+                                <option value="linear-gradient(90deg, #c62828, #e53935)">Red</option>
+                                <option value="#212121">Dark</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Coupon / Promo Codes -->
+                <div class="card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-tags"></i> Promo Codes</h3>
+                        <button class="btn btn-primary btn-sm" id="addCouponBtn"><i class="fas fa-plus"></i> New Code</button>
+                    </div>
+                    <div class="card-body">
+                        <p class="settings-hint">Create promo codes customers can use at checkout for discounts.</p>
+                        <div id="couponsList" style="display:flex;flex-direction:column;gap:8px;">
+                            <div class="loading-spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Configurable Settings -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-percent"></i> Commission & Limits</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Referral Commission (%)</label>
+                            <input type="number" id="referralCommission" min="0" max="50" step="0.5" value="5" style="max-width:120px;">
+                            <p class="form-hint">Percentage paid to referrers on qualifying orders</p>
+                        </div>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Minimum Order Amount (KES)</label>
+                            <input type="number" id="minOrderAmount" min="0" step="100" value="0" style="max-width:150px;">
+                            <p class="form-hint">0 = no minimum order required</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="saveCommissionBtn" style="margin-top:12px;"><i class="fas fa-save"></i> Save Settings</button>
                     </div>
                 </div>
             </div>

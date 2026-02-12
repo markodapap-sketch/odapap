@@ -11,6 +11,8 @@ import { categoryHierarchy, brandsByCategory } from './js/categoryData.js';
 import { setupGlobalImageErrorHandler, getImageUrl } from './js/imageCache.js';
 import { escapeHtml, sanitizeText, validatePrice, validateQuantity, validateListing } from './js/sanitize.js';
 import { ImageOptimizer, formatFileSize } from './js/imageOptimizer.js';
+import { counties } from './js/locationData.js';
+import { detectLocation } from './js/geolocation.js';
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -1099,8 +1101,7 @@ async function handleSubmit(e) {
     
     // Check if profile is complete
     if (!state.profileComplete) {
-        sessionStorage.setItem('profileMessage', 'Please complete your profile before listing products');
-        window.location.href = 'profile.html';
+        showProfileModal();
         return;
     }
     
@@ -2381,6 +2382,210 @@ function initAuth() {
     });
 }
 
+// ═══════════════════════════════════════════════════════════
+// INLINE PROFILE COMPLETION MODAL
+// ═══════════════════════════════════════════════════════════
+let profileModalInitialized = false;
+
+function showProfileModal(existingData = {}) {
+    const modal = $('profile-modal');
+    if (!modal) return;
+    modal.classList.add('show');
+
+    // Show warning banner too
+    const warningEl = $('profile-warning');
+    if (warningEl) {
+        warningEl.style.display = 'flex';
+        const goLink = warningEl.querySelector('a');
+        if (goLink) { goLink.textContent = 'Fill Below ↓'; goLink.href = '#'; goLink.onclick = (e) => { e.preventDefault(); modal.classList.add('show'); }; }
+    }
+
+    // Pre-fill if we have data
+    if (existingData.name) $('lp-name').value = existingData.name;
+    if (existingData.phone) $('lp-phone').value = existingData.phone;
+
+    if (!profileModalInitialized) {
+        profileModalInitialized = true;
+        initListingLocationDropdowns(existingData);
+        initListingProfileModalEvents();
+    }
+}
+
+function initListingLocationDropdowns(data = {}) {
+    const regionSel = $('lp-region');
+    const countySel = $('lp-county');
+    const consSel = $('lp-constituency');
+    const wardSel = $('lp-ward');
+
+    // Populate regions
+    Object.keys(counties).forEach(r => {
+        const o = document.createElement('option');
+        o.value = r;
+        o.textContent = r.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        regionSel.appendChild(o);
+    });
+
+    regionSel.addEventListener('change', () => {
+        countySel.innerHTML = '<option value="">County</option>';
+        consSel.innerHTML = '<option value="">Sub-County</option>';
+        wardSel.innerHTML = '<option value="">Ward</option>';
+        countySel.disabled = !regionSel.value;
+        consSel.disabled = true;
+        wardSel.disabled = true;
+        if (regionSel.value && counties[regionSel.value]) {
+            Object.keys(counties[regionSel.value]).forEach(c => {
+                const o = document.createElement('option'); o.value = c; o.textContent = c; countySel.appendChild(o);
+            });
+        }
+    });
+    countySel.addEventListener('change', () => {
+        consSel.innerHTML = '<option value="">Sub-County</option>';
+        wardSel.innerHTML = '<option value="">Ward</option>';
+        consSel.disabled = !countySel.value;
+        wardSel.disabled = true;
+        if (regionSel.value && countySel.value && counties[regionSel.value][countySel.value]) {
+            Object.keys(counties[regionSel.value][countySel.value]).forEach(c => {
+                const o = document.createElement('option'); o.value = c; o.textContent = c; consSel.appendChild(o);
+            });
+        }
+    });
+    consSel.addEventListener('change', () => {
+        wardSel.innerHTML = '<option value="">Ward</option>';
+        wardSel.disabled = !consSel.value;
+        if (regionSel.value && countySel.value && consSel.value && counties[regionSel.value][countySel.value][consSel.value]) {
+            counties[regionSel.value][countySel.value][consSel.value].forEach(w => {
+                const o = document.createElement('option'); o.value = w; o.textContent = w; wardSel.appendChild(o);
+            });
+        }
+    });
+
+    // Pre-fill
+    if (data.region) {
+        regionSel.value = data.region;
+        regionSel.dispatchEvent(new Event('change'));
+        setTimeout(() => {
+            if (data.county) { countySel.value = data.county; countySel.dispatchEvent(new Event('change')); }
+            setTimeout(() => {
+                if (data.constituency) { consSel.value = data.constituency; consSel.dispatchEvent(new Event('change')); }
+                setTimeout(() => { if (data.ward) wardSel.value = data.ward; }, 10);
+            }, 10);
+        }, 10);
+    }
+    if (data.specificLocation) $('lp-specific').value = data.specificLocation;
+}
+
+function initListingProfileModalEvents() {
+    const modal = $('profile-modal');
+    let listingMap = null, listingMarker = null, listingCoords = null;
+
+    // Close handlers
+    $('close-profile-modal').addEventListener('click', () => modal.classList.remove('show'));
+    $('cancel-profile-modal').addEventListener('click', () => modal.classList.remove('show'));
+
+    // Detect location
+    $('lp-detect-btn').addEventListener('click', async () => {
+        const btn = $('lp-detect-btn');
+        const st = $('lp-detect-status');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Detecting...';
+        st.style.display = 'block';
+        st.style.background = '#e3f2fd'; st.style.color = '#1565c0';
+        st.textContent = 'Requesting your location…';
+        try {
+            const loc = await detectLocation();
+            st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
+            st.textContent = '✓ ' + loc.display_name.substring(0, 70) + '…';
+            listingCoords = { lat: loc.lat, lng: loc.lng };
+            $('lp-specific').value = [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ');
+            // Match to dropdowns
+            const detected = (loc.county || '').toLowerCase();
+            for (const [rk, rc] of Object.entries(counties)) {
+                for (const cn of Object.keys(rc)) {
+                    if (detected.includes(cn.toLowerCase()) || cn.toLowerCase().includes(detected)) {
+                        $('lp-region').value = rk; $('lp-region').dispatchEvent(new Event('change'));
+                        setTimeout(() => { $('lp-county').value = cn; $('lp-county').dispatchEvent(new Event('change')); }, 20);
+                        break;
+                    }
+                }
+            }
+            if (listingMap) {
+                listingMap.setView([loc.lat, loc.lng], 14);
+                if (listingMarker) listingMap.removeLayer(listingMarker);
+                listingMarker = L.marker([loc.lat, loc.lng]).addTo(listingMap);
+            }
+        } catch (e) {
+            st.style.background = '#fce4ec'; st.style.color = '#c62828';
+            st.textContent = e.message;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-crosshairs"></i> Detect My Location';
+        }
+    });
+
+    // Map toggle
+    $('listing-map-toggle').addEventListener('click', () => {
+        const mc = $('listing-map-container');
+        const show = mc.style.display === 'none';
+        mc.style.display = show ? 'block' : 'none';
+        if (show && !listingMap) {
+            listingMap = L.map('listing-map').setView([-1.2921, 36.8219], 7);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(listingMap);
+            listingMap.on('click', (e) => {
+                if (listingMarker) listingMap.removeLayer(listingMarker);
+                listingMarker = L.marker([e.latlng.lat, e.latlng.lng]).addTo(listingMap);
+                listingCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+            });
+            setTimeout(() => listingMap.invalidateSize(), 200);
+        } else if (show && listingMap) {
+            setTimeout(() => listingMap.invalidateSize(), 100);
+        }
+    });
+
+    // Save profile
+    $('save-profile-modal').addEventListener('click', async () => {
+        const name = $('lp-name').value.trim();
+        const phone = $('lp-phone').value.trim();
+        const region = $('lp-region').value;
+        const county = $('lp-county').value;
+        const constituency = $('lp-constituency').value;
+        const ward = $('lp-ward').value;
+        const specificLocation = $('lp-specific').value.trim();
+
+        if (!name) { toast('Please enter your name', 'error'); return; }
+        if (!phone) { toast('Please enter your phone number', 'error'); return; }
+        const phoneRegex = /^(?:\+?254|0)[17]\d{8}$/;
+        if (!phoneRegex.test(phone.replace(/\s+/g, ''))) { toast('Enter a valid Kenyan phone number', 'error'); return; }
+        if (!county) { toast('Please select at least a county', 'error'); return; }
+
+        const user = auth.currentUser;
+        if (!user) { toast('Not logged in', 'error'); return; }
+
+        const saveBtn = $('save-profile-modal');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        const updateData = { name, phone, region, county, constituency, ward, specificLocation };
+        if (listingCoords) { updateData.lat = listingCoords.lat; updateData.lng = listingCoords.lng; }
+
+        try {
+            await updateDoc(doc(db, "Users", user.uid), updateData);
+            state.profileComplete = true;
+            // Update seller card
+            $('seller-name').textContent = name;
+            $('seller-location').querySelector('span').textContent = county;
+            modal.classList.remove('show');
+            $('profile-warning').style.display = 'none';
+            toast('Profile saved! You can now list products.', 'success');
+        } catch (e) {
+            console.error('Profile save error:', e);
+            toast('Failed to save profile', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-check"></i> Save & Continue';
+        }
+    });
+}
+
 async function loadProfile(user) {
     try {
         const snap = await getDoc(doc(db, "Users", user.uid));
@@ -2406,11 +2611,9 @@ async function loadProfile(user) {
             const complete = d.name && (d.county || d.location) && d.phone;
             state.profileComplete = complete;
             
-            // Redirect to profile if incomplete
+            // Show inline profile modal if incomplete (no redirect)
             if (!complete) {
-                // Store message in session for profile page
-                sessionStorage.setItem('profileMessage', 'Please complete your profile before listing products');
-                window.location.href = 'profile.html';
+                showProfileModal(d);
                 return;
             }
             

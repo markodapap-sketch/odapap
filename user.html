@@ -250,21 +250,54 @@
       overflow: hidden;
     }
     .item-card {
-      background: #fafafa;
-      border-radius: 8px;
+      background: #fff;
+      border-radius: 10px;
       overflow: hidden;
       text-decoration: none;
       max-width: 100%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      transition: transform 0.2s, box-shadow 0.2s;
     }
-    .item-card img {
+    .item-card:active {
+      transform: scale(0.97);
+    }
+    .item-card .item-img-wrap {
+      position: relative;
       width: 100%;
-      height: 100px;
+      aspect-ratio: 1 / 1;
+      background: #f5f5f5;
+      overflow: hidden;
+    }
+    .item-card .item-img-wrap img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      max-width: 100%;
       display: block;
+      transition: transform 0.3s;
+    }
+    .item-card:hover .item-img-wrap img {
+      transform: scale(1.04);
+    }
+    .item-card .item-stock-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      font-size: 0.6rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      backdrop-filter: blur(4px);
+    }
+    .item-stock-badge.in-stock {
+      background: rgba(22,163,74,0.15);
+      color: #16a34a;
+    }
+    .item-stock-badge.out-of-stock {
+      background: rgba(220,38,38,0.12);
+      color: #dc2626;
     }
     .item-info {
-      padding: 8px;
+      padding: 8px 10px 10px;
     }
     .item-title {
       font-size: 0.8rem;
@@ -278,13 +311,9 @@
       line-clamp: 2;
     }
     .item-price {
-      font-size: 0.85rem;
+      font-size: 0.9rem;
       color: #ff5722;
       font-weight: 700;
-    }
-    .item-stock {
-      font-size: 0.65rem;
-      color: #4caf50;
     }
 
     /* Empty State */
@@ -591,14 +620,26 @@
         // Stats - followers count
         document.getElementById('followersCount').textContent = userData.followers?.length || 0;
 
-        // Check if current user is following
+        // Check if current user is following (use cached data from header if available)
         if (currentUser) {
-          const currentUserDoc = await getDoc(doc(db, 'Users', currentUser.uid));
-          const currentUserData = currentUserDoc.data() || {};
-          if (currentUserData.following?.includes(profileUserId)) {
-            document.getElementById('followBtn').classList.add('following');
-            document.getElementById('followBtn').innerHTML = '<i class="fas fa-heart"></i> Following';
-          }
+          try {
+            let currentUserData = null;
+            const cached = localStorage.getItem('oda_user_cache');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed.data && (Date.now() - parsed.timestamp < 600000)) {
+                currentUserData = parsed.data;
+              }
+            }
+            if (!currentUserData) {
+              const currentUserDoc = await getDoc(doc(db, 'Users', currentUser.uid));
+              currentUserData = currentUserDoc.data() || {};
+            }
+            if (currentUserData.following?.includes(profileUserId)) {
+              document.getElementById('followBtn').classList.add('following');
+              document.getElementById('followBtn').innerHTML = '<i class="fas fa-heart"></i> Following';
+            }
+          } catch(e) {}
         }
 
       } catch (error) {
@@ -639,18 +680,29 @@
           const card = document.createElement('a');
           card.href = `product.html?id=${safeId}`;
           card.className = 'item-card';
+
+          const imgWrap = document.createElement('div');
+          imgWrap.className = 'item-img-wrap';
           const img = document.createElement('img');
           img.src = safeImage;
           img.alt = item.name || 'Unnamed Item';
+          img.loading = 'lazy';
           img.onerror = function() { this.src = 'images/product-placeholder.png'; };
+          imgWrap.appendChild(img);
+
+          // Stock badge overlay
+          const stockBadge = document.createElement('span');
+          stockBadge.className = stock > 0 ? 'item-stock-badge in-stock' : 'item-stock-badge out-of-stock';
+          stockBadge.textContent = stock > 0 ? `${stock} in stock` : 'Sold out';
+          imgWrap.appendChild(stockBadge);
+
           const info = document.createElement('div');
           info.className = 'item-info';
           info.innerHTML = `
             <div class="item-title">${safeName}</div>
             <div class="item-price">KES ${price.toLocaleString()}</div>
-            <div class="item-stock">${stock > 0 ? `${stock} in stock` : 'Out of stock'}</div>
           `;
-          card.appendChild(img);
+          card.appendChild(imgWrap);
           card.appendChild(info);
           itemsContainer.appendChild(card);
         });

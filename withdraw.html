@@ -28,50 +28,68 @@
         </nav>
     </header>
     <main>
-        <div class="page-header" style="text-align:center; padding:20px; background:linear-gradient(135deg,#ff5722,#ff7043); color:white; margin-bottom:20px;">
+        <div class="withdraw-hero">
             <h1><i class="fas fa-money-bill-wave"></i> Withdraw Funds</h1>
-            <p>Manual withdrawal from your wallet</p>
-            <p style="font-size:0.75rem; opacity:0.9; margin-top:6px;">💰 Withdrawals are currently processed manually. Submit a request and we'll send it to your M-Pesa.</p>
+            <p>Send wallet balance to your M-Pesa</p>
+            <span class="hero-note">💰 Withdrawals are processed manually within 24 hours</span>
         </div>
 
-        <!-- Balance Display -->
-        <div style="max-width:400px; margin:0 auto 16px; padding:16px 20px; background:white; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08); display:flex; align-items:center; gap:12px;">
-            <i class="fas fa-wallet" style="font-size:24px; color:#ff5722;"></i>
-            <div>
-                <div style="font-size:0.75rem; color:#888;">Available Balance</div>
-                <div id="currentBalance" style="font-size:1.2rem; font-weight:700; color:#333;">KES 0</div>
+        <div class="withdraw-content">
+            <!-- Balance Card -->
+            <div class="balance-card">
+                <div class="balance-icon"><i class="fas fa-wallet"></i></div>
+                <div>
+                    <div class="balance-label">Available Balance</div>
+                    <div class="balance-value" id="currentBalance">KES 0</div>
+                </div>
             </div>
-        </div>
 
-        <form id="withdraw-form" style="max-width:400px; margin:0 auto; padding:20px; background:white; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-            <div style="margin-bottom:16px;">
-                <label for="withdraw-amount" style="display:block; font-weight:600; margin-bottom:6px; font-size:0.9rem;"><i class="fas fa-money-bill-wave"></i> Amount (KES)</label>
-                <input type="number" id="withdraw-amount" name="withdraw-amount" min="100" max="150000" placeholder="Enter amount" required style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; font-size:1rem;">
-                <small style="color:#888; font-size:0.75rem;">Minimum: KES 100 | Maximum: KES 150,000</small>
+            <!-- Form -->
+            <div class="withdraw-form-card">
+                <h3><i class="fas fa-paper-plane"></i> Request Withdrawal</h3>
+                <form id="withdraw-form">
+                    <div class="form-group">
+                        <label for="withdraw-amount"><i class="fas fa-money-bill-wave"></i> Amount (KES)</label>
+                        <input type="number" id="withdraw-amount" name="withdraw-amount" min="1" max="150000" placeholder="Enter amount" required>
+                        <small class="field-hint" id="withdrawMinHint">Minimum: KES 1 · Maximum: KES 150,000</small>
+                        <div class="quick-amounts">
+                            <button type="button" class="quick-amount-chip" data-amount="500">500</button>
+                            <button type="button" class="quick-amount-chip" data-amount="1000">1,000</button>
+                            <button type="button" class="quick-amount-chip" data-amount="2000">2,000</button>
+                            <button type="button" class="quick-amount-chip" data-amount="5000">5,000</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="withdraw-phone"><i class="fas fa-mobile-alt"></i> M-Pesa Number</label>
+                        <input type="tel" id="withdraw-phone" placeholder="e.g. 0712345678" maxlength="13" required>
+                        <small class="field-hint">Safaricom number to receive funds</small>
+                    </div>
+                    <button type="submit" class="btn-withdraw" id="withdrawBtn">
+                        <i class="fas fa-paper-plane"></i> Submit Withdrawal Request
+                    </button>
+                    <p class="form-footer-note">
+                        <i class="fas fa-shield-alt"></i> Requests are reviewed &amp; processed within 24 hours
+                    </p>
+                </form>
             </div>
-            <div style="margin-bottom:16px;">
-                <label for="withdraw-phone" style="display:block; font-weight:600; margin-bottom:6px; font-size:0.9rem;"><i class="fas fa-mobile-alt"></i> M-Pesa Number</label>
-                <input type="tel" id="withdraw-phone" placeholder="e.g. 0712345678" maxlength="13" required style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; font-size:1rem;">
-                <small style="color:#888; font-size:0.75rem;">Safaricom number to receive funds</small>
-            </div>
-            <button type="submit" id="withdrawBtn" style="width:100%; padding:14px; background:#ff5722; color:white; border:none; border-radius:8px; cursor:pointer; font-size:1rem; font-weight:600;">
-                <i class="fas fa-paper-plane"></i> Submit Withdrawal Request
-            </button>
-            <p style="text-align:center; font-size:0.75rem; color:#888; margin-top:12px;">
-                <i class="fas fa-info-circle"></i> Requests are processed within 24 hours
-            </p>
-        </form>
 
-        <!-- Recent Withdrawals -->
-        <div style="max-width:400px; margin:20px auto; padding:20px; background:white; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-            <h3 style="font-size:0.95rem; margin-bottom:12px;"><i class="fas fa-history"></i> Recent Withdrawals</h3>
-            <div id="withdrawalsList">
-                <p style="text-align:center; color:#999; font-size:0.85rem; padding:20px 0;"><i class="fas fa-receipt" style="display:block; font-size:1.5rem; margin-bottom:8px;"></i>No withdrawal history yet</p>
+            <!-- History -->
+            <div class="history-card">
+                <div class="history-card-header">
+                    <i class="fas fa-history"></i>
+                    <h3>Recent Withdrawals</h3>
+                </div>
+                <div class="history-list" id="withdrawalsList">
+                    <div class="history-empty">
+                        <i class="fas fa-receipt"></i>
+                        <p>No withdrawal history yet</p>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
 
-    <footer style="text-align:center; padding:20px; color:#888; font-size:0.8rem;">
+    <footer class="withdraw-footer">
         <p>&copy; 2026 Oda Pap. All Rights Reserved.</p>
     </footer>
 
@@ -83,6 +101,23 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         let userData = null;
+
+        function showToast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = `toast-withdraw ${type}`;
+            t.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'exclamation-triangle'}"></i> ${msg}`;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3500);
+        }
+
+        // Quick amount chips
+        document.querySelectorAll('.quick-amount-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                document.getElementById('withdraw-amount').value = chip.dataset.amount;
+                document.querySelectorAll('.quick-amount-chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+            });
+        });
 
         onAuthStateChanged(auth, async (user) => {
             if (!user) {
@@ -123,10 +158,12 @@
                     const data = d.data();
                     const date = data.createdAt?.toDate?.() || new Date();
                     const status = data.status || 'pending';
-                    const statusColors = { pending: '#ff9800', completed: '#4caf50', rejected: '#f44336' };
-                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">
-                        <div><div style="font-weight:600;font-size:0.9rem;">KES ${(data.amount || 0).toLocaleString()}</div><div style="font-size:0.75rem;color:#888;">${date.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'})}</div></div>
-                        <span style="font-size:0.75rem;font-weight:600;color:${statusColors[status] || '#888'};text-transform:capitalize;">${status}</span>
+                    return `<div class="history-item">
+                        <div>
+                            <div class="history-amount">KES ${(data.amount || 0).toLocaleString()}</div>
+                            <div class="history-date">${date.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'})}</div>
+                        </div>
+                        <span class="status-badge ${status}">${status}</span>
                     </div>`;
                 }).join('');
             } catch (err) {
@@ -145,25 +182,25 @@
             const amount = parseInt(amountInput.value);
             let phone = phoneInput.value.replace(/\D/g, '');
 
-            // Validate amount
-            if (!amount || amount < 100) {
-                alert('Minimum withdrawal is KES 100');
+            // Validate amount — minimum KES 1
+            if (!amount || amount < 1) {
+                showToast('Please enter a valid amount', 'warning');
                 return;
             }
             if (amount > 150000) {
-                alert('Maximum withdrawal is KES 150,000');
+                showToast('Maximum withdrawal is KES 150,000', 'warning');
                 return;
             }
             const balance = userData?.walletBalance || 0;
             if (amount > balance) {
-                alert('Insufficient balance');
+                showToast('Insufficient balance', 'error');
                 return;
             }
 
             // Validate phone
             if (phone.startsWith('254')) phone = '0' + phone.substring(3);
             if (!/^0[17]\d{8}$/.test(phone)) {
-                alert('Please enter a valid Safaricom phone number');
+                showToast('Please enter a valid Safaricom phone number', 'error');
                 return;
             }
 
@@ -181,12 +218,13 @@
                     createdAt: serverTimestamp()
                 });
 
-                alert('Withdrawal request submitted! You will receive your funds within 24 hours.');
+                showToast('Request submitted! Funds sent within 24 hours.', 'success');
                 amountInput.value = '';
+                document.querySelectorAll('.quick-amount-chip').forEach(c => c.classList.remove('active'));
                 await loadWithdrawals(user.uid);
             } catch (err) {
                 console.error('Withdrawal error:', err);
-                alert('Failed to submit request. Please try again.');
+                showToast('Failed to submit request. Please try again.', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Withdrawal Request';
