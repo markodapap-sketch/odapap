@@ -13,6 +13,29 @@ import { app } from './firebase.js';
 
 const db = getFirestore(app);
 
+// ===== SHIPPING SETTINGS CACHE =====
+// Cache shipping settings to avoid duplicate reads per session
+let _shippingCache = null;
+let _shippingCacheTime = 0;
+const SHIPPING_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getShippingSettings() {
+    if (_shippingCache && (Date.now() - _shippingCacheTime) < SHIPPING_CACHE_TTL) {
+        return _shippingCache;
+    }
+    try {
+        const settingsDoc = await getDoc(doc(db, 'Settings', 'shipping'));
+        if (settingsDoc.exists()) {
+            _shippingCache = settingsDoc.data();
+            _shippingCacheTime = Date.now();
+            return _shippingCache;
+        }
+    } catch (e) {
+        console.warn('Shipping settings fetch error:', e);
+    }
+    return null;
+}
+
 // Configuration
 const MPESA_CONFIG = {
     TIMEOUT_SECONDS: 300, // 5 minutes
@@ -741,30 +764,24 @@ export class MpesaPaymentManager {
  */
 export async function getShippingFee(county, subcounty, ward) {
     try {
-        // Try to get from Firestore settings
-        const settingsDoc = await getDoc(doc(db, 'Settings', 'shipping'));
+        const settings = await getShippingSettings();
         
-        if (settingsDoc.exists()) {
-            const settings = settingsDoc.data();
+        if (settings) {
             const zones = settings.zones || [];
             
             // Check for matching zone
             for (const zone of zones) {
-                // Check if subcounty matches
                 if (zone.subcounty === subcounty) {
-                    // If zone has specific wards, check if our ward is included
                     if (zone.wards && zone.wards.length > 0) {
                         if (zone.wards.includes(ward)) {
                             return zone.fee;
                         }
                     } else {
-                        // Zone applies to all wards in subcounty
                         return zone.fee;
                     }
                 }
             }
             
-            // No specific zone found, use default
             return settings.defaultFee || 150;
         }
     } catch (error) {
@@ -793,17 +810,15 @@ export async function getShippingFee(county, subcounty, ward) {
  */
 export async function checkFreeShipping(orderTotal) {
     try {
-        const settingsDoc = await getDoc(doc(db, 'Settings', 'shipping'));
+        const settings = await getShippingSettings();
         
-        if (settingsDoc.exists()) {
-            const settings = settingsDoc.data();
+        if (settings) {
             const threshold = settings.freeThreshold || 3000;
             
             if (threshold > 0 && orderTotal >= threshold) {
                 return true;
             }
         } else {
-            // Default: free shipping for orders KES 3,000+
             return orderTotal >= 3000;
         }
     } catch (error) {

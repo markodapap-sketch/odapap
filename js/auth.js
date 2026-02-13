@@ -10,7 +10,7 @@ import {
   getRedirectResult,
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
 const firestore = getFirestore();
 
@@ -57,7 +57,7 @@ export const loginUser = async (email, password) => {
 };
 
 // Function to sign up a new user with optional survey data
-export const signUpUser = async (email, phone, password, surveyData = null) => {
+export const signUpUser = async (email, phone, password, surveyData = null, referredBy = null) => {
   try {
     // Validate inputs
     if (!email || !email.trim()) {
@@ -80,13 +80,21 @@ export const signUpUser = async (email, phone, password, surveyData = null) => {
       phone: phone.trim(),
       name: emailPrefix,
       profilePicUrl: "images/profile-placeholder.png",
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      referralEarnings: 0,
+      pendingReferralEarnings: 0
     };
     
     // Add survey data if provided
     if (surveyData) {
       userData.surveyCompleted = true;
       userData.surveyData = surveyData;
+    }
+
+    // Handle referral: link to referrer
+    if (referredBy) {
+      userData.referredBy = referredBy.referrerId;
+      userData.referredByCode = referredBy.code;
     }
 
     // Store additional user information in Firestore
@@ -122,7 +130,7 @@ const isMobileDevice = () => {
 };
 
 // Function to sign in with Google - with fallback for popup blockers
-export const signInWithGoogle = async () => {
+export const signInWithGoogle = async (referredBy = null) => {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({
     prompt: 'select_account'
@@ -162,13 +170,23 @@ export const signInWithGoogle = async () => {
     if (!userDoc.exists()) {
       // New user - create minimal profile, they'll complete it later
       const emailPrefix = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim() : 'User';
-      await setDoc(doc(firestore, "Users", user.uid), {
+      const newUserData = {
         email: user.email,
         phone: "",
         name: user.displayName || emailPrefix,
         profilePicUrl: user.photoURL || "images/profile-placeholder.png",
-        createdAt: new Date().toISOString()
-      });
+        createdAt: new Date().toISOString(),
+        referralEarnings: 0,
+        pendingReferralEarnings: 0
+      };
+      
+      // Handle referral for Google sign-up
+      if (referredBy) {
+        newUserData.referredBy = referredBy.referrerId;
+        newUserData.referredByCode = referredBy.code;
+      }
+      
+      await setDoc(doc(firestore, "Users", user.uid), newUserData);
       
       return {
         user: user,
@@ -261,5 +279,20 @@ export const sendPasswordReset = async (email) => {
   } catch (error) {
     console.error('Error sending password reset email:', error);
     throw error;
+  }
+};
+
+// Resolve a referral code to a user ID
+export const resolveReferralCode = async (code) => {
+  if (!code || code.length < 4) return null;
+  try {
+    const q = query(collection(firestore, "Users"), where("referralCode", "==", code.toUpperCase()));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    const referrerDoc = snap.docs[0];
+    return { referrerId: referrerDoc.id, code: code.toUpperCase() };
+  } catch (e) {
+    console.error('Error resolving referral code:', e);
+    return null;
   }
 };

@@ -163,7 +163,14 @@ export function getHeaderHTML(activePage = '') {
         <h4>Quick Links</h4>
         <div class="mega-menu-links">
           <a href="listing.html"><i class="fas fa-plus-circle"></i> Sell Product</a>
+          <a href="seller-dashboard.html"><i class="fas fa-store"></i> Seller Hub</a>
+          <a href="deposit.html"><i class="fas fa-wallet"></i> Deposit</a>
           <a href="orderTracking.html"><i class="fas fa-truck"></i> Track Orders</a>
+          <a href="referral.html" style="color:#e64a19;font-weight:600;"><i class="fas fa-gift"></i> Refer & Earn 5%</a>
+          <a href="compare.html"><i class="fas fa-columns"></i> Compare Products</a>
+          <a href="recently_viewed.html"><i class="fas fa-history"></i> Recently Viewed</a>
+          <a href="addresses.html"><i class="fas fa-map-marker-alt"></i> My Addresses</a>
+          <a href="returns.html"><i class="fas fa-undo-alt"></i> Returns & Refunds</a>
           <a href="profile.html"><i class="fas fa-user-cog"></i> My Account</a>
           <a href="customer_care.html"><i class="fas fa-headset"></i> Help & Support</a>
         </div>
