@@ -527,6 +527,9 @@ class CheckoutManager {
             }
         });
 
+        // Track auto-detected location
+        let ckAutoDetectedLocation = null;
+        
         // Detect location
         document.getElementById('ck-detect-btn')?.addEventListener('click', async () => {
             const btn = document.getElementById('ck-detect-btn');
@@ -538,22 +541,47 @@ class CheckoutManager {
             st.textContent = 'Requesting your location…';
             try {
                 const loc = await detectLocation();
-                st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
-                st.textContent = '✓ ' + loc.display_name.substring(0, 70) + '…';
+                
+                // Store coordinates
                 ckCoords = { lat: loc.lat, lng: loc.lng };
-                // Match to dropdowns
-                const detected = (loc.county || '').toLowerCase();
-                for (const [rk, rc] of Object.entries(counties)) {
-                    for (const cn of Object.keys(rc)) {
-                        if (detected.includes(cn.toLowerCase()) || cn.toLowerCase().includes(detected)) {
-                            regionSel.value = rk; regionSel.dispatchEvent(new Event('change'));
-                            setTimeout(() => { countySel.value = cn; countySel.dispatchEvent(new Event('change')); }, 20);
-                            break;
-                        }
-                    }
-                }
+                
+                // Store full auto-detected data
+                ckAutoDetectedLocation = {
+                    autoDetectedLocation: loc.display_name,
+                    county: loc.county || '',
+                    subcounty: loc.subcounty || '',
+                    ward: loc.ward || '',
+                    road: loc.road || '',
+                    specificLocation: loc.specificLocation || [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ')
+                };
+                
+                // Save directly to user profile
+                const saveData = {
+                    ...ckAutoDetectedLocation,
+                    lat: loc.lat,
+                    lng: loc.lng
+                };
+                await updateDoc(doc(db, "Users", this.user.uid), saveData);
+                
+                // Update UI
+                const displayParts = [loc.road, loc.ward, loc.subcounty, loc.county].filter(Boolean);
+                this.buyerLocationEl.textContent = displayParts.join(', ') || loc.display_name.substring(0, 60);
+                this.buyerLocationEl.classList.remove('lp-not-set');
+                this.userData.county = loc.county;
+                this.userData.constituency = loc.subcounty;
+                this.userData.ward = loc.ward;
+                
+                await this.checkDeliveryArea(loc.county);
+                await this.calculateShippingFee(loc.county, loc.subcounty, loc.ward);
+                formEl.style.display = 'none';
+                
+                st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
+                st.innerHTML = '✓ Location pinned & saved! ' + displayParts.join(', ');
+                showNotification('Delivery location detected & saved!', 'success');
+                
+                // Update map if visible
                 if (ckMap) {
-                    ckMap.setView([loc.lat, loc.lng], 14);
+                    ckMap.setView([loc.lat, loc.lng], 16);
                     if (ckMarker) ckMap.removeLayer(ckMarker);
                     ckMarker = L.marker([loc.lat, loc.lng]).addTo(ckMap);
                 }
@@ -566,7 +594,7 @@ class CheckoutManager {
             }
         });
 
-        // Save location
+        // Save location (manual dropdown selection)
         document.getElementById('ck-save-location')?.addEventListener('click', async () => {
             const data = {
                 region: regionSel.value,
@@ -574,19 +602,24 @@ class CheckoutManager {
                 constituency: consSel.value,
                 ward: wardSel.value
             };
-            if (!data.county) { showNotification('Please select at least a county', 'warning'); return; }
+            if (!data.county && !ckAutoDetectedLocation) { showNotification('Please select a location or detect it', 'warning'); return; }
             if (ckCoords) { data.lat = ckCoords.lat; data.lng = ckCoords.lng; }
+            
+            // If auto-detected and no manual selection, use auto-detected data
+            const saveData = (!data.county && ckAutoDetectedLocation) 
+                ? { ...ckAutoDetectedLocation, lat: ckCoords?.lat, lng: ckCoords?.lng }
+                : data;
             try {
-                await updateDoc(doc(db, "Users", this.user.uid), data);
-                const display = [data.county, data.constituency, data.ward].filter(Boolean).join(', ');
-                this.buyerLocationEl.textContent = display || 'Not set';
-                this.buyerLocationEl.classList.toggle('lp-not-set', !data.county);
-                this.userData.county = data.county;
-                this.userData.constituency = data.constituency;
-                this.userData.ward = data.ward;
-                this.userData.region = data.region;
-                await this.checkDeliveryArea(data.county);
-                await this.calculateShippingFee(data.county, data.constituency, data.ward);
+                await updateDoc(doc(db, "Users", this.user.uid), saveData);
+                const display = [saveData.county, saveData.constituency || saveData.subcounty, saveData.ward].filter(Boolean).join(', ');
+                this.buyerLocationEl.textContent = display || saveData.autoDetectedLocation || 'Not set';
+                this.buyerLocationEl.classList.toggle('lp-not-set', !saveData.county);
+                this.userData.county = saveData.county;
+                this.userData.constituency = saveData.constituency || saveData.subcounty;
+                this.userData.ward = saveData.ward;
+                this.userData.region = saveData.region || '';
+                await this.checkDeliveryArea(saveData.county);
+                await this.calculateShippingFee(saveData.county, saveData.constituency || saveData.subcounty, saveData.ward);
                 formEl.style.display = 'none';
                 showNotification('Delivery location updated!', 'success');
             } catch (e) {
@@ -1605,7 +1638,10 @@ class CheckoutManager {
                     name: escapeHtml(this.buyerNameEl?.textContent || ''),
                     phone: this.buyerPhoneEl?.textContent || '',
                     location: escapeHtml(this.buyerLocationEl?.textContent || ''),
-                    deliveryAddress: escapeHtml(deliveryAddress)
+                    deliveryAddress: escapeHtml(deliveryAddress),
+                    lat: this.userData?.lat || null,
+                    lng: this.userData?.lng || null,
+                    autoDetectedLocation: this.userData?.autoDetectedLocation || ''
                 },
                 paymentMethod,
                 paymentStatus: paymentData.paymentStatus || (paymentMethod === 'mpesa' ? 'completed' : 'pending'),

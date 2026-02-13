@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KRSVFTQZK4"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KRSVFTQZK4');
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
@@ -568,7 +576,7 @@
 
   <script type="module">
     import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, or } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, getDocs, collection, query, where, onSnapshot, addDoc, serverTimestamp, or, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-storage.js";
     import { app } from "./js/firebase.js";
     import { showNotification } from './notifications.js';
@@ -875,10 +883,17 @@
       listingData = null;
     };
 
-    // Contact support - customer care ID
-    window.contactSupport = () => {
-      const supportId = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
-      window.location.href = `chat.html?sellerId=${supportId}`;
+    // Contact support - resolve admin@odapap.com dynamically
+    window.contactSupport = async () => {
+      try {
+        const q = query(collection(db, 'Users'), where('email', '==', 'admin@odapap.com'), limit(1));
+        const snap = await getDocs(q);
+        const supportId = !snap.empty ? snap.docs[0].id : 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+        window.location.href = `chat.html?sellerId=${supportId}`;
+      } catch (e) {
+        console.error('Support lookup error:', e);
+        window.location.href = `chat.html?sellerId=nYaKUGTsLTf3d4wYWNezHv2sVbT2`;
+      }
     };
 
     // Cleanup

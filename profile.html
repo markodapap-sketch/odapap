@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KRSVFTQZK4"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KRSVFTQZK4');
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
@@ -1181,24 +1189,26 @@
      * Queries Admins collection (by email) and DeliveryStaff/{uid} doc.
      */
     async function checkVerifiedRoles(user) {
+      // Check admin status — use getDoc with UID (not a collection query) to avoid permission errors
       try {
-        // Check admin status
-        const adminQuery = query(collection(db, "Admins"), where("email", "==", user.email));
-        const adminSnap = await getDocs(adminQuery);
-        if (!adminSnap.empty) {
+        const adminDoc = await getDoc(doc(db, "Admins", user.uid));
+        if (adminDoc.exists()) {
           const adminLink = document.getElementById('adminDashboardLink');
           if (adminLink) adminLink.style.display = 'flex';
         }
+      } catch (e) {
+        // Silently fail — user just won't see admin link
+      }
 
-        // Check delivery staff status
+      // Check delivery staff status
+      try {
         const deliveryDoc = await getDoc(doc(db, "DeliveryStaff", user.uid));
         if (deliveryDoc.exists()) {
           const deliveryLink = document.getElementById('deliveryDashboardLink');
           if (deliveryLink) deliveryLink.style.display = 'flex';
         }
       } catch (e) {
-        // Silently fail — user just won't see the links
-        console.log('Role check:', e.message);
+        // Silently fail — user just won't see delivery link
       }
     }
 
@@ -1440,57 +1450,43 @@
       try {
         const loc = await detectLocation();
         status.className = 'detect-status success';
-        status.innerHTML = `<i class="fas fa-check-circle"></i> Found: ${loc.display_name.substring(0, 80)}…`;
-        // Try to match to our location data
-        matchDetectedToDropdowns(loc);
-        // Store coords for map
+        status.innerHTML = `<i class="fas fa-check-circle"></i> Found: ${loc.display_name.substring(0, 100)}…`;
+        
+        // Auto-detected: save exact pin + full address directly — no dropdown matching needed
+        const detectedData = {
+          lat: loc.lat,
+          lng: loc.lng,
+          autoDetectedLocation: loc.display_name,
+          specificLocation: loc.specificLocation || [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', '),
+          county: loc.county || '',
+          subcounty: loc.subcounty || '',
+          ward: loc.ward || '',
+          road: loc.road || '',
+          postcode: loc.postcode || ''
+        };
+
+        // Save directly to Firestore
+        await updateDoc(doc(db, "Users", currentUserId), detectedData);
+        
+        // Update UI displays
+        const displayParts = [loc.road, loc.ward, loc.subcounty, loc.county].filter(Boolean);
+        document.getElementById('location-text').textContent = displayParts.join(', ');
+        document.getElementById('full-location-display').textContent = loc.display_name;
+        specificLocationInput.value = detectedData.specificLocation;
+        document.getElementById('profile-prompt').style.display = 'none';
+        locationForm.classList.remove('active');
+        
+        // Update map
         profileMapMarkerCoords = { lat: loc.lat, lng: loc.lng };
         if (profileMap) {
-          profileMap.setView([loc.lat, loc.lng], 14);
+          profileMap.setView([loc.lat, loc.lng], 16);
           if (profileMapMarker) profileMap.removeLayer(profileMapMarker);
           profileMapMarker = L.marker([loc.lat, loc.lng]).addTo(profileMap);
         }
-        specificLocationInput.value = [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ');
-
-        // Auto-save after detection — wait briefly for dropdown cascades to settle
-        setTimeout(async () => {
-          try {
-            const data = {
-              region: regionSelect.value,
-              county: countySelect.value,
-              constituency: constituencySelect.value,
-              ward: wardSelect.value,
-              specificLocation: specificLocationInput.value.trim()
-            };
-            if (profileMapMarkerCoords) {
-              data.lat = profileMapMarkerCoords.lat;
-              data.lng = profileMapMarkerCoords.lng;
-            }
-            if (data.county) {
-              await updateDoc(doc(db, "Users", currentUserId), data);
-              const locationParts = [data.ward, data.constituency, data.county].filter(Boolean);
-              document.getElementById('location-text').textContent = locationParts.join(', ');
-              document.getElementById('full-location-display').textContent =
-                [data.specificLocation, ...locationParts, data.region ? data.region.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : ''].filter(Boolean).join(', ');
-              document.getElementById('profile-prompt').style.display = 'none';
-              locationForm.classList.remove('active');
-              status.className = 'detect-status success';
-              status.innerHTML = '<i class="fas fa-check-circle"></i> Location detected & saved!';
-              showNotification('Location detected & saved!', 'success');
-            } else {
-              // Dropdowns didn't match — show save button
-              const saveBtn = document.getElementById('save-location-button');
-              saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              saveBtn.style.animation = 'pulse 0.6s ease 2';
-              status.innerHTML += ' — Please verify & tap <strong>Save</strong> below.';
-            }
-          } catch (e) {
-            // Auto-save failed, prompt manual save
-            const saveBtn = document.getElementById('save-location-button');
-            saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            status.innerHTML += ' — Tap <strong>Save</strong> below to confirm.';
-          }
-        }, 500);
+        
+        status.className = 'detect-status success';
+        status.innerHTML = '<i class="fas fa-check-circle"></i> Location detected & saved!';
+        showNotification('Location detected & saved!', 'success');
       } catch (e) {
         status.className = 'detect-status error';
         status.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${e.message}`;
@@ -1499,45 +1495,6 @@
         btn.innerHTML = '<i class="fas fa-crosshairs"></i> Detect My Location';
       }
     });
-
-    function matchDetectedToDropdowns(loc) {
-      // Best-effort fuzzy match of detected county name against our data
-      const detected = (loc.county || '').toLowerCase();
-      for (const [regionKey, regionCounties] of Object.entries(counties)) {
-        for (const countyName of Object.keys(regionCounties)) {
-          if (detected.includes(countyName.toLowerCase()) || countyName.toLowerCase().includes(detected)) {
-            regionSelect.value = regionKey;
-            regionSelect.dispatchEvent(new Event('change'));
-            setTimeout(() => {
-              countySelect.value = countyName;
-              countySelect.dispatchEvent(new Event('change'));
-              // Try matching sub-county
-              const detSub = (loc.subcounty || '').toLowerCase();
-              setTimeout(() => {
-                for (const opt of constituencySelect.options) {
-                  if (opt.value && detSub.includes(opt.value.toLowerCase())) {
-                    constituencySelect.value = opt.value;
-                    constituencySelect.dispatchEvent(new Event('change'));
-                    // Try ward
-                    const detWard = (loc.ward || '').toLowerCase();
-                    setTimeout(() => {
-                      for (const wo of wardSelect.options) {
-                        if (wo.value && detWard.includes(wo.value.toLowerCase())) {
-                          wardSelect.value = wo.value;
-                          break;
-                        }
-                      }
-                    }, 20);
-                    break;
-                  }
-                }
-              }, 20);
-            }, 20);
-            return;
-          }
-        }
-      }
-    }
 
     document.getElementById('edit-location-button').addEventListener('click', () => {
       locationForm.classList.toggle('active');

@@ -154,6 +154,46 @@ function renderOrders() {
     $('emptyState').style.display = 'none';
     container.style.display = 'flex';
     container.innerHTML = filtered.map(order => renderOrderCard(order)).join('');
+
+    // Initialize Leaflet mini-maps for orders with GPS coordinates
+    initializeDeliveryMaps();
+}
+
+// Initialize Leaflet mini-maps on delivery cards
+function initializeDeliveryMaps() {
+    document.querySelectorAll('.delivery-mini-map').forEach(el => {
+        const lat = parseFloat(el.dataset.lat);
+        const lng = parseFloat(el.dataset.lng);
+        if (!lat || !lng || el._leafletMap) return;
+
+        try {
+            const map = L.map(el.id, {
+                zoomControl: false,
+                dragging: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false,
+                tap: false,
+                touchZoom: false,
+                attributionControl: false
+            }).setView([lat, lng], 16);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+            }).addTo(map);
+
+            L.marker([lat, lng]).addTo(map)
+                .bindPopup('Delivery Location');
+
+            el._leafletMap = map;
+
+            // Fix rendering for maps inside hidden/dynamic containers
+            setTimeout(() => map.invalidateSize(), 200);
+        } catch (e) {
+            console.warn('Map init failed for', el.id, e);
+        }
+    });
 }
 
 // Render a single order card
@@ -165,6 +205,9 @@ function renderOrderCard(order) {
     const buyerLocation = buyer.location || 'N/A';
     const buyerName = buyer.name || 'Customer';
     const buyerPhone = buyer.phone || '';
+    const buyerLat = buyer.lat || null;
+    const buyerLng = buyer.lng || null;
+    const autoDetected = buyer.autoDetectedLocation || '';
     const items = order.items || [];
     const total = order.totalAmount || order.total || 0;
     const paymentMethod = order.paymentMethod || 'N/A';
@@ -197,16 +240,34 @@ function renderOrderCard(order) {
             </button>`;
     }
 
-    // Phone call + navigate buttons
+    // Phone call button
     const contactActions = buyerPhone ? `
         <button class="action-btn call" onclick="window.open('tel:${escapeHtml(buyerPhone)}')">
             <i class="fas fa-phone"></i> Call
         </button>` : '';
 
-    const navigateAction = deliveryAddress !== 'Not provided' ? `
+    // Navigate button — use exact coordinates if available, otherwise fall back to text address
+    let navigateAction = '';
+    if (buyerLat && buyerLng) {
+        navigateAction = `
+        <button class="action-btn navigate" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${buyerLat},${buyerLng}','_blank')">
+            <i class="fas fa-directions"></i> Navigate
+        </button>`;
+    } else if (deliveryAddress !== 'Not provided') {
+        navigateAction = `
         <button class="action-btn navigate" onclick="window.open('https://www.google.com/maps/search/${encodeURIComponent(deliveryAddress + ', ' + buyerLocation)}','_blank')">
             <i class="fas fa-directions"></i> Navigate
-        </button>` : '';
+        </button>`;
+    }
+
+    // Mini map with exact pin (if coordinates available)
+    const mapHtml = buyerLat && buyerLng ? `
+        <div class="delivery-mini-map" id="map-${order.id}" data-lat="${buyerLat}" data-lng="${buyerLng}" 
+             style="height:150px;border-radius:8px;margin-top:8px;border:1px solid var(--gray-300);overflow:hidden;"></div>
+    ` : '';
+
+    // Location display — show auto-detected full address if available
+    const locationDisplay = autoDetected || buyerLocation || 'N/A';
 
     return `
         <div class="order-card">
@@ -234,9 +295,11 @@ function renderOrderCard(order) {
                     <div class="info-content">
                         <span class="info-label">Deliver To</span>
                         <span class="info-value">${escapeHtml(deliveryAddress)}</span>
-                        <span class="info-value">${escapeHtml(buyerLocation)}</span>
+                        <span class="info-value" style="font-size:11px;color:var(--gray-500);">${escapeHtml(locationDisplay)}</span>
+                        ${buyerLat ? `<span class="info-value" style="font-size:10px;color:var(--blue);"><i class="fas fa-crosshairs"></i> GPS pin available</span>` : ''}
                     </div>
                 </div>
+                ${mapHtml}
                 <div class="items-summary">
                     <div class="items-summary-title">Items (${items.length})</div>
                     ${itemsHtml}

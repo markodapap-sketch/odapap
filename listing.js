@@ -2482,6 +2482,9 @@ function initListingProfileModalEvents() {
     $('close-profile-modal').addEventListener('click', () => modal.classList.remove('show'));
     $('cancel-profile-modal').addEventListener('click', () => modal.classList.remove('show'));
 
+    // Track whether location was auto-detected
+    let autoDetectedLocation = null;
+    
     // Detect location
     $('lp-detect-btn').addEventListener('click', async () => {
         const btn = $('lp-detect-btn');
@@ -2493,23 +2496,29 @@ function initListingProfileModalEvents() {
         st.textContent = 'Requesting your location…';
         try {
             const loc = await detectLocation();
-            st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
-            st.textContent = '✓ ' + loc.display_name.substring(0, 70) + '…';
+            
+            // Store coordinates
             listingCoords = { lat: loc.lat, lng: loc.lng };
-            $('lp-specific').value = [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ');
-            // Match to dropdowns
-            const detected = (loc.county || '').toLowerCase();
-            for (const [rk, rc] of Object.entries(counties)) {
-                for (const cn of Object.keys(rc)) {
-                    if (detected.includes(cn.toLowerCase()) || cn.toLowerCase().includes(detected)) {
-                        $('lp-region').value = rk; $('lp-region').dispatchEvent(new Event('change'));
-                        setTimeout(() => { $('lp-county').value = cn; $('lp-county').dispatchEvent(new Event('change')); }, 20);
-                        break;
-                    }
-                }
-            }
+            
+            // Store full auto-detected data — will be saved directly, no dropdown matching needed
+            autoDetectedLocation = {
+                autoDetectedLocation: loc.display_name,
+                county: loc.county || '',
+                subcounty: loc.subcounty || '',
+                ward: loc.ward || '',
+                road: loc.road || '',
+                specificLocation: loc.specificLocation || [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', ')
+            };
+            
+            // Show detected address in specific location field
+            $('lp-specific').value = autoDetectedLocation.specificLocation;
+            
+            st.style.background = '#e8f5e9'; st.style.color = '#2e7d32';
+            st.innerHTML = '✓ Location pinned: ' + loc.display_name.substring(0, 80) + '… <strong>Saved!</strong>';
+            
+            // Update map if visible
             if (listingMap) {
-                listingMap.setView([loc.lat, loc.lng], 14);
+                listingMap.setView([loc.lat, loc.lng], 16);
                 if (listingMarker) listingMap.removeLayer(listingMarker);
                 listingMarker = L.marker([loc.lat, loc.lng]).addTo(listingMap);
             }
@@ -2555,7 +2564,7 @@ function initListingProfileModalEvents() {
         if (!phone) { toast('Please enter your phone number', 'error'); return; }
         const phoneRegex = /^(?:\+?254|0)[17]\d{8}$/;
         if (!phoneRegex.test(phone.replace(/\s+/g, ''))) { toast('Enter a valid Kenyan phone number', 'error'); return; }
-        if (!county) { toast('Please select at least a county', 'error'); return; }
+        if (!county && !autoDetectedLocation) { toast('Please select a location or detect it', 'error'); return; }
 
         const user = auth.currentUser;
         if (!user) { toast('Not logged in', 'error'); return; }
@@ -2564,7 +2573,17 @@ function initListingProfileModalEvents() {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
-        const updateData = { name, phone, region, county, constituency, ward, specificLocation };
+        let updateData;
+        if (autoDetectedLocation && !county) {
+            // Auto-detected: save exact pin data directly
+            updateData = {
+                name, phone,
+                ...autoDetectedLocation
+            };
+        } else {
+            // Manual dropdown selection
+            updateData = { name, phone, region, county, constituency, ward, specificLocation };
+        }
         if (listingCoords) { updateData.lat = listingCoords.lat; updateData.lng = listingCoords.lng; }
 
         try {
@@ -2572,7 +2591,7 @@ function initListingProfileModalEvents() {
             state.profileComplete = true;
             // Update seller card
             $('seller-name').textContent = name;
-            $('seller-location').querySelector('span').textContent = county;
+            $('seller-location').querySelector('span').textContent = autoDetectedLocation ? autoDetectedLocation.county || autoDetectedLocation.specificLocation : county;
             modal.classList.remove('show');
             $('profile-warning').style.display = 'none';
             toast('Profile saved! You can now list products.', 'success');

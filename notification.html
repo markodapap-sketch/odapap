@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KRSVFTQZK4"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KRSVFTQZK4');
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
@@ -617,6 +625,7 @@
       }
       currentUser = user;
       userNotifsLoaded = false; // Reset on new auth
+      await getSupportId(); // Resolve admin support ID before loading chats
       loadChats();
       loadOrderNotifications();
       loadGlobalNotifications();
@@ -981,9 +990,24 @@
       }
     }
 
+    // Resolve admin@odapap.com support UID
+    let resolvedSupportId = null;
+    async function getSupportId() {
+      if (resolvedSupportId) return resolvedSupportId;
+      try {
+        const q = query(collection(db, 'Users'), where('email', '==', 'admin@odapap.com'), limit(1));
+        const snap = await getDocs(q);
+        resolvedSupportId = !snap.empty ? snap.docs[0].id : 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+      } catch (e) {
+        console.error('Support lookup error:', e);
+        resolvedSupportId = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+      }
+      return resolvedSupportId;
+    }
+
     function renderChats(searchTerm = '') {
       const container = document.getElementById('chatList');
-      const SUPPORT_ID = 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
+      const SUPPORT_ID = resolvedSupportId || 'nYaKUGTsLTf3d4wYWNezHv2sVbT2';
       
       let filteredChats = allChats;
 
