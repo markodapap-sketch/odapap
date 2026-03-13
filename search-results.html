@@ -84,13 +84,18 @@
     </main>
 
     <script type="module">
-        import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { app } from "./js/firebase.js";
         import { setupGlobalImageErrorHandler, getImageUrl, initLazyLoading } from './js/imageCache.js';
         import { initDynamicSearch } from './js/dynamicSearch.js';
         
         const db = getFirestore(app);
+        const auth = getAuth(app);
         setupGlobalImageErrorHandler();
+
+        // Ensure auth token survives the Firestore fetch — fixes "logged out after search"
+        setPersistence(auth, browserLocalPersistence).catch(() => {});
 
         const searchInput = document.getElementById('searchInput');
         const clearBtn = document.getElementById('clearBtn');
@@ -99,15 +104,77 @@
         // Init dynamic search suggestions on this page's search bar
         initDynamicSearch('searchInput');
 
-        // Clear button logic
+        // Show/hide clear button on input
         searchInput.addEventListener('input', () => {
             clearBtn.style.display = searchInput.value.trim() ? 'flex' : 'none';
         });
+
+        // Clear button
         clearBtn.addEventListener('click', () => {
             searchInput.value = '';
             clearBtn.style.display = 'none';
             searchInput.focus();
         });
+
+        // Submit new search on Enter (re-navigates with new query term)
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const val = searchInput.value.trim();
+                if (val) {
+                    window.location.href = `search-results.html?q=${encodeURIComponent(val)}`;
+                }
+            }
+        });
+
+        // ── Listings cache: 5-minute TTL avoids re-fetching all docs on every search ──
+        const CACHE_KEY = 'oda_search_listings_v2';
+        const CACHE_TTL = 5 * 60 * 1000;
+
+        async function getCachedListings() {
+            try {
+                const raw = localStorage.getItem(CACHE_KEY);
+                if (raw) {
+                    const { data, ts } = JSON.parse(raw);
+                    if (Date.now() - ts < CACHE_TTL) return data;
+                }
+            } catch (_) {}
+            return null;
+        }
+
+        async function fetchListings() {
+            const cached = await getCachedListings();
+            if (cached) return cached;
+
+            // Try composite-indexed query first (status ASC + createdAt DESC).
+            // Falls back gracefully if the Firestore index has not been created yet.
+            let snap;
+            try {
+                const q = query(
+                    collection(db, 'Listings'),
+                    where('status', '==', 'active'),
+                    orderBy('createdAt', 'desc'),
+                    limit(500)
+                );
+                snap = await getDocs(q);
+            } catch (_) {
+                try {
+                    snap = await getDocs(query(
+                        collection(db, 'Listings'),
+                        where('status', '==', 'active'),
+                        limit(500)
+                    ));
+                } catch (_2) {
+                    snap = await getDocs(query(collection(db, 'Listings'), limit(500)));
+                }
+            }
+
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            try {
+                localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+            } catch (_) {} // storage quota — skip silently
+            return data;
+        }
 
         // Min price helper
         function getMinPrice(product) {
@@ -158,36 +225,39 @@
             }
 
             try {
-                const querySnapshot = await getDocs(collection(db, "Listings"));
+                const listings = await fetchListings();
                 const searchLower = searchQuery.toLowerCase();
-                const searchTerms = searchLower.split(/\s+/);
+                // Filter out single-char terms to reduce noise
+                const searchTerms = searchLower.split(/\s+/).filter(t => t.length > 1);
                 
                 const results = [];
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const name = (data.name || '').toLowerCase();
-                    const brand = (data.brand || '').toLowerCase();
+                for (const data of listings) {
+                    const name        = (data.name || '').toLowerCase();
+                    const brand       = (data.brand || '').toLowerCase();
                     const description = (data.description || '').toLowerCase();
-                    const category = (data.category || '').toLowerCase();
+                    const category    = (data.category || '').toLowerCase();
+                    const subcategory = (data.subcategory || '').toLowerCase();
                     
-                    const matches = searchTerms.some(term => 
-                        name.includes(term) || 
-                        brand.includes(term) || 
+                    const matches = searchTerms.some(term =>
+                        name.includes(term) ||
+                        brand.includes(term) ||
                         description.includes(term) ||
-                        category.includes(term)
+                        category.includes(term) ||
+                        subcategory.includes(term)
                     );
                     
                     if (matches) {
                         let score = 0;
                         searchTerms.forEach(term => {
-                            if (name.includes(term)) score += 10;
-                            if (name.startsWith(term)) score += 5;
-                            if (brand.includes(term)) score += 3;
+                            if (name === term)            score += 20; // exact match
+                            if (name.startsWith(term))   score += 10; // prefix
+                            if (name.includes(term))     score += 8;
+                            if (brand.includes(term))    score += 4;
                             if (category.includes(term)) score += 2;
                         });
-                        results.push({ id: doc.id, ...data, score });
+                        results.push({ ...data, score });
                     }
-                });
+                }
                 
                 results.sort((a, b) => b.score - a.score);
                 allResults = results;

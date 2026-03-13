@@ -1,24 +1,317 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-KRSVFTQZK4"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-KRSVFTQZK4');
-    </script>
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-KRSVFTQZK4');</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico"><link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png"><link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png"><link rel="manifest" href="favicon_io/site.webmanifest">
-    <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
-    <title>Checkout - Oda Pap B2B</title>
-    <link rel="stylesheet" href="checkout.css">
+    <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
+    <link rel="manifest" href="favicon_io/site.webmanifest">
+    <title>Checkout - Oda Pap</title>
     <link rel="stylesheet" href="css/header.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
+    <style>
+        :root {
+            --primary:#ff5722; --primary-dark:#e64a19; --primary-light:#ffccbc;
+            --success:#16a34a; --warning:#f59e0b; --danger:#dc2626;
+            --border:#e5e7eb; --bg:#f5f7fa; --card:#fff;
+            --text:#111827; --muted:#6b7280; --radius:10px;
+            --shadow:0 1px 4px rgba(0,0,0,0.07);
+        }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+
+        /* Loading */
+        .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.96);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:12px;}
+        .loader-spinner{width:40px;height:40px;border:3px solid var(--primary-light);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .loader-content p{font-size:13px;color:var(--muted);}
+
+        .checkout-page{max-width:480px;margin:0 auto;padding-bottom:90px;}
+
+        /* Free shipping bar */
+        #freeShippingBar{margin:8px 12px 0;padding:9px 12px;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #bbf7d0;border-radius:var(--radius);font-size:12px;color:#166534;display:flex;align-items:center;gap:8px;}
+        #freeShippingBar .bar-track{flex:1;height:5px;background:#dcfce7;border-radius:3px;overflow:hidden;}
+        #freeShippingBar .bar-fill{height:100%;background:var(--success);border-radius:3px;transition:width 0.4s;}
+
+        /* Shipping notice */
+        .notice-banner{display:none;align-items:center;gap:12px;padding:12px 14px;margin:8px 12px 0;background:#fffbeb;border-left:4px solid var(--warning);border-radius:var(--radius);font-size:13px;}
+        .notice-banner i:first-child{color:var(--warning);font-size:18px;flex-shrink:0;}
+        .notice-content{flex:1;}
+        .notice-content strong{display:block;margin-bottom:2px;}
+        .notice-content p{font-size:12px;color:var(--muted);margin:0;}
+        .notice-close{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;font-size:14px;}
+
+        /* Cards */
+        .section-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 12px 0;overflow:hidden;}
+        .section-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);}
+        .section-header h2{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;}
+        .section-header h2 i{color:var(--primary);font-size:13px;}
+        .item-count{background:#fff3e0;color:var(--primary);font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;}
+
+        /* Order items */
+        .order-items-list{padding:8px 14px;max-height:220px;overflow-y:auto;}
+        .order-items-list::-webkit-scrollbar{width:3px;}
+        .order-items-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+        .order-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6;}
+        .order-item:last-child{border-bottom:none;}
+        .order-item-image{width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid var(--border);flex-shrink:0;}
+        .order-item-details{flex:1;min-width:0;}
+        .order-item-details h4{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .order-item-details .item-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+        .order-item-details .item-variation{display:inline-block;font-size:10px;color:#555;background:#f3f4f6;padding:2px 6px;border-radius:4px;margin-top:3px;}
+        .order-item-price{text-align:right;flex-shrink:0;}
+        .order-item-price .unit-price{font-size:10px;color:var(--muted);}
+        .order-item-price .total-price{font-size:13px;font-weight:700;color:var(--primary);}
+
+        /* Promo */
+        .promo-code-section{padding:8px 14px;}
+        .promo-input-wrap{display:flex;align-items:center;gap:6px;background:#f9fafb;border:1.5px dashed var(--border);border-radius:8px;padding:5px 8px 5px 12px;transition:border-color 0.2s;}
+        .promo-input-wrap:focus-within{border-color:var(--primary);}
+        .promo-icon{color:var(--muted);font-size:13px;flex-shrink:0;}
+        .promo-input-wrap input{flex:1;border:none;outline:none;background:transparent;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;padding:7px 4px;}
+        .promo-input-wrap input::placeholder{text-transform:none;letter-spacing:0;font-weight:400;color:var(--muted);}
+        .btn-apply-promo{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+        .btn-apply-promo:disabled{opacity:0.5;cursor:not-allowed;}
+        .promo-applied{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.25);border-radius:8px;color:#16a34a;font-size:12px;font-weight:500;}
+        .btn-remove-promo{background:none;border:none;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:50%;}
+        .promo-error{font-size:11px;color:var(--danger);padding:2px 2px 4px;}
+
+        /* Price */
+        .price-card{padding:10px 14px;background:#fafafa;border-top:1px solid var(--border);}
+        .price-row{display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:var(--muted);}
+        .price-row.shipping-row small{display:block;font-size:10px;color:var(--muted);}
+        .price-row.discount-row{color:var(--success);}
+        .discount-value{font-weight:600;}
+        .price-divider{height:1px;background:var(--border);margin:6px 0;}
+        .price-row.total-row{font-size:16px;font-weight:700;color:var(--text);padding-top:6px;}
+        .price-row.total-row span:last-child{color:var(--primary);}
+
+        /* Delivery */
+        .card-body{padding:12px 14px;}
+        .delivery-summary-line{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:#f9fafb;border-radius:8px;border:1px solid var(--border);margin-bottom:10px;}
+        .delivery-summary-line i{color:var(--primary);font-size:15px;flex-shrink:0;margin-top:2px;}
+        .delivery-summary-line .ds-text{flex:1;}
+        .delivery-summary-line .ds-text strong{display:block;font-size:13px;}
+        .delivery-summary-line .ds-text small{font-size:11px;color:var(--muted);}
+        .btn-edit-location{background:none;border:1px solid var(--border);padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;color:var(--muted);flex-shrink:0;transition:border-color 0.15s,color 0.15s;}
+        .btn-edit-location:hover{border-color:var(--primary);color:var(--primary);}
+
+        /* Location form */
+        .checkout-location-form{display:none;padding:10px 12px;background:#f9fafb;border-radius:8px;border:1px solid var(--border);margin-bottom:10px;}
+        #ck-detect-btn{width:100%;padding:9px;background:linear-gradient(135deg,#1a73e8,#4285f4);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px;}
+        #ck-detect-status{font-size:11px;padding:6px 8px;border-radius:5px;margin-bottom:6px;}
+        .loc-dropdowns{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+        .loc-dropdowns label{font-size:10px;color:var(--muted);display:block;margin-bottom:2px;}
+        .loc-dropdowns select{width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;}
+        .loc-form-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:8px;}
+        .loc-form-actions button{padding:6px 14px;border-radius:5px;font-size:12px;cursor:pointer;border:none;}
+        #ck-cancel-location{background:#eee;color:#555;}
+        #ck-save-location{background:var(--primary);color:#fff;}
+
+        /* Shipping info box */
+        .shipping-info-box{display:flex;align-items:center;gap:10px;padding:9px 12px;background:linear-gradient(135deg,#eff6ff,#f5f5f5);border-radius:8px;border:1px solid #bfdbfe;margin-bottom:10px;}
+        .shipping-icon{width:38px;height:38px;background:#2563eb;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;flex-shrink:0;}
+        .shipping-details strong{display:block;font-size:13px;color:var(--text);}
+        .shipping-details small{font-size:11px;color:var(--muted);}
+
+        /* Saved addresses */
+        #savedAddressesWrap{margin-bottom:10px;}
+        .saved-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+        .saved-header span{font-size:12px;font-weight:600;color:#555;}
+        .saved-header a{font-size:11px;color:var(--primary);text-decoration:none;}
+        .ck-saved-addr{padding:8px 10px;background:#f9fafb;border:1.5px solid var(--border);border-radius:7px;font-size:12px;cursor:pointer;margin-bottom:5px;transition:border-color 0.15s;}
+        .ck-saved-addr:hover,.ck-saved-addr.selected{border-color:var(--primary);background:#fff5f2;}
+
+        /* Form */
+        .form-group{margin-bottom:10px;}
+        .form-group:last-child{margin-bottom:0;}
+        .form-group>label{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;}
+        .form-group>label i{color:var(--muted);}
+        .required{color:var(--danger);}
+        .form-group textarea,.form-group input[type="text"],.form-group input[type="tel"]{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--card);transition:border-color 0.2s;resize:vertical;font-family:inherit;outline:none;}
+        .form-group textarea:focus,.form-group input:focus{border-color:var(--primary);}
+        .form-hint{display:block;font-size:11px;color:var(--muted);margin-top:4px;}
+
+        /* Payment options — class names must match checkout.js exactly */
+        .payment-options{display:flex;flex-direction:column;gap:8px;padding:8px 14px 14px;}
+        .payment-option{display:flex;align-items:center;gap:12px;padding:11px 12px;border:2px solid var(--border);border-radius:8px;cursor:pointer;transition:border-color 0.15s;position:relative;}
+        .payment-option:hover{border-color:var(--primary-light);background:#fff5f2;}
+        .payment-option.selected{border-color:var(--primary);background:#fff5f2;}
+        .payment-option input[type="radio"]{position:absolute;opacity:0;pointer-events:none;}
+        .option-icon{width:38px;height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .option-icon.mpesa-icon{background:#f5f5f5;padding:6px;}
+        .option-icon.mpesa-icon img{width:100%;height:100%;object-fit:contain;}
+        .option-icon.wallet-icon{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:18px;}
+        .option-icon.cod-icon{background:linear-gradient(135deg,#e8f5e9,#c8e6c9);color:#16a34a;font-size:18px;}
+        .option-details{flex:1;}
+        .option-details strong{display:block;font-size:13px;color:var(--text);}
+        .option-details span{font-size:11px;color:var(--muted);}
+        .option-check{color:var(--border);font-size:16px;transition:color 0.15s;}
+        .payment-option.selected .option-check{color:var(--primary);}
+
+        .wallet-notice{margin:0 14px 10px;padding:10px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:7px;font-size:12px;color:#92400e;}
+        .wallet-notice i{margin-right:4px;}
+        .wallet-notice a{color:#d97706;font-weight:600;}
+        .wallet-notice-content{display:flex;align-items:flex-start;gap:8px;}
+        .wallet-notice-content i{color:#d97706;font-size:16px;flex-shrink:0;margin-top:1px;}
+
+        .mpesa-input-section{padding:10px 14px 14px;border-top:1px solid var(--border);}
+        .mpesa-input-section>label{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;margin-bottom:6px;}
+        .phone-input-wrapper{display:flex;border:1.5px solid var(--border);border-radius:7px;overflow:hidden;transition:border-color 0.2s;}
+        .phone-input-wrapper:focus-within{border-color:var(--primary);}
+        .phone-prefix{padding:10px 12px;background:#f9fafb;font-size:13px;font-weight:500;color:#555;border-right:1px solid var(--border);display:flex;align-items:center;}
+        .phone-input-wrapper input{flex:1;border:none;outline:none;padding:10px 12px;font-size:13px;}
+        .phone-validation{font-size:11px;margin-top:4px;}
+        .phone-validation.valid{color:var(--success);}
+        .phone-validation.invalid{color:var(--danger);}
+
+        /* Notes card */
+        .form-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);margin:8px 12px 0;overflow:hidden;}
+        .card-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border);}
+        .card-header h3{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;}
+        .card-header h3 i{color:var(--primary);font-size:13px;}
+        .optional{font-weight:400;color:var(--muted);font-size:12px;}
+
+        /* Actions */
+        .checkout-actions{padding:8px 12px 16px;}
+        .btn-place-order{width:100%;padding:14px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity 0.2s,transform 0.15s;}
+        .btn-place-order:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(255,87,34,0.3);}
+        .btn-place-order:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+        .secure-notice{text-align:center;font-size:11px;color:var(--muted);margin-top:6px;display:flex;align-items:center;justify-content:center;gap:4px;}
+        .secure-notice i{color:var(--success);}
+
+        /* Empty state */
+        .empty-state{text-align:center;padding:60px 20px;}
+        .empty-icon{width:90px;height:90px;margin:0 auto 20px;background:#f3f4f6;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+        .empty-icon i{font-size:40px;color:var(--muted);}
+        .empty-state h2{font-size:18px;margin-bottom:8px;}
+        .empty-state p{color:var(--muted);font-size:13px;margin-bottom:20px;}
+        .btn-primary{display:inline-flex;align-items:center;gap:6px;padding:11px 22px;background:var(--primary);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;}
+
+        /* Modals */
+        .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;align-items:flex-end;justify-content:center;z-index:10000;backdrop-filter:blur(2px);}
+        .modal-overlay.active{display:flex;}
+        .modal-container{background:var(--card);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;animation:sheetUp 0.28s ease;}
+        @keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+
+        /* Payment modal */
+        .payment-modal .modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-radius:16px 16px 0 0;}
+        .modal-title{display:flex;align-items:center;gap:10px;}
+        .modal-title h3{font-size:16px;font-weight:700;}
+        .payment-timer{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.2);padding:5px 12px;border-radius:20px;font-size:13px;font-weight:700;}
+        .modal-body{padding:20px;}
+        .payment-status-display{text-align:center;padding:16px 0;}
+        .status-icon{position:relative;width:72px;height:72px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;}
+        .status-icon i{font-size:32px;color:var(--primary);z-index:1;}
+        .pulse-ring{position:absolute;inset:0;border:2.5px solid var(--primary);border-radius:50%;animation:pulse 1.5s ease-out infinite;}
+        @keyframes pulse{0%{transform:scale(.9);opacity:1}100%{transform:scale(1.5);opacity:0}}
+        .status-icon.success i{color:var(--success);}
+        .status-icon.success .pulse-ring{border-color:var(--success);animation:none;}
+        .status-icon.error i{color:var(--danger);}
+        .status-icon.error .pulse-ring{border-color:var(--danger);animation:none;}
+        #statusTitle{font-size:17px;font-weight:700;margin-bottom:6px;}
+        #statusMessage{font-size:13px;color:var(--muted);}
+        .phone-display{background:#f9fafb;border-radius:8px;padding:12px;text-align:center;margin:14px 0;}
+        .phone-display span{display:block;font-size:11px;color:var(--muted);margin-bottom:3px;}
+        .phone-display strong{font-size:17px;letter-spacing:1px;}
+        .payment-instructions{margin-bottom:16px;}
+        .payment-instructions h5{font-size:13px;font-weight:600;margin-bottom:8px;}
+        .payment-instructions ol{padding-left:18px;}
+        .payment-instructions li{font-size:12px;color:var(--muted);padding:3px 0;}
+        .status-area{margin-bottom:12px;}
+        .status-message{padding:10px 12px;border-radius:7px;font-size:12px;display:flex;align-items:center;gap:8px;}
+        .status-message.info{background:#eff6ff;color:#1d4ed8;}
+        .status-message.success{background:#f0fdf4;color:#15803d;}
+        .status-message.warning{background:#fffbeb;color:#b45309;}
+        .status-message.error{background:#fef2f2;color:#b91c1c;}
+        .manual-code-section{padding:14px;background:#fffbeb;border-radius:8px;margin-bottom:12px;display:none;}
+        .manual-code-header{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:#92400e;margin-bottom:10px;}
+        .manual-code-input{display:flex;gap:6px;}
+        .manual-code-input input{flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;text-transform:uppercase;letter-spacing:1px;outline:none;}
+        .manual-code-input input:focus{border-color:var(--primary);}
+        .btn-verify{padding:9px 16px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;}
+        .manual-code-section>small{display:block;font-size:11px;color:var(--muted);margin-top:6px;}
+        .check-status-section{display:none;text-align:center;padding:12px 14px;background:#eff6ff;border-radius:8px;margin-bottom:12px;border:1px solid #bfdbfe;}
+        .btn-check-status{background:#0284c7;color:#fff;border:none;padding:10px 20px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+        .check-status-section>small{display:block;font-size:11px;color:#0369a1;margin-top:6px;}
+        .upload-receipt-section{display:none;padding:14px;background:#f9fafb;border-radius:8px;margin-bottom:12px;}
+        .upload-header{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px;}
+        .upload-area{border:2px dashed var(--border);border-radius:8px;padding:20px;text-align:center;}
+        .upload-label{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;color:var(--muted);font-size:12px;}
+        .upload-label i{font-size:26px;}
+        .upload-preview{display:none;position:relative;text-align:center;}
+        .upload-preview img{max-width:160px;border-radius:6px;}
+        .remove-preview{position:absolute;top:-8px;right:calc(50% - 88px);width:24px;height:24px;background:var(--danger);color:#fff;border:none;border-radius:50%;cursor:pointer;font-size:12px;}
+        .btn-submit-receipt{display:none;width:100%;margin-top:10px;padding:10px;background:#0284c7;color:#fff;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;}
+        .support-contact{text-align:center;padding-top:14px;border-top:1px solid var(--border);}
+        .support-contact p{font-size:12px;margin-bottom:8px;}
+        .contact-buttons{display:flex;gap:8px;justify-content:center;}
+        .contact-btn{display:inline-flex;align-items:center;gap:5px;padding:8px 16px;border-radius:7px;font-size:12px;font-weight:500;text-decoration:none;background:#f3f4f6;color:var(--text);}
+        .contact-btn.whatsapp{background:#25d366;color:#fff;}
+        .modal-footer{padding:14px 20px;border-top:1px solid var(--border);text-align:center;}
+        .btn-cancel{padding:10px 24px;background:transparent;border:1.5px solid var(--border);border-radius:7px;color:var(--muted);font-size:13px;cursor:pointer;}
+
+        /* Success modal */
+        .success-modal{padding:0;}
+        .enhanced-success{max-height:95vh;}
+        .success-header{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;padding:28px 20px 24px;text-align:center;border-radius:16px 16px 0 0;position:relative;overflow:hidden;}
+        .success-animation{position:relative;margin-bottom:16px;}
+        .checkmark-circle{width:72px;height:72px;margin:0 auto;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+        .checkmark{width:50px;height:50px;stroke-width:3;}
+        .checkmark__circle{stroke:rgba(255,255,255,0.4);stroke-dasharray:166;stroke-dashoffset:166;stroke-width:2;stroke-miterlimit:10;fill:none;animation:ck-circle 0.6s cubic-bezier(.65,0,.45,1) forwards;}
+        .checkmark__check{stroke:white;stroke-dasharray:48;stroke-dashoffset:48;stroke-linecap:round;animation:ck-check 0.3s 0.4s cubic-bezier(.65,0,.45,1) forwards;}
+        @keyframes ck-circle{100%{stroke-dashoffset:0;}}
+        @keyframes ck-check{100%{stroke-dashoffset:0;}}
+        .confetti-container{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;}
+        @keyframes confetti-fall{0%{transform:translateY(-100%) rotate(0deg);opacity:1;}100%{transform:translateY(400%) rotate(720deg);opacity:0;}}
+        .success-header h2{font-size:20px;margin-bottom:5px;}
+        .success-subtitle{font-size:13px;opacity:0.9;}
+        .order-confirmation-card{margin:-16px 16px 16px;background:var(--card);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.1);padding:16px;position:relative;z-index:1;}
+        .order-header-info{display:flex;justify-content:space-between;margin-bottom:12px;}
+        .order-id-display,.order-date-display{display:flex;flex-direction:column;gap:3px;}
+        .order-id-display label,.order-date-display label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);}
+        .order-id-display strong{font-size:15px;color:var(--primary);display:flex;align-items:center;gap:6px;}
+        .order-date-display strong{font-size:12px;color:var(--muted);}
+        .copy-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:3px;font-size:14px;}
+        .copy-btn:hover{color:var(--primary);}
+        .payment-status-display{display:flex;justify-content:center;}
+        .status-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;}
+        .status-badge.success{background:#dcfce7;color:#15803d;}
+        .status-badge.warning{background:#fef3c7;color:#b45309;}
+        .status-badge.info{background:#eff6ff;color:#1d4ed8;}
+        .next-steps-simple{padding:0 16px 16px;}
+        .step-message{display:flex;align-items:flex-start;gap:10px;padding:12px;background:#f0fdf4;border-radius:8px;color:#166534;font-size:13px;margin-bottom:12px;}
+        .step-message i{font-size:18px;flex-shrink:0;margin-top:1px;}
+        .repay-section{margin-bottom:12px;}
+        .repay-alert{display:flex;align-items:flex-start;gap:10px;padding:12px;background:#fffbeb;border:1px solid var(--warning);border-radius:8px;margin-bottom:8px;}
+        .repay-alert i{color:var(--warning);font-size:16px;flex-shrink:0;}
+        .btn-repay{width:100%;padding:12px;background:linear-gradient(135deg,var(--warning),#f57c00);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;}
+        .pod-notice{display:none;align-items:flex-start;gap:10px;padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:12px;}
+        .pod-notice i{color:#2563eb;font-size:18px;flex-shrink:0;}
+        .success-quick-actions{padding:0 16px 16px;}
+        .action-card{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);transition:border-color 0.15s;margin-bottom:8px;}
+        .action-card:hover{border-color:var(--primary);}
+        .action-card.primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;}
+        .action-card .action-icon{width:44px;height:44px;background:rgba(255,255,255,0.2);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+        .action-card .action-text{flex:1;}
+        .action-card .action-text strong{display:block;font-size:13px;margin-bottom:1px;}
+        .action-card .action-text span{font-size:11px;opacity:0.8;}
+        .action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+        .action-row .action-card{flex-direction:column;text-align:center;padding:12px 8px;margin:0;gap:6px;}
+        .action-row .action-card i{font-size:18px;color:var(--primary);}
+        .action-row .action-card span{font-size:11px;color:var(--muted);}
+        .notification-preferences{margin:0 16px 16px;padding:12px;background:#f9fafb;border-radius:8px;}
+        .pref-header{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:8px;}
+        .pref-header i{color:var(--primary);}
+        .pref-options{display:flex;gap:20px;}
+        .pref-option{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;}
+        .pref-option input[type="checkbox"]{accent-color:var(--primary);}
+        .success-footer-actions{padding:0 16px 20px;}
+        .btn-continue-shopping{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border:2px solid var(--primary);color:var(--primary);background:var(--card);border-radius:9px;text-decoration:none;font-size:14px;font-weight:700;}
+        .btn-continue-shopping:hover{background:var(--primary);color:#fff;}
+    </style>
 </head>
 <body>
     <header class="oda-header">
@@ -39,59 +332,44 @@
         </nav>
     </header>
 
+    <div id="loadingSpinner" class="loading-overlay">
+        <div class="loader-content">
+            <div class="loader-spinner"></div>
+            <p>Loading checkout...</p>
+        </div>
+    </div>
+
+    <!-- Shipping notice (non-Mombasa) — toggled by checkout.js -->
+    <div id="shippingNotice" class="notice-banner">
+        <i class="fas fa-exclamation-triangle"></i>
+        <div class="notice-content">
+            <strong>Shipping Notice</strong>
+            <p>We currently ship only to Mombasa County. Support for other areas coming soon!</p>
+        </div>
+        <button class="notice-close" onclick="this.parentElement.style.display='none'"><i class="fas fa-times"></i></button>
+    </div>
+
     <main class="checkout-page">
-        <!-- Loading State -->
-        <div id="loadingSpinner" class="loading-overlay">
-            <div class="loader-content">
-                <div class="loader-spinner"></div>
-                <p>Loading checkout...</p>
-            </div>
+
+        <!-- Free shipping progress bar -->
+        <div id="freeShippingBar">
+            <i class="fas fa-truck" style="flex-shrink:0;"></i>
+            <span id="freeShipMsg" style="flex:1;font-size:12px;"></span>
+            <div class="bar-track"><div class="bar-fill" id="freeShipFill" style="width:0%"></div></div>
         </div>
 
-        <!-- Checkout Steps Progress -->
-        <div class="checkout-progress" id="checkoutProgress">
-            <div class="progress-step active" data-step="1">
-                <div class="step-number">1</div>
-                <span>Review</span>
-            </div>
-            <div class="progress-line"></div>
-            <div class="progress-step" data-step="2">
-                <div class="step-number">2</div>
-                <span>Delivery</span>
-            </div>
-            <div class="progress-line"></div>
-            <div class="progress-step" data-step="3">
-                <div class="step-number">3</div>
-                <span>Payment</span>
-            </div>
-        </div>
+        <!-- Main checkout wrapper — hidden until JS loads data, then shown -->
+        <div id="checkoutContainer" style="display:none;">
 
-        <!-- Shipping Notice Banner -->
-        <div id="shippingNotice" class="notice-banner" style="display: none;">
-            <i class="fas fa-exclamation-triangle"></i>
-            <div class="notice-content">
-                <strong>Shipping Notice</strong>
-                <p>We currently ship only to Mombasa County. Support for other areas coming soon!</p>
-            </div>
-            <button class="notice-close" onclick="this.parentElement.style.display='none'">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <!-- Main Checkout Container -->
-        <div class="checkout-container" id="checkoutContainer" style="display: none;">
-            <!-- Left Column: Order Summary -->
-            <section class="checkout-section order-summary">
+            <!-- 1. Order summary -->
+            <div class="section-card">
                 <div class="section-header">
-                    <h2><i class="fas fa-shopping-bag"></i> Order Summary</h2>
+                    <h2><i class="fas fa-shopping-bag"></i> Your Order</h2>
                     <span class="item-count" id="itemCount">0 items</span>
                 </div>
 
-                <div class="order-items-list" id="orderItems">
-                    <!-- Order items will be dynamically inserted -->
-                </div>
+                <div class="order-items-list" id="orderItems"></div>
 
-                <!-- Promo Code -->
                 <div class="promo-code-section" id="promoSection">
                     <div class="promo-input-wrap" id="promoInputWrap">
                         <i class="fas fa-ticket-alt promo-icon"></i>
@@ -105,7 +383,6 @@
                     <p class="promo-error" id="promoError" style="display:none;"></p>
                 </div>
 
-                <!-- Price Breakdown Card -->
                 <div class="price-card">
                     <div class="price-row">
                         <span>Subtotal</span>
@@ -115,9 +392,9 @@
                         <span>Shipping <small id="shippingLocation"></small></span>
                         <span id="shippingAmount">KES 0</span>
                     </div>
-                    <div class="price-row discount-row" id="discountRow" style="display: none;">
+                    <div class="price-row discount-row" id="discountRow" style="display:none;">
                         <span><i class="fas fa-tag"></i> Discount</span>
-                        <span class="discount-value" id="discountAmount">- KES 0</span>
+                        <span class="discount-value" id="discountAmount">-KES 0</span>
                     </div>
                     <div class="price-divider"></div>
                     <div class="price-row total-row">
@@ -125,258 +402,182 @@
                         <span id="totalAmount">KES 0</span>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            <!-- Right Column: Checkout Form -->
-            <section class="checkout-section checkout-form">
-                <!-- Delivery Information Card -->
-                <div class="form-card" id="deliveryCard">
-                    <div class="card-header">
-                        <h3><i class="fas fa-truck"></i> Delivery Information</h3>
+            <!-- 2. Delivery -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h2><i class="fas fa-truck"></i> Delivery</h2>
+                </div>
+                <div class="card-body">
+                    <div class="delivery-summary-line">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <div class="ds-text">
+                            <strong id="buyerName">Loading...</strong>
+                            <small id="buyerPhone"></small>
+                            <small id="buyerLocation" style="display:block;"></small>
+                        </div>
+                        <button type="button" class="btn-edit-location" id="checkout-edit-location-btn">
+                            <i class="fas fa-pen"></i> Edit
+                        </button>
                     </div>
-                    <div class="card-body">
-                        <div class="info-grid">
-                            <div class="info-item">
-                                <label><i class="fas fa-user"></i> Name</label>
-                                <span id="buyerName">Loading...</span>
-                            </div>
-                            <div class="info-item">
-                                <label><i class="fas fa-phone"></i> Phone</label>
-                                <span id="buyerPhone">Loading...</span>
-                            </div>
-                            <div class="info-item full-width">
-                                <label><i class="fas fa-map-marker-alt"></i> Location</label>
-                                <span id="buyerLocation">Loading...</span>
-                                <button type="button" class="btn-edit-location" id="checkout-edit-location-btn" style="background:none;border:1px solid #ddd;border-radius:6px;padding:4px 10px;font-size:0.75rem;cursor:pointer;color:#555;margin-left:8px;"><i class="fas fa-pen"></i> Change</button>
-                            </div>
-                            <!-- Inline location edit dropdowns (hidden by default) -->
-                            <div class="checkout-location-form" id="checkout-location-form" style="display:none;padding:12px;background:#fafafa;border-radius:8px;margin-top:8px;">
-                              <button type="button" id="ck-detect-btn" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a73e8,#4285f4);color:white;border:none;border-radius:8px;font-size:0.8rem;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:7px;">
-                                <i class="fas fa-crosshairs"></i> Detect My Location
-                              </button>
-                              <div id="ck-detect-status" style="display:none;font-size:0.73rem;padding:7px 10px;border-radius:6px;margin-bottom:8px;"></div>
-                              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                                <div>
-                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Region</label>
-                                  <select id="ck-region" style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Region</option></select>
-                                </div>
-                                <div>
-                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">County</label>
-                                  <select id="ck-county" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">County</option></select>
-                                </div>
-                                <div>
-                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Sub-County</label>
-                                  <select id="ck-constituency" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Sub-County</option></select>
-                                </div>
-                                <div>
-                                  <label style="font-size:0.7rem;color:#666;display:block;margin-bottom:3px;">Ward</label>
-                                  <select id="ck-ward" disabled style="width:100%;padding:7px;border:1px solid #ddd;border-radius:6px;font-size:0.8rem;"><option value="">Ward</option></select>
-                                </div>
-                              </div>
-                              <div style="margin-top:8px;">
-                                <button type="button" class="btn-map-toggle" id="checkout-map-toggle" style="background:none;border:1px dashed #aaa;border-radius:6px;padding:6px 12px;color:#555;font-size:0.75rem;cursor:pointer;">
-                                  <i class="fas fa-map-marked-alt"></i> Pin on Map (optional)
-                                </button>
-                              </div>
-                              <div id="checkout-map-container" style="display:none;margin-top:8px;border-radius:10px;overflow:hidden;border:1px solid #ddd;">
-                                <div id="checkout-map" style="width:100%;height:200px;"></div>
-                                <p style="text-align:center;font-size:0.7rem;color:#888;padding:5px;background:#fafafa;"><i class="fas fa-info-circle"></i> Tap the map to pin your location</p>
-                              </div>
-                              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
-                                <button type="button" id="ck-cancel-location" style="padding:6px 14px;border-radius:4px;font-size:0.75rem;cursor:pointer;border:none;background:#eee;color:#666;">Cancel</button>
-                                <button type="button" id="ck-save-location" style="padding:6px 14px;border-radius:4px;font-size:0.75rem;cursor:pointer;border:none;background:#ff5722;color:white;">Save</button>
-                              </div>
-                            </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="deliveryAddress">
-                                <i class="fas fa-home"></i> Detailed Delivery Address
-                                <span class="required">*</span>
-                            </label>
-                            <!-- Saved Addresses Selector -->
-                            <div id="savedAddressesWrap" style="display:none; margin-bottom:10px;">
-                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                    <i class="fas fa-bookmark" style="color:#ff5722;font-size:12px;"></i>
-                                    <span style="font-size:12px;font-weight:600;color:#555;">Saved Addresses</span>
-                                    <a href="addresses.html" style="margin-left:auto;font-size:11px;color:#ff5722;text-decoration:none;">Manage</a>
-                                </div>
-                                <div id="savedAddressList" style="display:flex;flex-direction:column;gap:6px;"></div>
-                            </div>
-                            <textarea 
-                                id="deliveryAddress" 
-                                rows="3" 
-                                placeholder="Enter specific address: Building name, floor, apartment number, nearest landmark..."
-                                required
-                            ></textarea>
-                            <small class="form-hint">Provide clear directions to help our rider find you</small>
+                    <!-- Location edit panel — checkout.js looks for id="checkout-location-form" -->
+                    <div class="checkout-location-form" id="checkout-location-form">
+                        <button type="button" id="ck-detect-btn">
+                            <i class="fas fa-crosshairs"></i> Detect My Location
+                        </button>
+                        <div id="ck-detect-status" style="display:none;"></div>
+                        <div class="loc-dropdowns">
+                            <div><label>Region</label><select id="ck-region"><option value="">Region</option></select></div>
+                            <div><label>County</label><select id="ck-county" disabled><option value="">County</option></select></div>
+                            <div><label>Sub-County</label><select id="ck-constituency" disabled><option value="">Sub-County</option></select></div>
+                            <div><label>Ward</label><select id="ck-ward" disabled><option value="">Ward</option></select></div>
                         </div>
-
-                        <!-- Shipping Fee Display -->
-                        <div class="shipping-info-box">
-                            <div class="shipping-icon">
-                                <i class="fas fa-shipping-fast"></i>
-                            </div>
-                            <div class="shipping-details">
-                                <strong>Shipping Fee: <span id="displayShippingFee">KES 150</span></strong>
-                                <small id="shippingNote">Standard delivery within Mombasa</small>
-                            </div>
+                        <div style="margin-top:8px;">
+                            <button type="button" id="checkout-map-toggle" style="background:none;border:1px dashed #aaa;border-radius:6px;padding:5px 12px;color:#555;font-size:11px;cursor:pointer;">
+                                <i class="fas fa-map-marked-alt"></i> Pin on Map (optional)
+                            </button>
                         </div>
+                        <div id="checkout-map-container" style="display:none;margin-top:8px;border-radius:10px;overflow:hidden;border:1px solid var(--border);">
+                            <div id="checkout-map" style="width:100%;height:200px;"></div>
+                            <p style="text-align:center;font-size:11px;color:#888;padding:5px;background:#fafafa;"><i class="fas fa-info-circle"></i> Tap the map to pin your location</p>
+                        </div>
+                        <div class="loc-form-actions">
+                            <button type="button" id="ck-cancel-location">Cancel</button>
+                            <button type="button" id="ck-save-location">Save</button>
+                        </div>
+                    </div>
 
-                        <!-- Delivery Estimate -->
-                        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-top:10px;display:flex;align-items:center;gap:10px;">
-                            <i class="fas fa-clock" style="font-size:20px;color:#2563eb;"></i>
-                            <div style="font-size:13px;color:#1e40af;">
-                                <strong>Estimated Delivery</strong><br>
-                                <span style="font-size:12px;color:#4b5563;">Same day (within Mombasa) — orders placed before 3 PM</span>
-                            </div>
+                    <!-- Saved addresses — checkout.js toggles display -->
+                    <div id="savedAddressesWrap" style="display:none;">
+                        <div class="saved-header">
+                            <span><i class="fas fa-bookmark" style="color:var(--primary);margin-right:4px;"></i>Saved Addresses</span>
+                            <a href="addresses.html">Manage</a>
+                        </div>
+                        <div id="savedAddressList"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="deliveryAddress">
+                            <i class="fas fa-home"></i> Delivery Address <span class="required">*</span>
+                        </label>
+                        <textarea id="deliveryAddress" rows="2" placeholder="Building, floor, apartment, nearest landmark..."></textarea>
+                        <small class="form-hint">Help our rider find you easily</small>
+                    </div>
+
+                    <!-- Compact shipping fee — checkout.js sets id="displayShippingFee" and id="shippingNote" -->
+                    <div class="shipping-info-box">
+                        <div class="shipping-icon"><i class="fas fa-shipping-fast"></i></div>
+                        <div class="shipping-details">
+                            <strong>Shipping: <span id="displayShippingFee">KES 150</span></strong>
+                            <small id="shippingNote">Standard delivery within Mombasa</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Payment -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h2><i class="fas fa-credit-card"></i> Payment</h2>
+                </div>
+                <div class="payment-options">
+                    <label class="payment-option selected" data-method="mpesa">
+                        <input type="radio" name="paymentMethod" value="mpesa" checked>
+                        <div class="option-icon mpesa-icon">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" alt="M-Pesa" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                            <i class="fas fa-mobile-alt" style="display:none;"></i>
+                        </div>
+                        <div class="option-details">
+                            <strong>M-Pesa</strong>
+                            <span>Pay instantly via STK Push</span>
+                        </div>
+                        <i class="fas fa-check-circle option-check"></i>
+                    </label>
+
+                    <label class="payment-option" data-method="wallet">
+                        <input type="radio" name="paymentMethod" value="wallet">
+                        <div class="option-icon wallet-icon"><i class="fas fa-wallet"></i></div>
+                        <div class="option-details">
+                            <strong>Oda Pap Wallet</strong>
+                            <span>Balance: <span id="walletBalanceDisplay">KES 0</span></span>
+                        </div>
+                        <i class="fas fa-check-circle option-check"></i>
+                    </label>
+
+                    <label class="payment-option" data-method="pay_on_delivery">
+                        <input type="radio" name="paymentMethod" value="pay_on_delivery">
+                        <div class="option-icon cod-icon"><i class="fas fa-hand-holding-usd"></i></div>
+                        <div class="option-details">
+                            <strong>Pay on Delivery</strong>
+                            <span>Pay cash when you receive</span>
+                        </div>
+                        <i class="fas fa-check-circle option-check"></i>
+                    </label>
+                </div>
+
+                <div class="wallet-notice" id="walletNotice" style="display:none;">
+                    <div class="wallet-notice-content">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <strong>Insufficient wallet balance</strong>
+                            <p>Your balance is lower than the order total. <a href="deposit.html">Top up now</a></p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Payment Method Card -->
-                <div class="form-card" id="paymentCard">
-                    <div class="card-header">
-                        <h3><i class="fas fa-credit-card"></i> Payment Method</h3>
+                <div class="mpesa-input-section" id="mpesaSection">
+                    <label for="mpesaPhone">
+                        <i class="fas fa-mobile-alt"></i> M-Pesa Phone Number <span class="required">*</span>
+                    </label>
+                    <div class="phone-input-wrapper">
+                        <span class="phone-prefix">+254</span>
+                        <input type="tel" id="mpesaPhone" placeholder="712 345 678" maxlength="12" autocomplete="tel">
                     </div>
-                    <div class="card-body">
-                        <div class="payment-options">
-                            <label class="payment-option selected" data-method="mpesa">
-                                <input type="radio" name="paymentMethod" value="mpesa" checked>
-                                <div class="option-icon mpesa-icon">
-                                    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/M-PESA_LOGO-01.svg/1200px-M-PESA_LOGO-01.svg.png" alt="M-Pesa" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                    <i class="fas fa-mobile-alt" style="display:none;"></i>
-                                </div>
-                                <div class="option-details">
-                                    <strong>M-Pesa</strong>
-                                    <span>Pay instantly via STK Push</span>
-                                </div>
-                                <i class="fas fa-check-circle option-check"></i>
-                            </label>
+                    <div class="phone-validation" id="phoneValidation"></div>
+                </div>
+            </div>
 
-                            <label class="payment-option" data-method="wallet">
-                                <input type="radio" name="paymentMethod" value="wallet">
-                                <div class="option-icon wallet-icon">
-                                    <i class="fas fa-wallet"></i>
-                                </div>
-                                <div class="option-details">
-                                    <strong>Oda Pap Wallet</strong>
-                                    <span>Balance: <span id="walletBalanceDisplay">KES 0</span></span>
-                                </div>
-                                <i class="fas fa-check-circle option-check"></i>
-                            </label>
-
-                            <label class="payment-option" data-method="pay_on_delivery">
-                                <input type="radio" name="paymentMethod" value="pay_on_delivery">
-                                <div class="option-icon cod-icon">
-                                    <i class="fas fa-hand-holding-usd"></i>
-                                </div>
-                                <div class="option-details">
-                                    <strong>Pay on Delivery</strong>
-                                    <span>Pay cash when you receive order</span>
-                                </div>
-                                <i class="fas fa-check-circle option-check"></i>
-                            </label>
-                        </div>
-
-                        <!-- Wallet Insufficient Balance Notice -->
-                        <div class="wallet-notice" id="walletNotice" style="display: none;">
-                            <div class="wallet-notice-content">
-                                <i class="fas fa-exclamation-triangle"></i>
-                                <div>
-                                    <strong>Insufficient wallet balance</strong>
-                                    <p>Your wallet balance is lower than the order total. <a href="deposit.html">Top up now</a></p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- M-Pesa Phone Input -->
-                        <div class="mpesa-input-section" id="mpesaSection">
-                            <div class="form-group">
-                                <label for="mpesaPhone">
-                                    <i class="fas fa-mobile-alt"></i> M-Pesa Phone Number
-                                    <span class="required">*</span>
-                                </label>
-                                <div class="phone-input-wrapper">
-                                    <span class="phone-prefix">+254</span>
-                                    <input 
-                                        type="tel" 
-                                        id="mpesaPhone" 
-                                        placeholder="712 345 678"
-                                        maxlength="12"
-                                        autocomplete="tel"
-                                    >
-                                </div>
-                                <small class="form-hint">
-                                    <i class="fas fa-info-circle"></i>
-                                    Enter the M-Pesa registered number (e.g., 0712345678 or 712345678)
-                                </small>
-                                <div class="phone-validation" id="phoneValidation"></div>
-                            </div>
-                        </div>
+            <!-- 4. Notes -->
+            <div class="form-card">
+                <div class="card-header">
+                    <h3><i class="fas fa-sticky-note"></i> Order Notes <span class="optional">(Optional)</span></h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <textarea id="orderNotes" rows="2" placeholder="Special instructions for your order..."></textarea>
                     </div>
                 </div>
+            </div>
 
-                <!-- Order Notes (Optional) -->
-                <div class="form-card">
-                    <div class="card-header">
-                        <h3><i class="fas fa-sticky-note"></i> Order Notes <span class="optional">(Optional)</span></h3>
-                    </div>
-                    <div class="card-body">
-                        <textarea 
-                            id="orderNotes" 
-                            rows="2" 
-                            placeholder="Any special instructions for your order..."
-                        ></textarea>
-                    </div>
-                </div>
+        </div><!-- /checkoutContainer -->
 
-                <!-- Place Order Button -->
-                <div class="checkout-actions">
-                    <button type="button" id="placeOrderBtn" class="btn-place-order">
-                        <span class="btn-text">
-                            <i class="fas fa-lock"></i> Place Order • <span id="btnTotalAmount">KES 0</span>
-                        </span>
-                        <span class="btn-loading" style="display: none;">
-                            <i class="fas fa-spinner fa-spin"></i> Processing...
-                        </span>
-                    </button>
-                    <p class="secure-notice">
-                        <i class="fas fa-shield-alt"></i>
-                        Your payment information is secure and encrypted
-                    </p>
-                </div>
-            </section>
+        <!-- Sticky Place Order Bar -->
+        <div id="stickyOrderBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e7eb;padding:10px 16px 10px;z-index:200;box-shadow:0 -4px 16px rgba(0,0,0,0.08);">
+            <button type="button" id="placeOrderBtn" class="btn-place-order">
+                <span class="btn-text"><i class="fas fa-lock"></i> Place Order &bull; <span id="btnTotalAmount">KES 0</span></span>
+                <span class="btn-loading" style="display:none;"><i class="fas fa-spinner fa-spin"></i> Processing...</span>
+            </button>
+            <p class="secure-notice" style="text-align:center;font-size:10px;color:#9ca3af;margin-top:5px;display:flex;align-items:center;justify-content:center;gap:4px;"><i class="fas fa-shield-alt" style="color:#16a34a;"></i> Secure &amp; encrypted payment</p>
         </div>
 
-        <!-- Empty Cart State -->
-        <div id="emptyCartState" class="empty-state" style="display: none;">
-            <div class="empty-icon">
-                <i class="fas fa-shopping-cart"></i>
-            </div>
+        <!-- Empty cart -->
+        <div id="emptyCartState" class="empty-state" style="display:none;">
+            <div class="empty-icon"><i class="fas fa-shopping-cart"></i></div>
             <h2>Your cart is empty</h2>
-            <p>Looks like you haven't added anything to your cart yet</p>
-            <a href="index.html" class="btn-primary">
-                <i class="fas fa-shopping-bag"></i> Start Shopping
-            </a>
+            <p>Add some products before checking out</p>
+            <a href="index.html" class="btn-primary"><i class="fas fa-shopping-bag"></i> Start Shopping</a>
         </div>
 
         <!-- M-Pesa Payment Modal -->
         <div id="paymentModal" class="modal-overlay">
             <div class="modal-container payment-modal">
                 <div class="modal-header">
-                    <div class="modal-title">
-                        <i class="fas fa-mobile-alt"></i>
-                        <h3>M-Pesa Payment</h3>
-                    </div>
-                    <div class="payment-timer">
-                        <i class="fas fa-clock"></i>
-                        <span id="paymentTimer">5:00</span>
-                    </div>
+                    <div class="modal-title"><i class="fas fa-mobile-alt"></i><h3>M-Pesa Payment</h3></div>
+                    <div class="payment-timer"><i class="fas fa-clock"></i><span id="paymentTimer">5:00</span></div>
                 </div>
-
                 <div class="modal-body">
-                    <!-- Payment Status Animation -->
                     <div class="payment-status-display">
                         <div class="status-icon" id="statusIcon">
                             <div class="pulse-ring"></div>
@@ -385,105 +586,60 @@
                         <h4 id="statusTitle">Processing Payment</h4>
                         <p id="statusMessage">A payment request has been sent to your phone</p>
                     </div>
-
-                    <!-- Phone Number Display -->
                     <div class="phone-display">
                         <span>Payment request sent to:</span>
                         <strong id="modalPhone">+254 712 345 678</strong>
                     </div>
-
-                    <!-- Payment Instructions -->
                     <div class="payment-instructions">
-                        <h5>Follow these steps:</h5>
+                        <h5>Steps:</h5>
                         <ol>
                             <li>Check your phone for the M-Pesa prompt</li>
                             <li>Enter your M-Pesa PIN to confirm</li>
                             <li>Wait for confirmation</li>
                         </ol>
                     </div>
-
-                    <!-- Status Messages -->
                     <div id="paymentStatusArea" class="status-area"></div>
-
-                    <!-- Manual Code Entry Section -->
-                    <div id="manualCodeSection" class="manual-code-section" style="display: none;">
-                        <div class="manual-code-header">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <span>Already paid? Enter your M-Pesa code below</span>
-                        </div>
+                    <div id="manualCodeSection" class="manual-code-section">
+                        <div class="manual-code-header"><i class="fas fa-exclamation-triangle"></i> Already paid? Enter your M-Pesa code</div>
                         <div class="manual-code-input">
-                            <input 
-                                type="text" 
-                                id="mpesaCode" 
-                                placeholder="e.g., QGH7XYZ123"
-                                maxlength="10"
-                                autocomplete="off"
-                            >
-                            <button type="button" id="verifyCodeBtn" class="btn-verify">
-                                <i class="fas fa-check"></i> Verify
-                            </button>
+                            <input type="text" id="mpesaCode" placeholder="e.g. QGH7XYZ123" maxlength="10" autocomplete="off">
+                            <button type="button" id="verifyCodeBtn" class="btn-verify"><i class="fas fa-check"></i> Verify</button>
                         </div>
-                        <small>Enter the 10-character M-Pesa transaction code from your SMS</small>
+                        <small>Enter the 10-character code from your M-Pesa SMS</small>
                     </div>
-
-                    <!-- Check Status Button (for callback failures) -->
-                    <div id="checkStatusSection" class="check-status-section" style="display: none;">
-                        <button type="button" id="checkStatusBtn" class="btn-check-status">
-                            <i class="fas fa-sync-alt"></i> Check Payment Status
-                        </button>
-                        <small>Didn't receive confirmation? Click to check if your payment went through.</small>
+                    <div id="checkStatusSection" class="check-status-section">
+                        <button type="button" id="checkStatusBtn" class="btn-check-status"><i class="fas fa-sync-alt"></i> Check Payment Status</button>
+                        <small>Didn't receive confirmation? Click to check.</small>
                     </div>
-
-                    <!-- Upload Receipt Section -->
-                    <div id="uploadReceiptSection" class="upload-receipt-section" style="display: none;">
-                        <div class="upload-header">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <span>Or upload M-Pesa confirmation screenshot</span>
-                        </div>
+                    <div id="uploadReceiptSection" class="upload-receipt-section">
+                        <div class="upload-header"><i class="fas fa-cloud-upload-alt"></i> Or upload M-Pesa confirmation screenshot</div>
                         <div class="upload-area" id="uploadArea">
                             <input type="file" id="receiptUpload" accept="image/*" hidden>
-                            <label for="receiptUpload" class="upload-label">
-                                <i class="fas fa-image"></i>
-                                <span>Click to upload screenshot</span>
-                            </label>
-                            <div id="uploadPreview" class="upload-preview" style="display: none;">
+                            <label for="receiptUpload" class="upload-label"><i class="fas fa-image"></i><span>Tap to upload screenshot</span></label>
+                            <div id="uploadPreview" class="upload-preview">
                                 <img id="previewImage" src="" alt="Receipt preview">
-                                <button type="button" class="remove-preview" onclick="removePreview()">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                                <button type="button" class="remove-preview" onclick="removePreview()"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
-                        <button type="button" id="submitReceiptBtn" class="btn-submit-receipt" style="display: none;">
-                            <i class="fas fa-paper-plane"></i> Submit for Verification
-                        </button>
+                        <button type="button" id="submitReceiptBtn" class="btn-submit-receipt"><i class="fas fa-paper-plane"></i> Submit for Verification</button>
                     </div>
-
-                    <!-- Support Contact -->
                     <div class="support-contact">
                         <p><strong>Need help?</strong></p>
                         <div class="contact-buttons">
-                            <a href="tel:+254759695025" class="contact-btn">
-                                <i class="fas fa-phone"></i> Call Us
-                            </a>
-                            <a href="https://wa.me/254759695025" target="_blank" class="contact-btn whatsapp">
-                                <i class="fab fa-whatsapp"></i> WhatsApp
-                            </a>
+                            <a href="tel:+254759695025" class="contact-btn"><i class="fas fa-phone"></i> Call Us</a>
+                            <a href="https://wa.me/254759695025" target="_blank" class="contact-btn whatsapp"><i class="fab fa-whatsapp"></i> WhatsApp</a>
                         </div>
                     </div>
                 </div>
-
                 <div class="modal-footer">
-                    <button type="button" id="cancelPaymentBtn" class="btn-cancel">
-                        <i class="fas fa-times"></i> Cancel Payment
-                    </button>
+                    <button type="button" id="cancelPaymentBtn" class="btn-cancel"><i class="fas fa-times"></i> Cancel Payment</button>
                 </div>
             </div>
         </div>
 
-        <!-- Success Modal - Enhanced Post-Purchase Experience -->
+        <!-- Success Modal -->
         <div id="successModal" class="modal-overlay">
             <div class="modal-container success-modal enhanced-success">
-                <!-- Animated Success Header -->
                 <div class="success-header">
                     <div class="success-animation">
                         <div class="checkmark-circle">
@@ -494,35 +650,31 @@
                         </div>
                         <div class="confetti-container" id="confettiContainer"></div>
                     </div>
-                    <h2>🎉 Order Placed Successfully!</h2>
-                    <p class="success-subtitle">Thank you for shopping with Oda Pap. Your order is being processed.</p>
+                    <h2>Order Placed Successfully!</h2>
+                    <p class="success-subtitle">Thank you for shopping with Oda Pap</p>
                 </div>
 
-                <!-- Order Summary Card -->
                 <div class="order-confirmation-card">
                     <div class="order-header-info">
                         <div class="order-id-display">
                             <label>Order Reference</label>
-                            <strong id="orderRefNumber">ORD-XXXX</strong>
-                            <button class="copy-btn" onclick="copyOrderId()" title="Copy Order ID">
-                                <i class="fas fa-copy"></i>
-                            </button>
+                            <strong id="orderRefNumber">ORD-XXXX
+                                <button class="copy-btn" onclick="copyOrderId()" title="Copy Order ID"><i class="fas fa-copy"></i></button>
+                            </strong>
                         </div>
                         <div class="order-date-display">
                             <label>Order Date</label>
                             <strong id="orderDateDisplay"></strong>
                         </div>
                     </div>
-                    
                     <div class="payment-status-display">
-                        <div class="status-badge" id="paymentStatusBadge">
+                        <div class="status-badge success" id="paymentStatusBadge">
                             <i class="fas fa-check-circle"></i>
                             <span id="paymentMethodDisplay">M-Pesa - Confirmed</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- What Happens Next - Simple Message -->
                 <div class="next-steps-simple">
                     <div class="step-message">
                         <i class="fas fa-info-circle"></i>
@@ -531,125 +683,132 @@
                             <p id="nextStepText">The seller will confirm your order and prepare it for delivery. You'll receive updates via SMS.</p>
                         </div>
                     </div>
-                    
-                    <!-- Repay Option for Unpaid Orders -->
-                    <div class="repay-section" id="repaySection" style="display: none;">
+                    <div class="repay-section" id="repaySection" style="display:none;">
                         <div class="repay-alert">
                             <i class="fas fa-exclamation-triangle"></i>
-                            <div>
-                                <strong>Payment Required</strong>
-                                <p>Your order is pending payment. Please complete payment to proceed.</p>
-                            </div>
+                            <div><strong>Payment Required</strong><p>Complete payment to proceed.</p></div>
                         </div>
-                        <button class="btn-repay" id="repayBtn" onclick="retryPayment()">
-                            <i class="fas fa-credit-card"></i> Pay Now
-                        </button>
+                        <button class="btn-repay" id="repayBtn" onclick="retryPayment()"><i class="fas fa-credit-card"></i> Pay Now</button>
                     </div>
-                    
-                    <!-- Pay on Delivery Notice -->
-                    <div class="pod-notice" id="podNotice" style="display: none;">
+                    <div class="pod-notice" id="podNotice">
                         <i class="fas fa-hand-holding-usd"></i>
-                        <div>
-                            <strong>Pay on Delivery</strong>
-                            <p>Please prepare <span id="podAmount">KES 0</span> in cash for the delivery person. Exact change is appreciated.</p>
-                        </div>
+                        <div><strong>Pay on Delivery</strong><p>Please prepare <span id="podAmount">KES 0</span> in cash for the delivery person.</p></div>
                     </div>
                 </div>
 
-                <!-- Quick Actions -->
                 <div class="success-quick-actions">
                     <a href="" id="trackOrderLink" class="action-card primary">
-                        <div class="action-icon">
-                            <i class="fas fa-truck"></i>
-                        </div>
-                        <div class="action-text">
-                            <strong>Track Your Order</strong>
-                            <span>Real-time updates on delivery</span>
-                        </div>
-                        <i class="fas fa-chevron-right"></i>
+                        <div class="action-icon"><i class="fas fa-truck"></i></div>
+                        <div class="action-text"><strong>Track Your Order</strong><span>Real-time delivery updates</span></div>
+                        <i class="fas fa-chevron-right" style="opacity:0.7;font-size:13px;"></i>
                     </a>
-                    
                     <div class="action-row">
-                        <a href="profile.html#orders" class="action-card secondary">
-                            <i class="fas fa-list-alt"></i>
-                            <span>View All Orders</span>
-                        </a>
-                        <a href="" id="shareOrderLink" class="action-card secondary" onclick="shareOrder(event)">
-                            <i class="fas fa-share-alt"></i>
-                            <span>Share</span>
-                        </a>
-                        <a href="customer_care.html" class="action-card secondary">
-                            <i class="fas fa-headset"></i>
-                            <span>Get Help</span>
-                        </a>
+                        <a href="profile.html#orders" class="action-card"><i class="fas fa-list-alt"></i><span>My Orders</span></a>
+                        <a href="" id="shareOrderLink" class="action-card" onclick="shareOrder(event)"><i class="fas fa-share-alt"></i><span>Share</span></a>
+                        <a href="customer_care.html" class="action-card"><i class="fas fa-headset"></i><span>Help</span></a>
                     </div>
                 </div>
 
-                <!-- Notification Preferences -->
                 <div class="notification-preferences">
-                    <div class="pref-header">
-                        <i class="fas fa-bell"></i>
-                        <span>Get notified about your order status</span>
-                    </div>
+                    <div class="pref-header"><i class="fas fa-bell"></i> Get notified about your order</div>
                     <div class="pref-options">
-                        <label class="pref-option">
-                            <input type="checkbox" checked disabled>
-                            <span>SMS Updates</span>
-                        </label>
-                        <label class="pref-option">
-                            <input type="checkbox" id="emailNotifyCheck">
-                            <span>Email Updates</span>
-                        </label>
+                        <label class="pref-option"><input type="checkbox" checked disabled> <span>SMS Updates</span></label>
+                        <label class="pref-option"><input type="checkbox" id="emailNotifyCheck"> <span>Email Updates</span></label>
                     </div>
                 </div>
 
-                <!-- Continue Shopping Button -->
                 <div class="success-footer-actions">
-                    <a href="index.html" class="btn-continue-shopping">
-                        <i class="fas fa-shopping-bag"></i> Continue Shopping
-                    </a>
+                    <a href="index.html" class="btn-continue-shopping"><i class="fas fa-shopping-bag"></i> Continue Shopping</a>
                 </div>
             </div>
         </div>
+
     </main>
 
     <script type="module" src="checkout.js"></script>
     <script>
-        // Copy order ID to clipboard
-        function copyOrderId() {
-            const orderId = document.getElementById('orderRefNumber').textContent;
-            navigator.clipboard.writeText(orderId).then(() => {
-                const btn = document.querySelector('.copy-btn');
-                btn.innerHTML = '<i class="fas fa-check"></i>';
-                setTimeout(() => {
-                    btn.innerHTML = '<i class="fas fa-copy"></i>';
-                }, 2000);
-            });
-        }
+        document.addEventListener('DOMContentLoaded', function() {
 
-        // Share order
-        function shareOrder(e) {
-            e.preventDefault();
-            const orderId = document.getElementById('orderRefNumber').textContent;
-            const shareData = {
-                title: 'My Oda Pap Order',
-                text: `I just placed an order on Oda Pap! Order ID: ${orderId}`,
-                url: window.location.origin + '/orderTracking.html?orderId=' + orderId
-            };
-            
-            if (navigator.share) {
-                navigator.share(shareData);
-            } else {
-                navigator.clipboard.writeText(shareData.url);
-                // Show toast notification instead of alert
-                const toast = document.createElement('div');
-                toast.className = 'copy-toast';
-                toast.innerHTML = '<i class="fas fa-check-circle"></i> Order link copied!';
-                toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#333;color:white;padding:12px 24px;border-radius:8px;z-index:9999;display:flex;align-items:center;gap:8px;animation:fadeIn 0.3s ease';
-                document.body.appendChild(toast);
-                setTimeout(() => toast.remove(), 2500);
+            // ── Edit location button toggle ──────────────────────────────
+            const editBtn = document.getElementById('checkout-edit-location-btn');
+            const locationForm = document.getElementById('checkout-location-form');
+            if (editBtn && locationForm) {
+                editBtn.addEventListener('click', function() {
+                    const isOpen = locationForm.style.display === 'block';
+                    locationForm.style.display = isOpen ? 'none' : 'block';
+                    editBtn.textContent = isOpen ? '✎ Change' : '✕ Close';
+                });
             }
-        }
+
+            // ── Sticky bar: show once checkoutContainer becomes visible ──
+            // checkout.js sets checkoutContainer display via style — we watch it
+            const container = document.getElementById('checkoutContainer');
+            const stickyBar = document.getElementById('stickyOrderBar');
+            if (container && stickyBar) {
+                const observer = new MutationObserver(function() {
+                    if (container.style.display !== 'none' && container.style.display !== '') {
+                        stickyBar.style.display = 'block';
+                    }
+                });
+                observer.observe(container, { attributes: true, attributeFilter: ['style'] });
+            }
+
+            // ── Free shipping bar ────────────────────────────────────────
+            window.updateFreeShippingBar = function(subtotal) {
+                const FREE = 3000;
+                const fill = document.getElementById('freeShipFill');
+                const msg  = document.getElementById('freeShipMsg');
+                const bar  = document.getElementById('freeShippingBar');
+                if (!fill || !msg) return;
+                fill.style.width = Math.min(100, (subtotal / FREE) * 100) + '%';
+                if (subtotal >= FREE) {
+                    msg.textContent = 'You qualify for FREE delivery!';
+                    if (bar) bar.style.background = 'linear-gradient(135deg,#f0fdf4,#dcfce7)';
+                } else {
+                    msg.textContent = 'Add KES ' + (FREE - subtotal).toLocaleString() + ' more for free delivery';
+                }
+            };
+
+            // ── Copy order ID ────────────────────────────────────────────
+            window.copyOrderId = function() {
+                const id = document.getElementById('orderRefNumber')?.textContent;
+                if (!id) return;
+                navigator.clipboard.writeText(id).then(() => {
+                    const btn = document.querySelector('.copy-btn');
+                    if (!btn) return;
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                });
+            };
+
+            // ── Share order ──────────────────────────────────────────────
+            window.shareOrder = function(e) {
+                e.preventDefault();
+                const id = document.getElementById('orderRefNumber')?.textContent || '';
+                const url = location.origin + '/orderTracking.html?orderId=' + id;
+                if (navigator.share) {
+                    navigator.share({ title: 'My Oda Pap Order', text: 'Order ID: ' + id, url });
+                } else {
+                    navigator.clipboard.writeText(url);
+                    const t = document.createElement('div');
+                    t.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:8px;z-index:99999;font-size:13px;';
+                    t.textContent = 'Order link copied!';
+                    document.body.appendChild(t);
+                    setTimeout(() => t.remove(), 2200);
+                }
+            };
+
+            // ── Upload receipt preview ───────────────────────────────────
+            window.removePreview = function() {
+                const p = document.getElementById('uploadPreview');
+                const s = document.getElementById('submitReceiptBtn');
+                const u = document.getElementById('receiptUpload');
+                if (p) p.style.display = 'none';
+                if (s) s.style.display = 'none';
+                if (u) u.value = '';
+            };
+        });
     </script>
 </body>
 </html>

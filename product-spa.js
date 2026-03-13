@@ -96,21 +96,6 @@ function getMinPriceFromVariations(product) {
     };
 }
 
-// Recursively remove undefined values from an object before writing to Firestore.
-// Firestore rejects undefined — fields must be null or omitted entirely.
-function stripUndefined(obj) {
-    if (obj === null || obj === undefined) return null;
-    if (Array.isArray(obj)) return obj.map(stripUndefined).filter(v => v !== undefined);
-    if (typeof obj === 'object') {
-        const out = {};
-        for (const [k, v] of Object.entries(obj)) {
-            if (v !== undefined) out[k] = stripUndefined(v);
-        }
-        return out;
-    }
-    return obj;
-}
-
 class ProductPage {
     constructor() {
         this.auth = getAuth(app);
@@ -564,18 +549,15 @@ class ProductPage {
         this.product.variations.forEach((variation) => {
             if (variation.attributes && variation.attributes.length > 0) {
                 variation.attributes.forEach((attr) => {
-                    allVariations.push(stripUndefined({
+                    allVariations.push({
                         ...variation,
-                        // Do NOT include the nested attributes array — it creates
-                        // deep nesting and may carry undefined values into Firestore
-                        attributes: undefined,
                         attr_name: attr.attr_name,
                         stock: attr.stock,
                         piece_count: attr.piece_count,
                         price: attr.price,
                         retailPrice: attr.retailPrice,
                         photoUrl: attr.photoUrl
-                    }));
+                    });
                 });
             } else {
                 allVariations.push(variation);
@@ -968,7 +950,7 @@ class ProductPage {
         `;
         
         productCard.querySelector('.product-link').addEventListener('click', () => {
-            window.location.href = `product.html?id=${encodeURIComponent(productId)}`;
+            if(window.__router){window.__router.navigate('product',{id:productId});}else{window.location.href=`product.html?id=${encodeURIComponent(productId)}`;}
         });
         
         return productCard;
@@ -1050,7 +1032,7 @@ class ProductPage {
         }
 
         // Show quantity modal
-        this.showQuantityModal(false); // Buy Now modal
+        this.showQuantityModal();
     }
 
     // Show login prompt modal using authModal
@@ -1074,105 +1056,29 @@ class ProductPage {
         document.cookie = `${name}=${encodeURIComponent(JSON.stringify(value))};expires=${expires.toUTCString()};path=/`;
     }
 
-    showQuantityModal(isCart = false) {
-        const listing   = this.product;
-        const listingId = this.productId;
-        const minOrder  = listing.minOrderQuantity || 1;
-        const listingImg = listing.imageUrls?.[0] || listing.photoTraceUrl || '';
-
-        // ── Flatten all variation options (same structure as index.html modal) ──
-        const allOptions = [];
-        if (listing.variations?.length) {
-            listing.variations.forEach((v, vIdx) => {
-                const varImg = v.photoUrls?.[0] || v.photoUrl || '';
-                if (v.attributes?.length) {
-                    v.attributes.forEach((a, aIdx) => {
-                        allOptions.push(stripUndefined({
-                            ...a,
-                            variationTitle: v.title,
-                            variationIndex: vIdx,
-                            attributeIndex: aIdx,
-                            displayName: `${v.title}: ${a.attr_name}`,
-                            photoUrl: a.photoUrl || a.imageUrl || varImg || listingImg,
-                            packQuantity: a.packQuantity || null,
-                            unitLabel: a.unitLabel || 'pieces'
-                        }));
-                    });
-                } else {
-                    allOptions.push(stripUndefined({
-                        ...v,
-                        attributes: undefined,
-                        variationIndex: vIdx,
-                        displayName: v.title || v.attr_name || `Option ${vIdx + 1}`,
-                        photoUrl: v.photoUrl || v.imageUrl || varImg || listingImg,
-                        packQuantity: v.packQuantity || null,
-                        unitLabel: v.unitLabel || 'pieces'
-                    }));
-                }
-            });
-        }
-
-        // Pre-select the currently chosen variation if the user already picked one,
-        // otherwise default to the first option
-        let selected = allOptions.find(o =>
-            o.attr_name === this.selectedVariation?.attr_name &&
-            o.variationTitle === this.selectedVariation?.variationTitle
-        ) || allOptions[0] || null;
-
-        let price    = selected?.price || selected?.originalPrice || listing.price || listing.minPrice || 0;
-        let maxStock = selected?.stock || listing.totalStock || 10;
-
-        const shouldShowStock = s => Number.isFinite(parseInt(s)) && parseInt(s) > 0 && parseInt(s) <= 50;
-        const escHtml = s => String(s ?? '').replace(/[&<>"']/g, c =>
-            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
-        );
-
-        // ── Build variation cards HTML ──────────────────────────────────────────
-        let variationsHTML = '';
-        if (allOptions.length > 0) {
-            variationsHTML = '<div class="modal-variations"><h4>Select Option:</h4><div class="variations-grid">';
-            allOptions.forEach((o, idx) => {
-                const oPrice  = parseFloat(o.price || o.originalPrice || listing.price || 0);
-                const oRetail = parseFloat(o.retailPrice || o.retail) || 0;
-                const pqty    = parseInt(o.packQuantity) || 0;
-                const pLabel  = pqty
-                    ? `<p class="variation-pack"><i class="fas fa-cubes"></i> ${pqty} ${escHtml(o.unitLabel || 'pieces')} per unit</p>`
-                    : '';
-                const retailPP = oRetail && pqty > 1 ? ` (KES ${Math.ceil(oRetail / pqty).toLocaleString()}/pc)` : '';
-                const oStock  = parseInt(o.stock) || 0;
-                const isSelected = o === selected;
-                variationsHTML += `
-                    <div class="variation-mini-card ${isSelected ? 'selected' : ''}" data-option-index="${idx}">
-                        ${o.photoUrl ? `<img src="${escHtml(o.photoUrl)}" alt="${escHtml(o.displayName)}">` : '<i class="fas fa-box"></i>'}
-                        <p><strong>${escHtml(o.displayName)}</strong></p>
-                        ${pLabel}
-                        <p class="variation-price">KES ${oPrice.toLocaleString()}${pqty > 1 ? ` <span class="var-per-pc">(KES ${Math.ceil(oPrice / pqty).toLocaleString()}/pc)</span>` : ''}</p>
-                        ${oRetail ? `<p class="variation-retail">~Retail KES ${oRetail.toLocaleString()}${retailPP}</p>` : ''}
-                        ${shouldShowStock(oStock) ? `<p class="variation-stock">${oStock} in stock</p>` : ''}
-                    </div>`;
-            });
-            variationsHTML += '</div></div>';
-        }
-
+    showQuantityModal() {
+        const maxStock = this.selectedVariation ? this.selectedVariation.stock : this.product.totalStock;
+        const displayPrice = this.selectedVariation?.price || this.product.price;
+        const minOrder = this.product.minOrderQuantity || 1;
+        
         const modal = document.createElement('div');
         modal.className = 'quantity-modal';
         modal.innerHTML = `
             <div class="quantity-modal-content">
-                <h3>Select Options</h3>
-                ${shouldShowStock(maxStock) ? `<p>Available stock: <span id="modalStock">${maxStock}</span> units</p>` : '<span id="modalStock" style="display:none;"></span>'}
-                ${minOrder > 1 ? `<p style="color:#ff5722;font-size:12px;margin-top:4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
-                ${variationsHTML}
+                <h3>Select Quantity</h3>
+                <p>Available stock: ${maxStock} units</p>
+                ${minOrder > 1 ? `<p style="color: #ff5722; font-size: 12px; margin-top: 4px;"><i class="fas fa-info-circle"></i> Minimum order: ${minOrder} units</p>` : ''}
                 <div class="quantity-selector">
                     <button class="qty-btn minus">-</button>
                     <input type="number" id="buyNowQuantity" value="${minOrder}" min="${minOrder}" max="${maxStock}">
                     <button class="qty-btn plus">+</button>
                 </div>
                 <div class="quantity-total">
-                    <p>Total: <span id="quantityTotal">KES ${price.toLocaleString()}</span></p>
+                    <p>Total: <span id="quantityTotal">KES ${displayPrice.toLocaleString()}</span></p>
                 </div>
                 <div class="quantity-actions">
                     <button class="cancel-btn">Cancel</button>
-                    <button class="confirm-btn">${isCart ? 'Add to Cart' : 'Proceed to Checkout'}</button>
+                    <button class="confirm-btn">Proceed to Checkout</button>
                 </div>
             </div>
         `;
@@ -1180,76 +1086,49 @@ class ProductPage {
         document.body.appendChild(modal);
 
         const quantityInput = modal.querySelector('#buyNowQuantity');
-        const totalEl       = modal.querySelector('#quantityTotal');
-        const stockEl       = modal.querySelector('#modalStock');
+        const totalEl = modal.querySelector('#quantityTotal');
+        const minusBtn = modal.querySelector('.minus');
+        const plusBtn = modal.querySelector('.plus');
+        const cancelBtn = modal.querySelector('.cancel-btn');
+        const confirmBtn = modal.querySelector('.confirm-btn');
 
         const updateTotal = () => {
-            totalEl.textContent = `KES ${(price * (parseInt(quantityInput.value) || 1)).toLocaleString()}`;
+            const qty = parseInt(quantityInput.value) || 1;
+            const total = displayPrice * qty;
+            totalEl.textContent = `KES ${total.toLocaleString()}`;
         };
 
-        // Variation card clicks — keep page state in sync via this.selectedVariation
-        modal.querySelectorAll('.variation-mini-card').forEach((card, idx) => {
-            card.addEventListener('click', () => {
-                modal.querySelectorAll('.variation-mini-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                selected = allOptions[idx];
-                this.selectedVariation = selected; // sync page-level selection
-                price    = selected.price || selected.originalPrice || listing.price || 0;
-                maxStock = selected.stock || 10;
-                quantityInput.max = maxStock;
-                if (stockEl) stockEl.textContent = maxStock;
+        minusBtn.addEventListener('click', () => {
+            if (parseInt(quantityInput.value) > minOrder) {
+                quantityInput.value = parseInt(quantityInput.value) - 1;
                 updateTotal();
-            });
+            }
         });
 
-        modal.querySelector('.minus').addEventListener('click', () => {
-            if (parseInt(quantityInput.value) > minOrder) { quantityInput.value--; updateTotal(); }
+        plusBtn.addEventListener('click', () => {
+            if (parseInt(quantityInput.value) < maxStock) {
+                quantityInput.value = parseInt(quantityInput.value) + 1;
+                updateTotal();
+            }
         });
-        modal.querySelector('.plus').addEventListener('click', () => {
-            if (parseInt(quantityInput.value) < maxStock) { quantityInput.value++; updateTotal(); }
-        });
+
         quantityInput.addEventListener('input', updateTotal);
 
-        modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
-        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-
-        modal.querySelector('.confirm-btn').addEventListener('click', async () => {
-            const quantity = parseInt(quantityInput.value) || minOrder;
-
-            if (isCart) {
-                const user = this.auth.currentUser;
-                if (!user) { this.showLoginPrompt('add'); modal.remove(); return; }
-                try {
-                    const p = listing;
-                    const v = selected;
-                    const cartItem = stripUndefined({
-                        userId: user.uid,
-                        listingId: listingId,
-                        name: p.name || null,
-                        brand: p.brand || null,
-                        category: p.category || null,
-                        price: v?.price || v?.originalPrice || p.price || p.minPrice || null,
-                        photoTraceUrl: v?.photoUrl || (p.imageUrls?.[0]) || p.photoTraceUrl || null,
-                        imageUrls: p.imageUrls || null,
-                        minOrderQuantity: p.minOrderQuantity || null,
-                        quantity: quantity,
-                        selectedVariation: v || null,
-                        addedAt: new Date().toISOString()
-                    });
-                    await addDoc(collection(this.db, `users/${user.uid}/cart`), cartItem);
-                    showNotification('Item added to cart!');
-                    animateButton(this.addToCartBtn, 'sounds/pop-39222.mp3');
-                    animateIconToCart(this.addToCartBtn, 'cart-icon');
-                    invalidateCartCache();
-                    await updateCartCounter(this.db, user.uid, true);
-                } catch (err) {
-                    console.error('Error adding to cart:', err);
-                    showNotification('Failed to add item to cart. Please try again.');
-                }
-            } else {
-                this.proceedToBuyNowCheckout(quantity);
-            }
+        cancelBtn.addEventListener('click', () => {
             modal.remove();
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            const quantity = parseInt(quantityInput.value);
+            this.proceedToBuyNowCheckout(quantity);
+            modal.remove();
+        });
+
+        // Close on outside click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
         });
     }
 
@@ -1289,37 +1168,27 @@ class ProductPage {
             return;
         }
 
-        // If the product has variations, open the rich modal so the user picks
-        // a variant and quantity. The modal confirm handler does the addDoc.
-        if (this.product.variations?.length > 0) {
-            this.showQuantityModal(true);
+        if (!this.selectedVariation && this.product.variations && this.product.variations.length > 0) {
+            showNotification("Please select a variation first", "warning");
             return;
         }
 
-        // No variations — write a clean, safe object directly
         try {
-            const p = this.product;
-            const cartItem = stripUndefined({
+            const cartItem = {
                 userId: this.auth.currentUser.uid,
                 listingId: this.productId,
-                name: p.name || null,
-                brand: p.brand || null,
-                category: p.category || null,
-                price: p.price || p.minPrice || null,
-                photoTraceUrl: (p.imageUrls?.[0]) || p.photoTraceUrl || null,
-                imageUrls: p.imageUrls || null,
-                minOrderQuantity: p.minOrderQuantity || null,
-                quantity: p.minOrderQuantity || 1,
-                selectedVariation: null,
+                selectedVariation: this.selectedVariation,
+                quantity: 1,
+                ...this.product,
                 addedAt: new Date().toISOString()
-            });
+            };
 
             await addDoc(collection(this.db, `users/${this.auth.currentUser.uid}/cart`), cartItem);
             showNotification("Item added to cart!");
             animateButton(this.addToCartBtn, 'sounds/pop-39222.mp3');
             animateIconToCart(this.addToCartBtn, 'cart-icon');
-            invalidateCartCache();
-            await updateCartCounter(this.db, this.auth.currentUser.uid, true);
+            invalidateCartCache(); // Invalidate cache for counter updates
+            await updateCartCounter(this.db, this.auth.currentUser.uid, true); // Force refresh
         } catch (error) {
             console.error("Error adding item to cart:", error);
             showNotification("Failed to add item to cart. Please try again.");
@@ -1333,18 +1202,12 @@ class ProductPage {
         }
 
         try {
-            const p = this.product;
-            const wishlistItem = stripUndefined({
+            const wishlistItem = {
                 userId: this.auth.currentUser.uid,
                 listingId: this.productId,
-                name: p.name || null,
-                brand: p.brand || null,
-                category: p.category || null,
-                price: p.price || p.minPrice || null,
-                photoTraceUrl: (p.imageUrls?.[0]) || p.photoTraceUrl || null,
-                imageUrls: p.imageUrls || null,
+                ...this.product,
                 addedAt: new Date().toISOString()
-            });
+            };
 
             await addDoc(collection(this.db, `users/${this.auth.currentUser.uid}/wishlist`), wishlistItem);
             showNotification("Item added to wishlist!");
@@ -1466,45 +1329,32 @@ class ProductPage {
 }
 
 // Initialize the product page
-document.addEventListener('DOMContentLoaded', () => {
+export function initPage() {
     loadDisplaySettings();
     const productPage = new ProductPage();
     productPage.initialize();
-});
 
-// Share functionality
-document.addEventListener('DOMContentLoaded', () => {
+    // Share functionality
     const shareButtons = document.querySelectorAll('.share-btn');
     const notification = document.getElementById('notification');
-
     shareButtons.forEach(button => {
         button.addEventListener('click', () => {
             const productUrl = window.location.href;
             navigator.clipboard.writeText(productUrl).then(() => {
                 if (notification) {
                     notification.style.display = 'block';
-                    setTimeout(() => {
-                        notification.style.display = 'none';
-                    }, 3000);
+                    setTimeout(() => { notification.style.display = 'none'; }, 3000);
                 }
-
                 const platform = button.classList[1];
                 let redirectUrl = '';
                 switch (platform) {
-                    case 'whatsapp':
-                        redirectUrl = `https://wa.me/?text=${encodeURIComponent(productUrl)}`;
-                        break;
-                    case 'telegram':
-                        redirectUrl = `https://t.me/share/url?url=${encodeURIComponent(productUrl)}`;
-                        break;
-                    case 'twitter':
-                        redirectUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(productUrl)}`;
-                        break;
-                    case 'copy':
-                        return;
+                    case 'whatsapp': redirectUrl = `https://wa.me/?text=${encodeURIComponent(productUrl)}`; break;
+                    case 'telegram': redirectUrl = `https://t.me/share/url?url=${encodeURIComponent(productUrl)}`; break;
+                    case 'twitter': redirectUrl = `https://twitter.com/intent/tweet?url=${encodeURIComponent(productUrl)}`; break;
+                    case 'copy': return;
                 }
                 window.open(redirectUrl, '_blank');
             });
         });
     });
-});
+}

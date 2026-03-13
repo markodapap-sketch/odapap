@@ -24,6 +24,23 @@ const storage = getStorage(app);
 // Setup global image error handling
 setupGlobalImageErrorHandler();
 
+
+// ── Lazy-load Leaflet only when map is actually opened ───────────────────────
+async function ensureLeaflet() {
+    if (window.L) return; // already loaded
+    await new Promise((resolve, reject) => {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
 class CheckoutManager {
     constructor() {
         this.user = null;
@@ -257,10 +274,18 @@ class CheckoutManager {
     async initialize() {
         try {
             this.showLoading();
-            
-            onAuthStateChanged(auth, async (user) => {
+
+            // ── Fast path: if auth token already in memory, skip waiting ──
+            const immediateUser = auth.currentUser;
+            if (immediateUser) {
+                await this._boot(immediateUser);
+                return;
+            }
+
+            // Slow path: wait for Firebase to restore session from storage
+            const unsubscribe = onAuthStateChanged(auth, async (user) => {
+                unsubscribe(); // Only fire once
                 if (!user) {
-                    // Show login modal with cart as fallback
                     authModal.show({
                         title: 'Login to Checkout',
                         message: 'Please sign in to complete your purchase',
@@ -271,25 +296,41 @@ class CheckoutManager {
                     });
                     return;
                 }
-
-                this.user = user;
-                
-                // Initialize M-Pesa manager
-                this.mpesaManager = new MpesaPaymentManager({
-                    userId: user.uid,
-                    onStatusChange: (status, message) => this.handlePaymentStatusChange(status, message),
-                    onPaymentComplete: (data) => this.handlePaymentComplete(data),
-                    onPaymentFailed: (data) => this.handlePaymentFailed(data),
-                    onError: (error) => console.error('M-Pesa Error:', error)
-                });
-                
-                await this.loadUserInfo();
-                await this.loadOrderItems();
-                this.hideLoading();
+                await this._boot(user);
             });
         } catch (error) {
             console.error('Error initializing checkout:', error);
             showNotification('Error loading checkout page', 'error');
+        }
+    }
+
+    async _boot(user) {
+        try {
+            this.user = user;
+
+            // Initialize M-Pesa manager
+            this.mpesaManager = new MpesaPaymentManager({
+                userId: user.uid,
+                onStatusChange: (status, message) => this.handlePaymentStatusChange(status, message),
+                onPaymentComplete: (data) => this.handlePaymentComplete(data),
+                onPaymentFailed: (data) => this.handlePaymentFailed(data),
+                onError: (error) => console.error('M-Pesa Error:', error)
+            });
+
+            // Show container immediately so user sees something while data loads
+            if (this.checkoutContainer) this.checkoutContainer.style.display = 'block';
+
+            // Load user info and cart items in parallel — cuts wait time roughly in half
+            await Promise.all([
+                this.loadUserInfo(),
+                this.loadOrderItems()
+            ]);
+
+            this.hideLoading();
+        } catch (error) {
+            console.error('Checkout boot error:', error);
+            showNotification('Error loading checkout page', 'error');
+            this.hideLoading();
         }
     }
 
@@ -508,11 +549,12 @@ class CheckoutManager {
         let ckMap = null, ckMarker = null, ckCoords = null;
         if (this.userData?.lat && this.userData?.lng) ckCoords = { lat: this.userData.lat, lng: this.userData.lng };
 
-        document.getElementById('checkout-map-toggle')?.addEventListener('click', () => {
+        document.getElementById('checkout-map-toggle')?.addEventListener('click', async () => {
             const mc = document.getElementById('checkout-map-container');
             const show = mc.style.display === 'none';
             mc.style.display = show ? 'block' : 'none';
             if (show && !ckMap) {
+                await ensureLeaflet();
                 ckMap = L.map('checkout-map').setView(ckCoords ? [ckCoords.lat, ckCoords.lng] : [-1.2921, 36.8219], ckCoords ? 14 : 7);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(ckMap);
                 if (ckCoords) ckMarker = L.marker([ckCoords.lat, ckCoords.lng]).addTo(ckMap);
@@ -634,20 +676,52 @@ class CheckoutManager {
             const { getDoc, doc } = await import('https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js');
             const settingsDoc = await getDoc(doc(db, "Settings", "deliveryAreas"));
             
-            let enabledAreas = ['Mombasa']; // Default to Mombasa
+            let enabledAreas = ['Mombasa']; // Default fallback
             if (settingsDoc.exists()) {
                 enabledAreas = settingsDoc.data().enabledCounties || ['Mombasa'];
             }
-            
-            // Check if user's county is in enabled areas (case-insensitive)
-            const isInDeliveryArea = enabledAreas.some(area => 
-                county.toLowerCase().includes(area.toLowerCase()) || 
-                area.toLowerCase().includes(county.toLowerCase())
+
+            // ── Normalize the incoming county value ────────────────────────────
+            // Nominatim (OpenStreetMap) sometimes returns sub-county or ward names
+            // instead of the Kenyan county. This is especially common on the Coast
+            // where Nominatim returns "Kisauni", "Mvita", "Likoni" etc. — which are
+            // constituencies/sub-counties of Mombasa County. We map them here so the
+            // delivery check works correctly regardless of what Nominatim returns.
+            const KENYA_SUBCOUNTY_TO_COUNTY = {
+                // Mombasa sub-counties / constituencies
+                'kisauni': 'Mombasa', 'mvita': 'Mombasa', 'likoni': 'Mombasa',
+                'nyali': 'Mombasa', 'changamwe': 'Mombasa', 'jomvu': 'Mombasa',
+                'mshomoroni': 'Mombasa', 'port reitz': 'Mombasa',
+                // Kilifi sub-counties
+                'kilifi north': 'Kilifi', 'kilifi south': 'Kilifi', 'kaloleni': 'Kilifi',
+                'rabai': 'Kilifi', 'ganze': 'Kilifi', 'malindi': 'Kilifi',
+                'magarini': 'Kilifi', 'chonyi': 'Kilifi',
+                // Kwale sub-counties
+                'msambweni': 'Kwale', 'lunga lunga': 'Kwale', 'matuga': 'Kwale',
+                'kinango': 'Kwale',
+                // Nairobi sub-counties
+                'westlands': 'Nairobi', 'dagoretti': 'Nairobi', 'langata': 'Nairobi',
+                'kibra': 'Nairobi', 'roysambu': 'Nairobi', 'kasarani': 'Nairobi',
+                'ruaraka': 'Nairobi', 'embakasi': 'Nairobi', 'makadara': 'Nairobi',
+                'kamukunji': 'Nairobi', 'starehe': 'Nairobi', 'mathare': 'Nairobi',
+                // Meru sub-counties
+                'imenti north': 'Meru', 'imenti south': 'Meru', 'tigania east': 'Meru',
+                'tigania west': 'Meru', 'igembe north': 'Meru', 'igembe south': 'Meru',
+                // Add more as needed
+            };
+
+            const countyLower = (county || '').toLowerCase().trim();
+            // Resolve: if the raw value is a known sub-county, use the parent county
+            const resolvedCounty = KENYA_SUBCOUNTY_TO_COUNTY[countyLower] || county;
+
+            // Match resolved county against enabled areas (case-insensitive, bidirectional)
+            const isInDeliveryArea = enabledAreas.some(area =>
+                resolvedCounty.toLowerCase().includes(area.toLowerCase()) ||
+                area.toLowerCase().includes(resolvedCounty.toLowerCase())
             );
-            
+
             if (!isInDeliveryArea && county) {
                 this.shippingNotice.style.display = 'flex';
-                // Update notice message
                 const noticeText = this.shippingNotice.querySelector('p');
                 if (noticeText) {
                     const areasList = enabledAreas.join(', ');
@@ -658,10 +732,8 @@ class CheckoutManager {
             }
         } catch (error) {
             console.error('Error checking delivery area:', error);
-            // Fallback to old behavior
-            if (!county.toLowerCase().includes('mombasa')) {
-                this.shippingNotice.style.display = 'flex';
-            }
+            // Fail open — do not block checkout for location lookup errors
+            if (this.shippingNotice) this.shippingNotice.style.display = 'none';
         }
     }
 
@@ -2046,7 +2118,7 @@ class CheckoutManager {
                     repaySection.style.display = 'block';
                     // Store order info for repay
                     repaySection.dataset.orderId = orderId;
-                    repaySection.dataset.amount = this.orderTotal;
+                    repaySection.dataset.amount = this.total || 0;
                 } else {
                     repaySection.style.display = 'none';
                 }
@@ -2059,7 +2131,11 @@ class CheckoutManager {
                 if (paymentMethod === 'pay_on_delivery') {
                     podNotice.style.display = 'flex';
                     if (podAmount) {
-                        podAmount.textContent = `KSh ${this.orderTotal?.toLocaleString() || '0'}`;
+                        // this.total holds the live grand total (subtotal + shipping - discount).
+                        // this.orderTotal is never assigned on the class — using it always
+                        // produces undefined which .toLocaleString() renders as "0".
+                        const podDisplayAmount = this.total || 0;
+                        podAmount.textContent = `KSh ${podDisplayAmount.toLocaleString()}`;
                     }
                 } else {
                     podNotice.style.display = 'none';

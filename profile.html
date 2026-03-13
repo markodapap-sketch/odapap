@@ -1451,15 +1451,50 @@
         const loc = await detectLocation();
         status.className = 'detect-status success';
         status.innerHTML = `<i class="fas fa-check-circle"></i> Found: ${loc.display_name.substring(0, 100)}…`;
-        
+
+        // ── Resolve Nominatim sub-county names to Kenyan counties ────────────
+        // Nominatim often returns constituency/sub-county names (e.g. "Kisauni",
+        // "Mvita", "Likoni") instead of the proper county name ("Mombasa").
+        // This lookup maps known sub-county/ward names to their parent county.
+        const SUBCOUNTY_TO_COUNTY = {
+          // Mombasa
+          'kisauni':'Mombasa','mvita':'Mombasa','likoni':'Mombasa',
+          'nyali':'Mombasa','changamwe':'Mombasa','jomvu':'Mombasa',
+          'mshomoroni':'Mombasa','port reitz':'Mombasa','bamburi':'Mombasa',
+          'tudor':'Mombasa','tononoka':'Mombasa','majengo':'Mombasa',
+          'ganjoni':'Mombasa','shimanzi':'Mombasa','kongowea':'Mombasa',
+          'frere town':'Mombasa','miritini':'Mombasa','mikindani':'Mombasa',
+          // Kilifi
+          'kilifi north':'Kilifi','kilifi south':'Kilifi','malindi':'Kilifi',
+          'magarini':'Kilifi','rabai':'Kilifi','kaloleni':'Kilifi',
+          // Kwale
+          'msambweni':'Kwale','lunga lunga':'Kwale','matuga':'Kwale','kinango':'Kwale',
+          // Nairobi sub-counties
+          'westlands':'Nairobi','dagoretti north':'Nairobi','dagoretti south':'Nairobi',
+          'langata':'Nairobi','kibra':'Nairobi','roysambu':'Nairobi',
+          'kasarani':'Nairobi','ruaraka':'Nairobi','embakasi central':'Nairobi',
+          'embakasi east':'Nairobi','embakasi north':'Nairobi','embakasi south':'Nairobi',
+          'embakasi west':'Nairobi','makadara':'Nairobi','kamukunji':'Nairobi',
+          'starehe':'Nairobi','mathare':'Nairobi',
+          // Kiambu
+          'ruiru':'Kiambu','thika town':'Kiambu','githunguri':'Kiambu',
+          'kiambu':'Kiambu','kiambaa':'Kiambu','kabete':'Kiambu',
+          'kikuyu':'Kiambu','limuru':'Kiambu','gatundu north':'Kiambu',
+          'gatundu south':'Kiambu','juja':'Kiambu','lari':'Kiambu',
+        };
+        const rawCounty = (loc.county || '').toLowerCase().trim();
+        const resolvedCounty = SUBCOUNTY_TO_COUNTY[rawCounty]
+          || loc.county
+          || '';
+
         // Auto-detected: save exact pin + full address directly — no dropdown matching needed
         const detectedData = {
           lat: loc.lat,
           lng: loc.lng,
           autoDetectedLocation: loc.display_name,
           specificLocation: loc.specificLocation || [loc.road, loc.ward, loc.subcounty].filter(Boolean).join(', '),
-          county: loc.county || '',
-          subcounty: loc.subcounty || '',
+          county: resolvedCounty,
+          subcounty: loc.subcounty || loc.county || '',
           ward: loc.ward || '',
           road: loc.road || '',
           postcode: loc.postcode || ''

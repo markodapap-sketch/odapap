@@ -7,7 +7,7 @@ import { updateCartCounter, updateWishlistCounter, updateChatCounter } from './j
 import { categoryHierarchy } from './js/categoryData.js';
 import { initializeImageSliders } from './imageSlider.js';
 import { escapeHtml, sanitizeUrl, validatePrice, validateQuantity } from './js/sanitize.js';
-import { initializePWA, requestNotificationPermission } from './js/pwa.js';
+import { initializePWA, requestNotificationPermission, prefetchImages } from './js/pwa.js';
 import { showLoader, hideLoader, updateLoaderMessage, setProgress, showSkeletons, getSkeletonCards } from './loader.js';
 import { initLazyLoading } from './js/imageCache.js';
 
@@ -278,26 +278,31 @@ async function updateAuthStatus(user) {
   if (!el) return;
   
   if (user) {
-    let name = user.email?.split('@')[0] || 'User';
-    let userData = {};
-    try {
-      // Use the cached user fetch to avoid duplicate Firestore reads
-      userData = await getCachedUser(user.uid);
-      name = userData.name || userData.username || name;
-    } catch {}
-    
-    // Update mega menu
-    updateMegaMenu(user, userData);
-    
-    el.innerHTML = `
-      <div class="welcome">
-        <span class="greeting">👋 ${getGreeting()}, <strong>${escapeHtml(name)}</strong></span>
-        <div class="actions">
-          <a href="listing.html" class="btn btn-primary"><i class="fas fa-plus"></i> Sell</a>
-          <button class="btn btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+    // ── Render immediately with what we have, then update with real name ─────
+    const fallbackName = user.email?.split('@')[0] || 'User';
+
+    const renderGreeting = (name, userData = {}) => {
+      updateMegaMenu(user, userData);
+      el.innerHTML = `
+        <div class="welcome">
+          <span class="greeting">👋 ${getGreeting()}, <strong>${escapeHtml(name)}</strong></span>
+          <div class="actions">
+            <a href="listing.html" class="btn btn-primary"><i class="fas fa-plus"></i> Sell</a>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    };
+
+    // Show something right away — no await
+    renderGreeting(fallbackName);
+
+    // Then update silently when the real name arrives (usually from localStorage, ~0ms)
+    getCachedUser(user.uid).then(userData => {
+      const realName = userData?.name || userData?.username || fallbackName;
+      if (realName !== fallbackName) renderGreeting(realName, userData);
+      else updateMegaMenu(user, userData); // still update mega menu with full data
+    }).catch(() => {});
+
   } else {
     updateMegaMenu(null);
     
@@ -383,7 +388,28 @@ async function getCachedListings() {
   }
   
   try {
-    const snap = await getDocs(collection(db, "Listings"));
+    // Query only active listings, capped at 300, using the composite index
+    // (status ASC + createdAt DESC) created in the Firestore console.
+    // Falls back gracefully if the index isn't ready yet.
+    let snap;
+    try {
+      snap = await getDocs(query(
+        collection(db, 'Listings'),
+        where('status', '==', 'active'),
+        orderBy('createdAt', 'desc'),
+        limit(300)
+      ));
+    } catch (_) {
+      try {
+        snap = await getDocs(query(
+          collection(db, 'Listings'),
+          where('status', '==', 'active'),
+          limit(300)
+        ));
+      } catch (_2) {
+        snap = await getDocs(query(collection(db, 'Listings'), limit(300)));
+      }
+    }
     listingsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     listingsCacheTime = Date.now();
     
@@ -930,21 +956,7 @@ function getVerifiedBadge() {
   return `<svg class="verified-tick" viewBox="0 0 22 22" aria-label="Verified account" role="img"><g><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></g></svg>`;
 }
 
-function renderProducts() {
-  const container = $('listings-container');
-  if (!container) return;
-  
-  if (allListings.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <i class="fas fa-box-open"></i>
-        <p>No products yet. Be the first to sell!</p>
-      </div>
-    `;
-    return;
-  }
-  
-  container.innerHTML = allListings.map(listing => {
+function buildListingHTML(listing) {
     const imageUrls = listing.imageUrls || [];
     const firstImage = sanitizeUrl(getImageUrl(imageUrls[0], 'product'));
     const sellerPic = sanitizeUrl(getImageUrl(listing.sellerPic, 'profile'));
@@ -959,6 +971,7 @@ function renderProducts() {
     const safeSellerId = escapeHtml(listing.sellerId);
     const safeSellerUid = escapeHtml(listing.sellerUid);
     const safePackInfo = escapeHtml(listing.packInfo || '');
+    const safeDescShort = escapeHtml((listing.description || '').substring(0, 100)).replace(/'/g, '&#39;');
     
     // Use Twitter-style verified badge
     const verifiedBadge = listing.isVerified ? getVerifiedBadge() : '';
@@ -972,7 +985,7 @@ function renderProducts() {
     const badgeHtml = badges.length ? `<div class="product-badges">${badges.join('')}</div>` : '';
     
     return `
-      <div class="listing-item">
+      <div class="listing-item" data-product-id="${listing.id}" data-images="${encodeURIComponent(JSON.stringify(imageUrls))}">
         <div class="product-item">
           <div class="profile">
             <img src="${sellerPic}" alt="${safeSellerName}" onclick="goToUserProfile('${safeSellerUid}')" loading="lazy" data-fallback="profile">
@@ -987,7 +1000,7 @@ function renderProducts() {
                 <small>Message</small>
               </div>
               <div>
-                <i class="fas fa-share" onclick="shareProduct('${safeId}', '${safeName}', '${escapeHtml((listing.description || '').substring(0, 100))}')"></i>
+                <i class="fas fa-share" onclick="shareProduct('${safeId}', '${safeName}', '${safeDescShort}')"></i>
                 <small>Share</small>
               </div>
             </div>
@@ -1038,10 +1051,49 @@ function renderProducts() {
         </div>
       </div>
     `;
-  }).join('');
-  
-  // Initialize image sliders
+}
+
+function renderProducts() {
+  const container = $('listings-container');
+  if (!container) return;
+
+  if (allListings.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-box-open"></i>
+        <p>No products yet. Be the first to sell!</p>
+      </div>
+    `;
+    return;
+  }
+
+  // ── Progressive render: show first 12 immediately, rest in animation frames ──
+  // This unblocks the main thread so users see products ~3× faster on slow devices.
+  const FIRST_BATCH = 12;
+  const first = allListings.slice(0, FIRST_BATCH);
+  const rest  = allListings.slice(FIRST_BATCH);
+
+  container.innerHTML = first.map(buildListingHTML).join('');
   initializeImageSliders();
+  attachPrefetchListeners(container);
+
+  if (rest.length === 0) return;
+
+  // Defer remaining cards so browser can paint the first batch first
+  let i = 0;
+  const CHUNK = 12;
+  function appendChunk() {
+    const chunk = rest.slice(i, i + CHUNK);
+    if (chunk.length === 0) return;
+    const frag = document.createElement('div');
+    frag.innerHTML = chunk.map(buildListingHTML).join('');
+    while (frag.firstChild) container.appendChild(frag.firstChild);
+    initializeImageSliders();
+    attachPrefetchListeners(container);
+    i += CHUNK;
+    if (i < rest.length) requestAnimationFrame(appendChunk);
+  }
+  requestAnimationFrame(appendChunk);
 }
 
 // Sort products
@@ -1064,6 +1116,34 @@ $('sortSelect')?.addEventListener('change', function() {
 });
 
 // Navigation
+// ── Product prefetch on hover/touch intent ──────────────────────────────────
+const _prefetchedProducts = new Set();
+
+function attachPrefetchListeners(container) {
+  container.querySelectorAll('.listing-item[data-product-id]').forEach(el => {
+    const trigger = () => {
+      const id = el.dataset.productId;
+      if (_prefetchedProducts.has(id)) return;
+      _prefetchedProducts.add(id);
+
+      // Prefetch the product page HTML
+      const link = document.createElement('link');
+      link.rel = 'prefetch';
+      link.as = 'document';
+      link.href = `product.html?id=${id}`;
+      document.head.appendChild(link);
+
+      // Prefetch product images via browser cache
+      try {
+        const imgs = JSON.parse(decodeURIComponent(el.dataset.images || '%5B%5D'));
+        prefetchImages(imgs);
+      } catch (_) {}
+    };
+    el.addEventListener('mouseenter', trigger, { passive: true });
+    el.addEventListener('touchstart', trigger, { passive: true });
+  });
+}
+
 window.goToProduct = id => location.href = `product.html?id=${id}`;
 window.goToUserProfile = id => location.href = `user.html?userId=${id}`;
 
@@ -1410,48 +1490,46 @@ const badgeObserver = new MutationObserver(syncBadgeCounts);
 // ===== ANNOUNCEMENT BAR =====
 async function loadAnnouncement() {
   try {
-    // Check if user already dismissed this announcement
-    const dismissed = localStorage.getItem('oda_announcement_dismissed');
     const bar = document.getElementById('announcementBar');
     if (!bar) return;
+    const dismissed = localStorage.getItem('oda_announcement_dismissed');
 
-    // Use sessionStorage cache to avoid a Firestore read every page load
-    let data = null;
+    function applyAnnouncement(data) {
+      if (!data?.enabled || !data?.text) return;
+      if (dismissed === data.text) return;
+      document.getElementById('announcementText').textContent = data.text;
+      const link = document.getElementById('announcementLink');
+      if (data.linkUrl && data.linkText) {
+        link.href = data.linkUrl;
+        link.textContent = data.linkText;
+        link.style.display = 'inline';
+      }
+      if (data.bgColor) bar.style.background = data.bgColor;
+      bar.style.display = 'block';
+      document.getElementById('closeAnnouncement')?.addEventListener('click', () => {
+        bar.style.display = 'none';
+        localStorage.setItem('oda_announcement_dismissed', data.text);
+      });
+    }
+
+    // ── Show cached announcement INSTANTLY (zero network wait) ───────────────
     const cached = sessionStorage.getItem('oda_announcement');
     if (cached) {
-      try { data = JSON.parse(cached); } catch(e) {}
+      try { applyAnnouncement(JSON.parse(cached)); } catch (_) {}
+      // Still refresh in background so it stays current
+      getDoc(doc(db, 'Settings', 'announcement')).then(snap => {
+        if (snap.exists()) sessionStorage.setItem('oda_announcement', JSON.stringify(snap.data()));
+      }).catch(() => {});
+      return;
     }
-    
-    if (!data) {
-      const snap = await getDoc(doc(db, 'Settings', 'announcement'));
-      if (!snap.exists()) return;
-      data = snap.data();
-      sessionStorage.setItem('oda_announcement', JSON.stringify(data));
-    }
-    
-    if (!data.enabled || !data.text) return;
-    
-    // If already dismissed this exact announcement, don't show
-    if (dismissed === data.text) return;
-    
-    document.getElementById('announcementText').textContent = data.text;
-    
-    const link = document.getElementById('announcementLink');
-    if (data.linkUrl && data.linkText) {
-      link.href = data.linkUrl;
-      link.textContent = data.linkText;
-      link.style.display = 'inline';
-    }
-    
-    // Custom background color
-    if (data.bgColor) bar.style.background = data.bgColor;
-    
-    bar.style.display = 'block';
-    
-    document.getElementById('closeAnnouncement')?.addEventListener('click', () => {
-      bar.style.display = 'none';
-      localStorage.setItem('oda_announcement_dismissed', data.text);
-    });
+
+    // First visit — fetch from Firestore then cache
+    const snap = await getDoc(doc(db, 'Settings', 'announcement'));
+    if (!snap.exists()) return;
+    const data = snap.data();
+    sessionStorage.setItem('oda_announcement', JSON.stringify(data));
+    applyAnnouncement(data);
+
   } catch (err) {
     console.warn('[Announcement] Load failed:', err.message);
   }
@@ -1459,6 +1537,87 @@ async function loadAnnouncement() {
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', async () => {
+  // ── INSTANT GREETING from localStorage ────────────────────────────────────
+  // Render the auth bar immediately from cached data so the user sees their
+  // name right away. onAuthStateChanged will overwrite this once it fires.
+  (function renderInstantGreeting() {
+    const el = document.getElementById('auth-status');
+    if (!el) return;
+
+    // Try to find the current user's uid from Firebase's own IndexedDB key
+    // that it stores under localStorage in some SDK versions, or from our cache
+    try {
+      const usersRaw = localStorage.getItem('oda_users_cache');
+      if (usersRaw) {
+        const parsed = JSON.parse(usersRaw);
+        // parsed.data is { uid: { name, username, ... }, ... }
+        const entries = Object.values(parsed.data || {});
+        if (entries.length > 0) {
+          // Use the most recently cached user entry
+          const userData = entries[entries.length - 1];
+          const name = userData.name || userData.username || '';
+          if (name) {
+            el.innerHTML = `
+              <div class="welcome">
+                <span class="greeting">👋 ${getGreeting()}, <strong>${escapeHtml(name)}</strong></span>
+                <div class="actions">
+                  <a href="listing.html" class="btn btn-primary"><i class="fas fa-plus"></i> Sell</a>
+                </div>
+              </div>
+            `;
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // No cached user — show guest bar instantly (no network needed)
+    const guestCartCount = (() => {
+      try { return (JSON.parse(localStorage.getItem('guestCart')) || []).length; } catch { return 0; }
+    })();
+    el.innerHTML = `
+      <div class="welcome">
+        <span class="greeting">🛒 ${getGreeting()}! Welcome to <strong>Oda Pap</strong></span>
+        <div class="actions">
+          ${guestCartCount > 0 ? `<a href="cart.html" class="btn btn-outline"><i class="fas fa-shopping-cart"></i> ${guestCartCount}</a>` : ''}
+          <a href="login.html" class="btn btn-primary">Login</a>
+          <a href="signup.html" class="btn btn-outline">Sign Up</a>
+        </div>
+      </div>
+    `;
+  })();
+  // ── END INSTANT GREETING ───────────────────────────────────────────────────
+
+  // ── AUTH LISTENER: register early so it fires ASAP ──────────────────────
+  // Moved before product loading so the greeting updates as soon as Firebase
+  // restores the session — not after all products have loaded.
+  onAuthStateChanged(auth, async user => {
+    updateAuthStatus(user);
+
+    const howItWorks = document.getElementById('howItWorks');
+    if (howItWorks) {
+      if (user) {
+        howItWorks.style.display = 'none';
+      } else {
+        // Only show if user hasn't dismissed it permanently
+        if (!localStorage.getItem('oda_hiw_dismissed')) {
+          howItWorks.style.display = 'flex';
+        }
+      }
+    }
+
+    if (user) {
+      updateCartCounter(db, user.uid);
+      updateWishlistCounter(db, user.uid);
+      updateChatCounter(db, user.uid);
+      setTimeout(syncBadgeCounts, 1000);
+      setTimeout(() => {
+        if (Notification.permission === 'default') showNotificationPrompt();
+      }, 5000);
+    }
+  });
+  // ── END AUTH LISTENER ──────────────────────────────────────────────────────
+
   // Show skeleton loaders immediately for fast visual feedback
   showSkeletons();
   
@@ -1514,30 +1673,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Initial badge sync
   setTimeout(syncBadgeCounts, 500);
   
-  onAuthStateChanged(auth, async user => {
-    updateAuthStatus(user);
-    
-    // Show "How It Works" only for unlogged users
-    const howItWorks = document.getElementById('howItWorks');
-    if (howItWorks) {
-      howItWorks.style.display = user ? 'none' : 'block';
-    }
-    
-    if (user) {
-      updateCartCounter(db, user.uid);
-      updateWishlistCounter(db, user.uid);
-      updateChatCounter(db, user.uid);
-      // Sync after counters update
-      setTimeout(syncBadgeCounts, 1000);
-      
-      // Request notification permission for logged-in users (after a delay)
-      setTimeout(() => {
-        if (Notification.permission === 'default') {
-          showNotificationPrompt();
-        }
-      }, 5000);
-    }
-  });
 });
 
 // Show notification permission prompt

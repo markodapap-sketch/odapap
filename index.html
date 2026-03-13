@@ -201,41 +201,23 @@
     <!-- Auth Status -->
     <div id="auth-status" class="auth-bar"></div>
 
+    <!-- Delivery Countdown Banner -->
+    <div id="deliveryCountdownBanner" style="margin:0 0 6px;padding:8px 12px;background:linear-gradient(135deg,#ff5722,#e64a19);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="display:flex;align-items:center;gap:7px;min-width:0;">
+        <i class="fas fa-truck" style="color:#fff;font-size:14px;flex-shrink:0;"></i>
+        <span id="countdownMessage" style="color:#fff;font-size:12px;font-weight:600;line-height:1.3;">Loading...</span>
+      </div>
+      <div style="background:rgba(0,0,0,0.25);border-radius:7px;padding:4px 9px;text-align:center;flex-shrink:0;">
+        <span id="countdownTime" style="color:#fff;font-size:13px;font-weight:700;letter-spacing:0.5px;">--:--:--</span>
+      </div>
+    </div>
+
     <!-- How It Works - Guide for new/unlogged users -->
-    <section id="howItWorks" style="display:none;padding:16px;margin:0 12px 8px;background:linear-gradient(135deg,#f0f9ff,#e0f2fe);border-radius:12px;border:1px solid #bae6fd;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <h3 style="margin:0;font-size:15px;color:#0c4a6e;"><i class="fas fa-lightbulb" style="color:#f59e0b;"></i> How Oda Pap Works</h3>
-        <button onclick="this.closest('section').style.display='none'" style="background:none;border:none;color:#94a3b8;font-size:16px;cursor:pointer;" aria-label="Close"><i class="fas fa-times"></i></button>
-      </div>
-      <p style="font-size:12px;color:#475569;margin:0 0 12px;line-height:1.5;">Buy quality products at <strong>wholesale prices</strong> — delivered to your door in Mombasa. No minimum order, pay securely with M-Pesa.</p>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;text-align:center;">
-        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
-          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-search" style="color:#2563eb;font-size:14px;"></i></div>
-          <strong>Browse & Compare</strong><br><span style="color:#64748b;">Find products from verified sellers</span>
-        </div>
-        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
-          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-tags" style="color:#2563eb;font-size:14px;"></i></div>
-          <strong>Wholesale Prices</strong><br><span style="color:#64748b;">Pay less than shop retail prices</span>
-        </div>
-        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
-          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-mobile-alt" style="color:#2563eb;font-size:14px;"></i></div>
-          <strong>Pay via M-Pesa</strong><br><span style="color:#64748b;">Safe M-Pesa, wallet or COD</span>
-        </div>
-        <div style="font-size:11px;color:#334155;background:#fff;border-radius:10px;padding:10px 6px;">
-          <div style="width:36px;height:36px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 6px;"><i class="fas fa-truck" style="color:#2563eb;font-size:14px;"></i></div>
-          <strong>Fast Delivery</strong><br><span style="color:#64748b;">Delivered across Mombasa</span>
-        </div>
-      </div>
-      <div style="margin-top:12px;padding:10px;background:#f0fdf4;border-radius:8px;font-size:11px;color:#166534;line-height:1.6;">
-        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Free delivery</strong> on orders over KES 3,000<br>
-        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Verified sellers</strong> — quality guaranteed<br>
-        <i class="fas fa-check-circle" style="color:#16a34a;"></i> <strong>Buyer protection</strong> — secure payments & easy returns
-      </div>
-      <div style="text-align:center;margin-top:12px;">
-        <a href="signup.html" style="display:inline-block;background:#2563eb;color:#fff;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;">Sign Up Free <i class="fas fa-arrow-right" style="margin-left:4px;"></i></a>
-        <p style="font-size:11px;color:#94a3b8;margin:6px 0 0;">Already have an account? <a href="login.html" style="color:#2563eb;">Log in</a></p>
-      </div>
-    </section>
+    <div id="howItWorks" style="display:none;margin:0 0 4px;padding:6px 10px;background:#fff8e1;border-left:3px solid #f59e0b;border-radius:6px;align-items:center;gap:8px;">
+      <i class="fas fa-info-circle" style="color:#f59e0b;font-size:13px;flex-shrink:0;"></i>
+      <span style="font-size:11px;color:#78350f;flex:1;line-height:1.4;">Wholesale prices, M-Pesa payments, fast delivery in Mombasa. <a href="signup.html" style="color:#d97706;font-weight:600;">Sign up free</a></span>
+      <button onclick="document.getElementById('howItWorks').style.display='none';localStorage.setItem('oda_hiw_dismissed','1');" style="background:none;border:none;color:#a16207;font-size:15px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;" aria-label="Dismiss">&times;</button>
+    </div>
 
     <!-- Prime Categories Pills -->
     <section class="prime-pills">
@@ -261,17 +243,13 @@
     </section>
 
     <!-- Categories Strip -->
-    <section class="cat-section">
-      <div class="section-head">
-        <h2>Shop by Category</h2>
-      </div>
+    <section class="cat-section" style="margin-bottom:6px;">
       <div class="cat-strip" id="categoryStrip"></div>
     </section>
 
     <!-- Products Grid -->
     <section class="gallery">
-      <div class="filter-bar">
-        <h2>All Products</h2>
+      <div class="filter-bar" style="padding:6px 10px;margin-bottom:8px;">
         <select id="sortSelect" class="sort-select">
           <option value="for-you">✨ For You</option>
           <option value="profit">Best Margin</option>
@@ -391,6 +369,76 @@
         window.location.href = `search-results.html?q=${encodeURIComponent(this.value)}`;
       }
     });
+
+    // ── Delivery Countdown ──────────────────────────────────────────────────
+    // "Order now — we deliver in X hrs" counting to 5 PM EAT cutoff.
+    // After 5 PM flips to "Order now for delivery tomorrow at Xh Xm" 
+    (function startDeliveryCountdown() {
+      const CUTOFF_HOUR   = 18;  // 6 PM EAT — last order for same-day
+      const DELIVERY_HRS  = 3;   // delivery within 3 hrs of order
+      const OPEN_HOUR     = 9;   // we open at 9 AM
+
+      function pad(n) { return String(n).padStart(2, '0'); }
+
+      function tick() {
+        const now = new Date();
+        // Convert to EAT (UTC+3)
+        const eatMs  = now.getTime() + (now.getTimezoneOffset() + 180) * 60000;
+        const eat    = new Date(eatMs);
+        const h = eat.getHours(), m = eat.getMinutes(), s = eat.getSeconds();
+        const nowSecs    = h * 3600 + m * 60 + s;
+        const cutoffSecs = CUTOFF_HOUR * 3600;
+
+        const msgEl  = document.getElementById('countdownMessage');
+        const timeEl = document.getElementById('countdownTime');
+        const banner = document.getElementById('deliveryCountdownBanner');
+        if (!msgEl || !timeEl || !banner) return;
+
+        if (nowSecs < cutoffSecs) {
+          // Before 5 PM — show "order now, delivered in X hrs" + time left to order
+          const remaining = cutoffSecs - nowSecs;
+          const rh = Math.floor(remaining / 3600);
+          const rm = Math.floor((remaining % 3600) / 60);
+          const rs = remaining % 60;
+          timeEl.textContent = pad(rh) + ':' + pad(rm) + ':' + pad(rs);
+
+          if (remaining <= 3600) {
+            // Last hour — urgent
+            msgEl.textContent = 'Last chance! Order now — delivered in ' + DELIVERY_HRS + ' hrs';
+            banner.style.background = 'linear-gradient(135deg,#c62828,#b71c1c)';
+          } else {
+            msgEl.textContent = 'Order now — we deliver in ' + DELIVERY_HRS + ' hrs';
+            banner.style.background = 'linear-gradient(135deg,#ff5722,#e64a19)';
+          }
+        } else {
+          // After 5 PM — count down to next open time (9 AM tomorrow)
+          const midnightMs   = new Date(eatMs); 
+          midnightMs.setHours(24, 0, 0, 0);
+          const nextOpenMs   = midnightMs.getTime() + OPEN_HOUR * 3600000;
+          const tillNext     = Math.max(0, Math.floor((nextOpenMs - eatMs) / 1000));
+          const nh = Math.floor(tillNext / 3600);
+          const nm = Math.floor((tillNext % 3600) / 60);
+          const ns = tillNext % 60;
+          timeEl.textContent = pad(nh) + ':' + pad(nm) + ':' + pad(ns);
+          msgEl.textContent  = ' order now, delivered tomorrow from 9 AM';
+          banner.style.background = 'linear-gradient(135deg,#37474f,#263238)';
+        }
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    })();
+    // ── End Delivery Countdown ──────────────────────────────────────────────
+  </script>
+  <script>
+    // Register service worker for offline support + image caching
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(r => console.log('[SW] Registered', r.scope))
+          .catch(e => console.warn('[SW] Failed', e));
+      });
+    }
   </script>
 </body>
 </html>

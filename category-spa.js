@@ -553,26 +553,16 @@ let isLoadingMore = false;
 // Function to load listings for the current category using Firestore query
 async function loadCategoryListings() {
   try {
-    // Filter active listings by category server-side, limit to 200
-    let snap;
-    try {
-      snap = await getDocs(query(
-        collection(firestore, 'Listings'),
-        where('status', '==', 'active'),
-        where('category', '==', currentCategory),
-        limit(200)
-      ));
-    } catch (_) {
-      // Composite index not yet created — fall back to single-field filter
-      snap = await getDocs(query(
-        collection(firestore, 'Listings'),
-        where('category', '==', currentCategory),
-        limit(200)
-      ));
-    }
-    allCategoryListings = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    // Use Firestore query to filter server-side instead of client-side
+    const listingsQuery = query(
+      collection(firestore, "Listings"),
+      where("category", "==", currentCategory)
+    );
+    const listingsSnapshot = await getDocs(listingsQuery);
+    allCategoryListings = listingsSnapshot.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
-    console.error('Error loading category listings:', error);
+    console.error("Error loading category listings:", error);
     allCategoryListings = [];
   }
 }
@@ -865,11 +855,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
     // Twitter-like verified badge SVG
     const getVerifiedBadge = () => `<svg class="verified-tick" viewBox="0 0 22 22" aria-label="Verified account" role="img"><g><path fill="#1d9bf0" d="M20.396 11c-.018-.646-.215-1.275-.57-1.816-.354-.54-.852-.972-1.438-1.246.223-.607.27-1.264.14-1.897-.131-.634-.437-1.218-.882-1.687-.47-.445-1.053-.75-1.687-.882-.633-.13-1.29-.083-1.897.14-.273-.587-.704-1.086-1.245-1.44S11.647 1.62 11 1.604c-.646.017-1.273.213-1.813.568s-.969.854-1.24 1.44c-.608-.223-1.267-.272-1.902-.14-.635.13-1.22.436-1.69.882-.445.47-.749 1.055-.878 1.688-.13.633-.08 1.29.144 1.896-.587.274-1.087.705-1.443 1.245-.356.54-.555 1.17-.574 1.817.02.647.218 1.276.574 1.817.356.54.856.972 1.443 1.245-.224.606-.274 1.263-.144 1.896.13.634.433 1.218.877 1.688.47.443 1.054.747 1.687.878.633.132 1.29.084 1.897-.136.274.586.705 1.084 1.246 1.439.54.354 1.17.551 1.816.569.647-.016 1.276-.213 1.817-.567s.972-.854 1.245-1.44c.604.239 1.266.296 1.903.164.636-.132 1.22-.447 1.68-.907.46-.46.776-1.044.908-1.681s.075-1.299-.165-1.903c.586-.274 1.084-.705 1.439-1.246.354-.54.551-1.17.569-1.816zM9.662 14.85l-3.429-3.428 1.293-1.302 2.072 2.072 4.4-4.794 1.347 1.246z"/></g></svg>`;
 
-    // ── Progressive render: show first 12 immediately, rest deferred ─────────
-    const FIRST_BATCH = 12;
-    let renderIndex = 0;
-
-    function buildCatCard(listing) {
+    for (const listing of filteredListings) {
       const uploaderId = listing.uploaderId || listing.userId;
       const userData = userDataMap[uploaderId] || {};
 
@@ -963,27 +949,11 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
         </div>
       `;
 
-      return listingElement;
+      listingsContainer.appendChild(listingElement);
     }
 
-    // Render first batch synchronously for instant visual feedback
-    const firstBatch = filteredListings.slice(0, FIRST_BATCH);
-    firstBatch.forEach(l => listingsContainer.appendChild(buildCatCard(l)));
+    // Initialize image sliders after content is loaded
     initializeImageSliders();
-
-    // Defer remaining in chunks
-    const restBatch = filteredListings.slice(FIRST_BATCH);
-    if (restBatch.length > 0) {
-      let i = 0;
-      const CHUNK = 12;
-      function appendNext() {
-        restBatch.slice(i, i + CHUNK).forEach(l => listingsContainer.appendChild(buildCatCard(l)));
-        initializeImageSliders();
-        i += CHUNK;
-        if (i < restBatch.length) requestAnimationFrame(appendNext);
-      }
-      requestAnimationFrame(appendNext);
-    }
     
     // Add event listeners for cart, wishlist, and buy now buttons
     document.querySelectorAll('.add-to-cart-btn').forEach(btn => {
@@ -1018,7 +988,7 @@ const loadFeaturedListings = async (filterCriteria = {}, isInitialLoad = false) 
 
 // Add product navigation function
 window.goToProduct = function(productId) {
-  window.location.href = `product.html?id=${productId}`;
+  if(window.__router){window.__router.navigate("product",{id:productId});}else{window.location.href=`product.html?id=${productId}`;}
 };
 
 // Function to change images in the gallery
@@ -1209,7 +1179,7 @@ const performSearch = async (searchTerm) => {
         <span>KES ${(parseFloat(listing.price) || 0).toLocaleString()}</span>
       `;
       div.addEventListener('click', () => {
-        window.location.href = `product.html?id=${encodeURIComponent(doc.id)}`;
+        if(window.__router){window.__router.navigate("product",{id:doc.id});}else{window.location.href=`product.html?id=${encodeURIComponent(doc.id)}`;}
       });
       searchSuggestions.appendChild(div);
     });
@@ -1229,35 +1199,18 @@ async function loadMegaMenuCategories() {
   if (!megaMenuGrid) return;
   
   try {
-    // Use already-loaded allCategoryListings if available, otherwise use a small
-    // sample query — we only need category names/counts, not full documents.
-    let categoryCounts = {};
-
-    // Check localStorage for recently cached category counts (15 min TTL)
-    const CAT_CACHE_KEY = 'oda_cat_counts_v1';
-    const CAT_CACHE_TTL = 15 * 60 * 1000;
-    try {
-      const cached = JSON.parse(localStorage.getItem(CAT_CACHE_KEY) || 'null');
-      if (cached && Date.now() - cached.ts < CAT_CACHE_TTL) {
-        categoryCounts = cached.data;
+    // Fetch all listings to get unique categories (using 'Listings' collection with capital L)
+    const listingsQuery = query(collection(firestore, 'Listings'));
+    const listingsSnapshot = await getDocs(listingsQuery);
+    
+    // Get unique categories and their counts
+    const categoryCounts = {};
+    listingsSnapshot.forEach(doc => {
+      const listing = doc.data();
+      if (listing.category) {
+        categoryCounts[listing.category] = (categoryCounts[listing.category] || 0) + 1;
       }
-    } catch (_) {}
-
-    if (Object.keys(categoryCounts).length === 0) {
-      // Fetch a limited sample to derive category counts — avoids full scan
-      const snap = await getDocs(query(
-        collection(firestore, 'Listings'),
-        where('status', '==', 'active'),
-        limit(300)
-      ));
-      snap.forEach(doc => {
-        const cat = doc.data().category;
-        if (cat) categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
-      try {
-        localStorage.setItem(CAT_CACHE_KEY, JSON.stringify({ data: categoryCounts, ts: Date.now() }));
-      } catch (_) {}
-    }
+    });
     
     // Sort by count (most popular first)
     const sortedCategories = Object.entries(categoryCounts)
@@ -1315,7 +1268,7 @@ async function loadMegaMenuCategories() {
 }
 
 // Initialize everything when DOM is loaded
-document.addEventListener("DOMContentLoaded", async () => {
+export async function initPage() {
   // Show skeleton loaders and progress toast immediately
   const listingsContainer = document.getElementById('listings-container');
   if (listingsContainer) {
@@ -1416,7 +1369,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
   }
-});
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-KRSVFTQZK4"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-KRSVFTQZK4');
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Oda Pap - Mombasa's leading B2B wholesale marketplace. Source quality products at wholesale prices from verified local suppliers.">
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#ff5722">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Oda Pap">
+  <meta name="mobile-web-app-capable" content="yes">
+  <!-- Favicons -->
+  <link rel="icon" type="image/x-icon" href="favicon_io/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon_io/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon_io/favicon-16x16.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" sizes="180x180" href="favicon_io/apple-touch-icon.png">
+
+  <title>Oda Pap - Wholesale Marketplace Mombasa</title>
+
+  <!--
+    All three page stylesheets loaded once, up front.
+    The browser caches them — subsequent view switches cost zero network requests.
+  -->
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="category.css">
+  <link rel="stylesheet" href="product.css">
+  <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="css/dynamicSearch.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+
+  <style>
+    /* ── Skeleton loaders ── */
+    .skeleton{background:linear-gradient(90deg,#f0f0f0 25%,#e0e0e0 50%,#f0f0f0 75%);background-size:200% 100%;animation:skeletonShimmer 1.5s infinite;border-radius:8px}
+    @keyframes skeletonShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .skeleton-card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);margin-bottom:16px}
+    .skeleton-card .skeleton-image{width:100%;aspect-ratio:1;background:linear-gradient(90deg,#f5f5f5 25%,#eee 50%,#f5f5f5 75%);background-size:200% 100%;animation:skeletonShimmer 1.5s infinite}
+    .skeleton-card .skeleton-content{padding:12px}
+    .skeleton-card .skeleton-line{height:14px;margin-bottom:8px;border-radius:4px}
+    .skeleton-card .skeleton-line.short{width:60%}
+    .skeleton-card .skeleton-line.medium{width:80%}
+    .skeleton-card .skeleton-line.full{width:100%}
+    .img-placeholder{background:#f5f5f5;display:flex;align-items:center;justify-content:center;color:#ddd;font-size:24px;min-height:150px}
+    .img-placeholder::before{content:'\f03e';font-family:'Font Awesome 5 Free';font-weight:900}
+
+    /* ── View transition ── */
+    main { animation: viewFadeIn 0.18s ease; }
+    @keyframes viewFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  </style>
+
+  <!-- Firebase initialised once for the whole app -->
+  <script src="./js/firebase.js" type="module"></script>
+
+  <!-- SEO structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Oda Pap",
+    "description": "Oda Pap is Mombasa's premier B2B wholesale marketplace.",
+    "url": "https://odapap.com"
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ── Announcement Bar ── -->
+  <div class="announcement-bar" id="announcementBar" style="display:none;">
+    <div class="announcement-content">
+      <i class="fas fa-bullhorn announcement-icon"></i>
+      <span id="announcementText"></span>
+      <a id="announcementLink" href="#" style="display:none;">Shop Now &rarr;</a>
+    </div>
+    <button class="announcement-close" id="closeAnnouncement" aria-label="Close">&times;</button>
+  </div>
+
+  <!-- ── Header ── -->
+  <header id="mainHeader" class="header-full">
+    <!-- Compact Header (shown when scrolled) -->
+    <div class="compact-header" id="compactHeader">
+      <img src="images/logo.png" alt="Oda Pap" class="compact-logo" onclick="window.__router?.navigate('home')">
+      <div class="compact-search">
+        <input type="text" placeholder="Search..." id="compactSearchInput">
+        <i class="fas fa-search"></i>
+      </div>
+      <div class="compact-actions">
+        <button onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span id="cart-count-compact" class="compact-badge"></span></button>
+        <button onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span id="notif-count-compact" class="compact-badge"></span></button>
+        <button onclick="toggleMegaMenu()"><i class="fas fa-th"></i></button>
+      </div>
+    </div>
+
+    <!-- Full Header -->
+    <div class="full-header" id="fullHeader">
+      <div class="top-bar">
+        <div class="logo-container" onclick="window.__router?.navigate('home')">
+          <img src="images/logo.png" alt="Oda Pap Logo" class="logo">
+          <span class="logo-text">Oda Pap</span>
+        </div>
+        <div class="search-container">
+          <form id="searchForm">
+            <input type="text" id="searchInput" placeholder="Search products...">
+            <button type="submit"><i class="fas fa-search"></i></button>
+          </form>
+        </div>
+        <div class="top-icons">
+          <div class="menu-icon" onclick="toggleMegaMenu()">
+            <i class="fas fa-th-large"></i>
+            <p>Menu</p>
+          </div>
+        </div>
+      </div>
+      <div class="border-line"></div>
+      <nav class="nav-bar">
+        <button class="home-button active" onclick="window.__router?.navigate('home')"><i class="fas fa-home"></i></button>
+        <button class="home-button" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span id="notification-count" class="nav-counter"></span></button>
+        <button class="home-button" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span id="cart-count" class="nav-counter"></span></button>
+        <button class="home-button" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i><span id="wishlist-count" class="nav-counter"></span></button>
+        <button class="home-button" onclick="location.href='profile.html'"><i class="fas fa-user-circle"></i></button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ── Mega Menu ── -->
+  <div class="mega-menu-overlay" id="megaMenuOverlay" onclick="closeMegaMenu()"></div>
+  <div class="mega-menu" id="megaMenu">
+    <div class="mega-menu-header">
+      <h3><i class="fas fa-th-large"></i> Quick Menu</h3>
+      <button class="close-mega" onclick="closeMegaMenu()"><i class="fas fa-times"></i></button>
+    </div>
+
+    <!-- User Quick Info -->
+    <div class="mega-user-section" id="megaUserSection">
+      <div class="mega-user-info">
+        <img src="images/profile-placeholder.png" alt="Profile" id="megaUserPic">
+        <div>
+          <p class="mega-user-name" id="megaUserName">Welcome!</p>
+          <p class="mega-user-status" id="megaUserStatus">Login to access all features</p>
+        </div>
+      </div>
+      <div class="mega-quick-stats" id="megaQuickStats" style="display:none;">
+        <div class="quick-stat" onclick="location.href='cart.html'"><i class="fas fa-shopping-cart"></i><span id="megaCartCount">0</span><small>Cart</small></div>
+        <div class="quick-stat" onclick="location.href='wishlist.html'"><i class="fas fa-heart"></i><span id="megaWishlistCount">0</span><small>Wishlist</small></div>
+        <div class="quick-stat" onclick="location.href='notification.html'"><i class="fas fa-bell"></i><span id="megaNotifCount">0</span><small>Alerts</small></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mega-actions">
+      <a href="listing.html" class="mega-action sell"><i class="fas fa-plus-circle"></i> Sell Item</a>
+      <a href="seller-dashboard.html" class="mega-action"><i class="fas fa-store"></i> Seller Hub</a>
+      <a href="deposit.html" class="mega-action"><i class="fas fa-plus-circle"></i> Deposit</a>
+      <a href="profile.html" class="mega-action"><i class="fas fa-user-cog"></i> My Account</a>
+    </div>
+
+    <!-- Categories Grid (loaded dynamically) -->
+    <div class="mega-categories">
+      <h4>Browse Categories</h4>
+      <div class="mega-cat-grid" id="megaCatGrid"></div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="mega-categories">
+      <h4>Quick Links</h4>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <a href="orderTracking.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-truck" style="color:#ff5722;width:20px;text-align:center;"></i> Track Orders</a>
+        <a href="referral.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#e64a19;text-decoration:none;font-size:13px;font-weight:600;background:linear-gradient(135deg,#fff7f0,#fff3e0);border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-gift" style="color:#ff5722;width:20px;text-align:center;"></i> Refer &amp; Earn 5%</a>
+        <a href="compare.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-columns" style="color:#ff5722;width:20px;text-align:center;"></i> Compare Products</a>
+        <a href="recently_viewed.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-history" style="color:#ff5722;width:20px;text-align:center;"></i> Recently Viewed</a>
+        <a href="addresses.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-map-marker-alt" style="color:#ff5722;width:20px;text-align:center;"></i> My Addresses</a>
+        <a href="returns.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-undo-alt" style="color:#ff5722;width:20px;text-align:center;"></i> Returns &amp; Refunds</a>
+        <a href="notification.html" style="display:flex;align-items:center;gap:8px;padding:10px 12px;color:#333;text-decoration:none;font-size:13px;border-radius:8px;" onclick="closeMegaMenu()"><i class="fas fa-bell" style="color:#ff5722;width:20px;text-align:center;"></i> Notifications</a>
+      </div>
+    </div>
+
+    <!-- Help Links -->
+    <div class="mega-footer">
+      <a href="customer_care.html"><i class="fas fa-headset"></i> Help Center</a>
+      <a href="#" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</a>
+    </div>
+  </div>
+
+  <!-- ── Main view container (swapped by router) ── -->
+  <main id="app-main">
+    <!-- Router injects view HTML here -->
+    <div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+      <div style="text-align:center;color:#999;">
+        <i class="fas fa-spinner fa-spin" style="font-size:32px;margin-bottom:12px;color:#ff5722;"></i>
+        <p>Loading...</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Floating Sell Button ── -->
+  <button class="floating-button" onclick="location.href='listing.html'">
+    <i class="fas fa-plus"></i>
+  </button>
+
+  <!-- ── Footer (shared across all views) ── -->
+  <section class="trust-banner" style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:20px 16px 8px;background:#f9fafb;border-top:1px solid #eee;">
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-shield-alt" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Secure<br>Payments</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-truck" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Fast Delivery<br>in Mombasa</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-tags" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Wholesale<br>Prices</div>
+    <div style="text-align:center;font-size:12px;color:#555;"><i class="fas fa-headset" style="color:#0d9488;font-size:18px;display:block;margin-bottom:4px;"></i>Customer<br>Support</div>
+  </section>
+
+  <footer style="background:#1a1a2e;color:rgba(255,255,255,0.8);padding:24px 16px 16px;font-size:12px;">
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px 20px;margin-bottom:12px;">
+      <a href="customer_care.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-headset"></i> Help Center</a>
+      <a href="orderTracking.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-truck"></i> Track Order</a>
+      <a href="compare.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-columns"></i> Compare</a>
+      <a href="recently_viewed.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-history"></i> Recently Viewed</a>
+      <a href="returns.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-undo"></i> Returns</a>
+      <a href="referral.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-gift"></i> Refer &amp; Earn</a>
+      <a href="listing.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-store"></i> Sell on Oda Pap</a>
+      <a href="profile.html" style="color:rgba(255,255,255,0.85);text-decoration:none;"><i class="fas fa-user"></i> My Account</a>
+    </div>
+    <div style="text-align:center;border-top:1px solid rgba(255,255,255,0.15);padding-top:12px;">
+      <p style="margin:0;">&copy; 2025 Oda Pap Wholesale. All Rights Reserved.</p>
+      <p style="margin:4px 0 0;font-size:11px;color:rgba(255,255,255,0.5);">Mombasa's trusted B2B wholesale marketplace</p>
+    </div>
+  </footer>
+
+  <script>
+    // ── Mega Menu ──────────────────────────────────────────────────────────
+    function toggleMegaMenu() {
+      const menu = document.getElementById('megaMenu');
+      const overlay = document.getElementById('megaMenuOverlay');
+      menu.classList.toggle('open');
+      overlay.classList.toggle('open');
+      document.body.style.overflow = menu.classList.contains('open') ? 'hidden' : '';
+    }
+
+    function closeMegaMenu() {
+      document.getElementById('megaMenu').classList.remove('open');
+      document.getElementById('megaMenuOverlay').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    // ── Smart Header Collapse ─────────────────────────────────────────────
+    let lastScroll = 0, isCompact = false, ticking = false, switchTimer = null;
+    const THRESHOLD = 100, HYSTERESIS = 30;
+
+    function updateHeader() {
+      const header = document.getElementById('mainHeader');
+      const cur = window.pageYOffset;
+      if (!isCompact && cur > THRESHOLD + HYSTERESIS) {
+        clearTimeout(switchTimer);
+        switchTimer = setTimeout(() => { header.classList.add('header-compact'); header.classList.remove('header-full'); isCompact = true; }, 50);
+      } else if (isCompact && cur < THRESHOLD - HYSTERESIS) {
+        clearTimeout(switchTimer);
+        switchTimer = setTimeout(() => { header.classList.remove('header-compact'); header.classList.add('header-full'); isCompact = false; }, 50);
+      }
+      if (cur > lastScroll && cur > 200) header.classList.add('header-hidden');
+      else header.classList.remove('header-hidden');
+      lastScroll = cur;
+      ticking = false;
+    }
+
+    window.addEventListener('scroll', () => { if (!ticking) { requestAnimationFrame(updateHeader); ticking = true; } }, { passive: true });
+
+    // Compact search
+    document.getElementById('compactSearchInput')?.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        window.location.href = `search-results.html?q=${encodeURIComponent(this.value)}`;
+      }
+    });
+
+    // ── Intercept ALL internal category/product navigations globally ──────
+    // Catches any remaining location.href assignments that weren't patched
+    // in the JS modules (e.g. HTML onclick attributes).
+    const _origAssign = Object.getOwnPropertyDescriptor(window.location.__proto__, 'href');
+    // Note: location.href setter interception is blocked in modern browsers for security.
+    // Instead we delegate via the global navigate helpers below.
+
+    // Global helpers usable from inline onclick attributes
+    window.__navCategory = (cat, prime) => {
+      if (window.__router) window.__router.navigate('category', cat ? {category:cat} : {prime});
+      else location.href = cat ? `category.html?category=${encodeURIComponent(cat)}` : `category.html?prime=${prime}`;
+    };
+    window.__navProduct = (id) => {
+      if (window.__router) window.__router.navigate('product', {id});
+      else location.href = `product.html?id=${encodeURIComponent(id)}`;
+    };
+    window.__navHome = () => {
+      if (window.__router) window.__router.navigate('home');
+      else location.href = 'index.html';
+    };
+  </script>
+
+  <!-- Bootstrap the router (loads and runs immediately) -->
+  <script type="module">
+    import { initRouter } from './app-router.js';
+    // Small delay to let Firebase module settle, then boot
+    document.addEventListener('DOMContentLoaded', () => initRouter());
+  </script>
+
+</body>
+</html>

@@ -1,6 +1,8 @@
-// Oda Pap Service Worker v2.0.0
+// Oda Pap Service Worker v2.1.0
 const CACHE_NAME = 'odapap-cache-v2';
+const IMAGE_CACHE = 'odapap-images-v1';   // Separate long-lived cache for product images
 const OFFLINE_URL = '/offline.html';
+const IMAGE_CACHE_MAX = 300;              // Max product images to keep
 
 // Files to cache for offline use
 const STATIC_ASSETS = [
@@ -28,6 +30,18 @@ const STATIC_ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css'
 ];
 
+// ── Image cache helper ────────────────────────────────────────────────────────
+// Keeps the image cache from growing unbounded (evicts oldest first).
+async function trimImageCache() {
+  const cache = await caches.open(IMAGE_CACHE);
+  const keys = await cache.keys();
+  if (keys.length > IMAGE_CACHE_MAX) {
+    // Delete oldest entries (keys are ordered by insertion time)
+    const toDelete = keys.slice(0, keys.length - IMAGE_CACHE_MAX);
+    await Promise.all(toDelete.map(k => cache.delete(k)));
+  }
+}
+
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
   console.log('[SW] Installing Service Worker...');
@@ -52,7 +66,7 @@ self.addEventListener('activate', (event) => {
       .then((cacheNames) => {
         return Promise.all(
           cacheNames
-            .filter((name) => name !== CACHE_NAME)
+            .filter((name) => name !== CACHE_NAME && name !== IMAGE_CACHE)
             .map((name) => {
               console.log('[SW] Deleting old cache:', name);
               return caches.delete(name);
@@ -68,8 +82,36 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests and non-GET requests
   if (event.request.method !== 'GET') return;
   
-  // Skip Firebase and external API requests
+  // Route product images (Firebase Storage) into dedicated image cache
+  // This must come BEFORE the general firebase/googleapis skip below.
   const url = new URL(event.request.url);
+
+  const isProductImage = (
+    url.hostname.includes('firebasestorage.googleapis.com') ||
+    url.hostname.includes('storage.googleapis.com') ||
+    /\.(jpg|jpeg|png|gif|webp|avif)(\?|$)/i.test(url.pathname)
+  );
+
+  if (isProductImage) {
+    event.respondWith((async () => {
+      const cache = await caches.open(IMAGE_CACHE);
+      const cached = await cache.match(event.request);
+      if (cached) return cached;                           // instant from cache
+      try {
+        const response = await fetch(event.request);
+        if (response.ok) {
+          cache.put(event.request, response.clone());
+          trimImageCache();                                // async, non-blocking
+        }
+        return response;
+      } catch {
+        return new Response('', { status: 408 });
+      }
+    })());
+    return;
+  }
+
+  // Skip all other Firebase and external API requests (Firestore, Auth, etc.)
   if (url.hostname.includes('firebase') || 
       url.hostname.includes('googleapis') ||
       url.hostname.includes('gstatic')) {
@@ -237,5 +279,9 @@ self.addEventListener('message', (event) => {
   if (event.data.type === 'CACHE_URLS') {
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(event.data.urls));
+  }
+
+  if (event.data.type === 'CLEAR_IMAGE_CACHE') {
+    caches.delete(IMAGE_CACHE);
   }
 });
