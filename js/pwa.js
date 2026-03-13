@@ -565,5 +565,29 @@ function addPWAStyles() {
   document.head.appendChild(style);
 }
 
+// ── Image prefetch utility ────────────────────────────────────────────────────
+// Call this when the user shows intent to open a product (hover / touchstart).
+// Images are fetched during idle time so they're already in the SW image cache
+// by the time the product page opens — making it feel instant.
+export function prefetchImages(urls) {
+  if (!urls?.length) return;
+  const run = () => {
+    urls.forEach(url => {
+      if (!url || typeof url !== 'string') return;
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+      // The browser fetches the URL, the service worker intercepts it and stores
+      // it in IMAGE_CACHE. Next time the product page requests the same URL it
+      // comes from cache — no network round trip.
+    });
+  };
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(run, { timeout: 2000 });
+  } else {
+    setTimeout(run, 200);
+  }
+}
+
 // Export for external use
 export { deferredPrompt, messaging };

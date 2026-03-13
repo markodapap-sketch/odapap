@@ -70,9 +70,70 @@ export async function detectLocation() {
   const suburb = addr.suburb || addr.town || addr.city_district || '';
   const village = addr.village || addr.hamlet || '';
   const ward = neighbourhood || village || '';
-  const subcounty = suburb || addr.municipality || '';
-  const county = addr.county || addr.state_district || addr.city || '';
   const postcode = addr.postcode || '';
+
+  // ── Kenyan county / sub-county resolution ──────────────────────────────
+  // Nominatim's address hierarchy for Kenya is inconsistent:
+  //
+  //   Urban (e.g. Mombasa, Nairobi):
+  //     addr.city       = "Mombasa"          ← the correct county/city name
+  //     addr.county     = "Kisauni"           ← actually a constituency
+  //     addr.suburb     = "Mshomoroni"        ← ward / neighbourhood
+  //
+  //   Rural (e.g. Kilifi, Kwale):
+  //     addr.county     = "Kilifi County"     ← county name (with " County" suffix)
+  //     addr.state_district = "Kilifi"        ← cleaner version
+  //     addr.city / addr.town = sub-county    ← or absent
+  //
+  // Strategy:
+  //   1. Use addr.city if it looks like a proper city/county (single word or known name).
+  //   2. Fall back to addr.state_district (usually clean county name).
+  //   3. Fall back to addr.county but strip the " County" suffix if present.
+  //   4. Use the constituency lookup table as a final safety net.
+  //
+  // For subcounty: prefer addr.county when addr.city was used as county (it holds
+  // the constituency), otherwise use suburb / municipality.
+
+  // Known Kenyan county cities (Nominatim returns these as addr.city)
+  const KENYAN_COUNTY_CITIES = new Set([
+    'Mombasa','Nairobi','Kisumu','Nakuru','Eldoret','Thika','Malindi',
+    'Kitale','Garissa','Kakamega','Nyeri','Meru','Embu','Machakos',
+    'Kisii','Kericho','Bungoma','Busia','Homa Bay','Migori','Siaya',
+    'Vihiga','Nandi','Uasin Gishu','Trans Nzoia','West Pokot',
+    'Turkana','Marsabit','Isiolo','Laikipia','Samburu',
+    'Nyandarua','Muranga','Kirinyaga','Kajiado','Makueni',
+    'Kitui','Tharaka Nithi','Taita-Taveta','Kwale','Kilifi',
+    'Tana River','Lamu','Mandera','Wajir','Garissa','Bomet',
+    'Narok','Nyamira'
+  ]);
+
+  // Strip " County" suffix Nominatim sometimes appends (e.g. "Kilifi County")
+  const stripCountySuffix = s => (s || '').replace(/\s+county$/i, '').trim();
+
+  let county, subcounty;
+
+  const rawCity    = addr.city || '';
+  const rawCounty  = stripCountySuffix(addr.county || '');
+  const rawStateDist = stripCountySuffix(addr.state_district || '');
+
+  if (rawCity && KENYAN_COUNTY_CITIES.has(rawCity)) {
+    // Urban case: addr.city is the proper county name
+    county    = rawCity;
+    // addr.county here holds the constituency — use it as subcounty
+    subcounty = rawCounty || suburb || addr.municipality || '';
+  } else if (rawStateDist) {
+    // Rural case: state_district is reliable
+    county    = rawStateDist;
+    subcounty = rawCounty || suburb || addr.municipality || '';
+  } else if (rawCounty) {
+    // Fallback: use addr.county (stripped)
+    county    = rawCounty;
+    subcounty = suburb || addr.municipality || '';
+  } else {
+    // Last resort
+    county    = suburb || addr.municipality || '';
+    subcounty = '';
+  }
 
   // Build a comprehensive specific location string with all available details
   const specificParts = [
